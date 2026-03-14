@@ -2090,6 +2090,7 @@ async function doLogin(){
     }
     currentUser=user; setSession(user);
     hideAuthOverlay(); renderUserHeader(user); applyPermissions(user.permissions);
+    loadUploadLogsFromSupabase();
   }catch(e){
     if(e==='__PENDING__') showPending();
     else{ errEl.textContent=e; }
@@ -2110,6 +2111,7 @@ async function doRegister(){
       const user = await authLogin(email, pw);
       currentUser=user; setSession(user);
       hideAuthOverlay(); renderUserHeader(user); applyPermissions(user.permissions);
+      loadUploadLogsFromSupabase();
     } else { showPending(); }
   }
   catch(e){ errEl.textContent=e; }
@@ -2191,6 +2193,7 @@ async function initAuth(){
         displayName: profile.display_name, isAdmin: profile.is_admin,
         permissions: profile.permissions || {}, status: profile.status };
       hideAuthOverlay(); renderUserHeader(currentUser); applyPermissions(currentUser.permissions);
+      loadUploadLogsFromSupabase();
       return;
     }
   }
