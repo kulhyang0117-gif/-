@@ -1,0 +1,2249 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>생산계획 대비 자재부족현황</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Malgun Gothic', '맑은 고딕', Arial, sans-serif; background: #f0f2f5; color: #222; font-size: 13px; }
+
+  .header { background: #1e3a5f; color: white; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  .header h1 { font-size: 18px; font-weight: 700; }
+  .header .sub { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+  .btn-auto-kit { display: inline-flex; align-items: center; gap: 8px; padding: 9px 20px; background: linear-gradient(135deg,#8e44ad,#6c3483); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.2s; white-space: nowrap; }
+  .btn-auto-kit:hover { background: linear-gradient(135deg,#9b59b6,#7d3c98); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+  .btn-auto-kit:active { transform: translateY(0); }
+  .auto-kit-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; }
+  .auto-kit-modal.open { display:flex; }
+  .auto-kit-box { background:white; border-radius:16px; padding:32px 40px; max-width:480px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.4); }
+  .auto-kit-box h3 { font-size:18px; color:#1e3a5f; margin-bottom:16px; display:flex; align-items:center; gap:8px; }
+  .auto-kit-step { display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid #f0f0f0; font-size:13px; color:#444; }
+  .auto-kit-step:last-of-type { border-bottom:none; }
+  .auto-kit-step .num { width:24px; height:24px; background:#1e3a5f; color:white; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0; margin-top:1px; }
+  .auto-kit-btns { display:flex; gap:10px; margin-top:20px; }
+  .auto-kit-btns .btn-start-auto { flex:1; padding:11px; background:#8e44ad; color:white; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; }
+  .auto-kit-btns .btn-start-auto:hover { background:#6c3483; }
+  .auto-kit-btns .btn-setup { flex:0 0 auto; padding:11px 16px; background:#f0f0f0; color:#555; border:none; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; }
+  .auto-kit-btns .btn-setup:hover { background:#e0e0e0; }
+  .auto-kit-btns .btn-cancel { flex:0 0 auto; padding:11px 16px; background:#f0f0f0; color:#555; border:none; border-radius:8px; font-size:12px; cursor:pointer; }
+  .auto-kit-note { font-size:11px; color:#e74c3c; margin-top:12px; padding:8px 12px; background:#fef9f9; border-radius:6px; border-left:3px solid #e74c3c; }
+  .container { padding: 20px 24px; max-width: 1800px; margin: 0 auto; }
+
+  /* ── 업로드 ── */
+  .upload-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .upload-section h2 { font-size: 14px; font-weight: 700; color: #1e3a5f; margin-bottom: 16px; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; }
+  .upload-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+  .upload-item { border: 2px dashed #c8d6e5; border-radius: 8px; padding: 16px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
+  .upload-item:hover { border-color: #1e3a5f; background: #f8fafc; }
+  .upload-item.loaded { border-color: #27ae60; border-style: solid; background: #f0faf4; }
+  .upload-item.error { border-color: #e74c3c; border-style: solid; background: #fef9f9; }
+  .upload-item .icon { font-size: 28px; margin-bottom: 8px; }
+  .upload-item .label { font-weight: 700; color: #1e3a5f; margin-bottom: 4px; }
+  .upload-item .desc { font-size: 11px; color: #777; margin-bottom: 10px; }
+  .upload-item .status { font-size: 11px; color: #27ae60; font-weight: 600; }
+  .upload-item.error .status { color: #e74c3c; }
+  .upload-item input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-time { font-size: 10px; color: #999; margin-top: 4px; }
+  .upload-item.drag-over { border-color: #1e3a5f !important; border-style: solid !important; background: #dbeafe !important; transform: scale(1.03); box-shadow: 0 0 0 3px rgba(30,58,95,0.25); }
+  .kit-section.drag-over { border-color: #6c3483 !important; background: #ede9fe !important; box-shadow: 0 0 0 3px rgba(108,52,131,0.25); }
+
+  /* ── 키팅 ── */
+  .kit-section { border: 2px dashed #8e44ad; border-radius: 8px; padding: 14px 16px; background: #faf5ff; }
+  .kit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+  .kit-title { font-weight: 700; color: #6c3483; font-size: 13px; }
+  .kit-actions { display: flex; gap: 8px; align-items: center; }
+  .btn-kit-add { display: inline-block; padding: 5px 14px; background: #8e44ad; color: white; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; user-select: none; }
+  .btn-kit-add:hover { background: #6c3483; }
+  .btn-kit-clear { padding: 5px 12px; background: #e74c3c; color: white; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .btn-kit-clear:hover { background: #c0392b; }
+  .kit-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
+  .kit-chip { display: inline-flex; align-items: center; gap: 5px; background: #e8d5f5; color: #5b2c6f; padding: 3px 10px; border-radius: 14px; font-size: 11px; font-weight: 600; }
+  .kit-chip .rm { cursor: pointer; color: #8e44ad; font-size: 13px; font-weight: 700; }
+  .kit-chip .rm:hover { color: #c0392b; }
+  .kit-empty { font-size: 11px; color: #a78bbb; }
+  .optional-badge { display: inline-block; font-size: 10px; background: #f3e5ff; color: #8e44ad; padding: 1px 6px; border-radius: 8px; margin-left: 4px; font-weight: 600; }
+
+  /* ── 설정 ── */
+  .settings-section { background: white; border-radius: 8px; padding: 14px 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+  .setting-item { display: flex; align-items: center; gap: 7px; }
+  .setting-item label { font-weight: 600; color: #444; font-size: 12px; }
+  .setting-item select, .setting-item input[type=date] { border: 1px solid #ddd; border-radius: 4px; padding: 5px 8px; font-size: 12px; }
+  .btn { padding: 7px 18px; border-radius: 6px; border: none; cursor: pointer; font-weight: 700; font-size: 12px; transition: all 0.2s; }
+  .btn-primary { background: #1e3a5f; color: white; }
+  .btn-primary:hover { background: #2952a3; }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-export { background: #27ae60; color: white; }
+  .btn-export:hover { background: #219a52; }
+  .btn-export:disabled { background: #aaa; cursor: not-allowed; }
+
+  /* ── 요약 카드 ── */
+  .summary-cards { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; margin-bottom: 16px; }
+  .card { background: white; border-radius: 8px; padding: 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); text-align: center; }
+  .card .val { font-size: 26px; font-weight: 700; }
+  .card .lbl { font-size: 11px; color: #777; margin-top: 4px; }
+  .card.danger .val { color: #e74c3c; }
+  .card.warning .val { color: #e67e22; }
+  .card.ok .val { color: #27ae60; }
+  .card.info .val { color: #2980b9; }
+  .card.kit .val { color: #8e44ad; }
+
+  /* ── 결과 탭 ── */
+  .result-section { background: white; border-radius: 8px; padding: 16px 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .tab-row { display: flex; gap: 4px; margin-bottom: 14px; border-bottom: 2px solid #e0e0e0; }
+  .tab { padding: 7px 18px; background: #f0f0f0; color: #666; cursor: pointer; font-size: 12px; font-weight: 700; border-radius: 6px 6px 0 0; border: 1px solid #ddd; border-bottom: none; margin-bottom: -2px; transition: all 0.15s; }
+  .tab.active { background: #1e3a5f; color: white; border-color: #1e3a5f; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .result-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .result-header h2 { font-size: 14px; font-weight: 700; color: #1e3a5f; }
+  .filter-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .filter-bar input, .filter-bar select { border: 1px solid #ddd; border-radius: 4px; padding: 5px 10px; font-size: 12px; }
+  .filter-bar input[type=text] { width: 180px; }
+
+  /* ── 테이블 공통 ── */
+  .table-wrap { overflow-x: auto; max-height: 560px; overflow-y: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  thead { position: sticky; top: 0; z-index: 10; }
+  thead th { background: #1e3a5f; color: white; padding: 7px 9px; text-align: center; white-space: nowrap; border: 1px solid #2952a3; }
+  thead th.kit-col { background: #6c3483; border-color: #8e44ad; }
+  tbody tr:nth-child(even) { background: #f8fafc; }
+  tbody tr:hover { background: #e8f0fa !important; }
+  td { padding: 5px 9px; border: 1px solid #e0e0e0; white-space: nowrap; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.center { text-align: center; }
+  td.kit-val { background: #faf5ff; color: #6c3483; font-weight: 600; text-align: right; }
+
+  /* ── 모델별 테이블 ── */
+  .expand-btn { cursor: pointer; color: #2980b9; font-weight: 700; padding: 2px 8px; border-radius: 4px; background: #ebf5fb; border: none; font-size: 11px; white-space: nowrap; }
+  .expand-btn:hover { background: #d6eaf8; }
+  .detail-row td { padding: 0 !important; border-top: none !important; }
+  .col-resize { position:absolute; right:0; top:0; width:6px; height:100%; cursor:col-resize; user-select:none; z-index:2; }
+  .col-resize:hover, .col-resize.dragging { background:rgba(255,255,255,0.45); }
+  thead th { position:relative; overflow:visible; }
+  .detail-inner { display: none; padding: 12px 16px; background: #f7f8fa; border-top: 1px solid #dde4ed; }
+  .detail-inner.open { display: block; }
+
+  /* 일자별 소요 테이블 */
+  .date-req-table { border-collapse: collapse; font-size: 11px; margin-bottom: 12px; }
+  .date-req-table th { background: #34495e; color: white; padding: 4px 10px; border: 1px solid #2c3e50; text-align: center; white-space: nowrap; }
+  .date-req-table th.part-col { background: #6c3483; border-color: #8e44ad; }
+  .date-req-table th.part-col.warn-col { background: #9a7d0a; border-color: #b7950b; }
+  .date-req-table td { padding: 4px 10px; border: 1px solid #ddd; text-align: right; }
+  .date-req-table td.date-cell { text-align: center; font-weight: 600; background: #f4f6f8; }
+  .date-req-table td.qty-cell { font-weight: 600; }
+  .date-req-table tr.total-row td { background: #eaf0fb; font-weight: 700; }
+
+  /* 부족자재 칩 */
+  .detail-parts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .part-chip { display: flex; flex-direction: column; gap: 2px; padding: 7px 11px; border-radius: 7px; font-size: 11px; min-width: 160px; max-width: 220px; }
+  .part-chip.danger { background: #fde8e8; border: 1px solid #f1948a; }
+  .part-chip.warning { background: #fef3e2; border: 1px solid #f9ca74; }
+  .chip-code { font-weight: 700; color: #222; font-size: 12px; }
+  .chip-name { color: #555; font-size: 10px; margin-bottom: 3px; }
+  .chip-stock { color: #2471a3; font-size: 10px; }
+  .chip-req { font-weight: 700; font-size: 11px; }
+  .part-chip.danger .chip-req { color: #c0392b; }
+  .part-chip.warning .chip-req { color: #d68910; }
+
+  /* ── 배지 / 바 ── */
+  .shortage-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-weight: 700; font-size: 11px; }
+  .shortage-badge.danger { background: #fde8e8; color: #c0392b; }
+  .shortage-badge.warning { background: #fef3e2; color: #d68910; }
+  .shortage-badge.ok { background: #e8f8f0; color: #1e8449; }
+  .shortage-badge.na { background: #f0f0f0; color: #999; }
+  .bar-wrap { width: 70px; height: 11px; background: #eee; border-radius: 6px; display: inline-block; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 6px; }
+  .bar-fill.danger { background: #e74c3c; }
+  .bar-fill.warning { background: #e67e22; }
+  .bar-fill.ok { background: #27ae60; }
+
+  .loading { text-align: center; padding: 40px; color: #777; }
+  .loading .spinner { display: inline-block; width: 30px; height: 30px; border: 3px solid #ddd; border-top-color: #1e3a5f; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty { text-align: center; padding: 50px 20px; color: #aaa; }
+  .empty .icon { font-size: 40px; margin-bottom: 10px; }
+  .detail-tag { display: inline-block; padding: 1px 6px; border-radius: 10px; font-size: 10px; background: #e8f0fa; color: #1e3a5f; }
+  .restore-notice { background: #fff8e1; border: 1px solid #ffe082; border-radius: 6px; padding: 7px 14px; font-size: 12px; color: #795548; margin-bottom: 10px; display: none; }
+
+  @media (max-width: 900px) {
+    .upload-grid { grid-template-columns: 1fr; }
+    .summary-cards { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* ── 인증 오버레이 ── */
+  .auth-overlay { position:fixed; inset:0; background:rgba(10,20,40,0.97); z-index:1000; display:flex; align-items:center; justify-content:center; }
+  .auth-box { background:white; border-radius:12px; padding:36px 40px; width:390px; box-shadow:0 8px 40px rgba(0,0,0,0.5); }
+  .auth-box h2 { font-size:18px; font-weight:700; color:#1e3a5f; margin-bottom:5px; }
+  .auth-box .auth-sub { font-size:12px; color:#888; margin-bottom:22px; }
+  .auth-field { margin-bottom:13px; }
+  .auth-field label { display:block; font-size:11px; font-weight:700; color:#555; margin-bottom:4px; }
+  .auth-field input { width:100%; border:1px solid #ddd; border-radius:6px; padding:9px 12px; font-size:13px; outline:none; box-sizing:border-box; }
+  .auth-field input:focus { border-color:#1e3a5f; box-shadow:0 0 0 2px rgba(30,58,95,0.12); }
+  .btn-auth { width:100%; padding:11px; border-radius:6px; border:none; cursor:pointer; font-weight:700; font-size:13px; background:#1e3a5f; color:white; margin-top:4px; }
+  .btn-auth:hover { background:#2952a3; }
+  .auth-err { color:#e74c3c; font-size:12px; margin-top:8px; min-height:16px; }
+  .auth-link { text-align:center; margin-top:14px; font-size:12px; color:#666; }
+  .auth-link a { color:#1e3a5f; font-weight:700; cursor:pointer; text-decoration:underline; }
+  .auth-pending-box { text-align:center; padding:10px 0; }
+  .auth-pending-box .big-icon { font-size:52px; margin-bottom:14px; }
+
+  /* ── 관리자 패널 ── */
+  .admin-modal { position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:900; display:none; align-items:center; justify-content:center; }
+  .admin-modal.open { display:flex; }
+  .admin-box { background:white; border-radius:12px; width:min(920px,96vw); max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 40px rgba(0,0,0,0.35); }
+  .admin-head { background:#1e3a5f; color:white; padding:15px 20px; border-radius:12px 12px 0 0; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+  .admin-head h3 { font-size:15px; font-weight:700; }
+  .btn-close-admin { background:rgba(255,255,255,0.18); border:none; color:white; padding:5px 13px; border-radius:5px; cursor:pointer; font-size:13px; font-weight:700; }
+  .admin-body { padding:18px; overflow-y:auto; flex:1; }
+  .user-card { border:1px solid #e0e8f0; border-radius:8px; padding:13px 16px; margin-bottom:10px; }
+  .user-top { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:9px; }
+  .user-top strong { font-size:13px; }
+  .u-email { font-size:11px; color:#666; }
+  .badge-st { padding:2px 9px; border-radius:10px; font-size:11px; font-weight:700; }
+  .st-pending { background:#fff3cd; color:#856404; }
+  .st-approved { background:#d4edda; color:#155724; }
+  .st-rejected { background:#f8d7da; color:#721c24; }
+  .u-actions { margin-left:auto; display:flex; gap:6px; }
+  .btn-approve { padding:4px 12px; border-radius:5px; border:none; cursor:pointer; font-size:11px; font-weight:700; background:#27ae60; color:white; }
+  .btn-reject  { padding:4px 12px; border-radius:5px; border:none; cursor:pointer; font-size:11px; font-weight:700; background:#e74c3c; color:white; }
+  .perm-row { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .perm-label { font-size:11px; color:#555; font-weight:700; }
+  .perm-chk { display:flex; align-items:center; gap:4px; font-size:12px; cursor:pointer; user-select:none; }
+  .perm-chk input { cursor:pointer; }
+  .u-date { font-size:11px; color:#aaa; margin-left:auto; }
+
+  /* ── 헤더 유저 영역 ── */
+  .header-user { margin-left:auto; display:flex; align-items:center; gap:10px; }
+  .hdr-uname { font-size:12px; opacity:0.85; }
+  .btn-logout { padding:5px 12px; border-radius:5px; background:rgba(255,255,255,0.18); border:none; color:white; font-size:11px; cursor:pointer; font-weight:600; }
+  .btn-logout:hover { background:rgba(255,255,255,0.28); }
+  .btn-admin-open { padding:5px 12px; border-radius:5px; background:#e67e22; border:none; color:white; font-size:11px; font-weight:700; cursor:pointer; }
+  .btn-admin-open:hover { background:#d35400; }
+</style>
+</head>
+<body>
+
+<!-- ── 인증 오버레이 ── -->
+<div class="auth-overlay" id="auth-overlay">
+  <!-- 로그인 -->
+  <div id="auth-login" class="auth-box">
+    <h2>🔐 로그인</h2>
+    <div class="auth-sub">생산계획 대비 자재부족현황 관리 시스템</div>
+    <div class="auth-field"><label>이메일</label><input type="email" id="login-email" placeholder="이메일 주소 입력"></div>
+    <div class="auth-field"><label>비밀번호</label><input type="password" id="login-pw" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <input type="checkbox" id="login-remember" style="cursor:pointer;">
+      <label for="login-remember" style="font-size:12px;color:#555;cursor:pointer;">아이디 · 비밀번호 저장</label>
+    </div>
+    <button class="btn-auth" onclick="doLogin()">로그인</button>
+    <div class="auth-err" id="login-err"></div>
+    <div class="auth-link">계정이 없으신가요? <a onclick="showRegister()">회원가입 신청</a></div>
+  </div>
+  <!-- 회원가입 -->
+  <div id="auth-register" class="auth-box" style="display:none;">
+    <h2>✏️ 회원가입</h2>
+    <div class="auth-sub">가입 후 관리자 승인이 완료되면 이용 가능합니다.</div>
+    <div class="auth-field"><label>이름</label><input type="text" id="reg-name" placeholder="이름 입력"></div>
+    <div class="auth-field"><label>이메일</label><input type="email" id="reg-email" placeholder="이메일 주소 입력"></div>
+    <div class="auth-field"><label>비밀번호 <span style="font-weight:400;color:#999;">(6자 이상)</span></label><input type="password" id="reg-pw" placeholder="비밀번호 입력"></div>
+    <div class="auth-field"><label>비밀번호 확인</label><input type="password" id="reg-pw2" placeholder="비밀번호 재입력" onkeydown="if(event.key==='Enter')doRegister()"></div>
+    <button class="btn-auth" onclick="doRegister()">회원가입 신청</button>
+    <div class="auth-err" id="reg-err"></div>
+    <div class="auth-link">이미 계정이 있으신가요? <a onclick="showLogin()">로그인</a></div>
+  </div>
+  <!-- 승인 대기 -->
+  <div id="auth-pending" class="auth-box" style="display:none;">
+    <div class="auth-pending-box">
+      <div class="big-icon">⏳</div>
+      <h2 style="margin-bottom:10px;">관리자 승인 대기중</h2>
+      <p style="color:#666;font-size:13px;line-height:1.7;">회원가입 신청이 완료되었습니다.<br>관리자 승인 후 로그인이 가능합니다.</p>
+      <button class="btn-auth" style="margin-top:22px;width:auto;padding:9px 28px;" onclick="showLogin()">로그인 화면으로</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 관리자 패널 ── -->
+<div class="admin-modal" id="admin-modal">
+  <div class="admin-box">
+    <div class="admin-head">
+      <h3>👥 회원 관리</h3>
+      <button class="btn-close-admin" onclick="closeAdminPanel()">✕ 닫기</button>
+    </div>
+    <div class="admin-body" id="admin-body">
+      <div style="text-align:center;padding:30px;color:#999;">로딩 중...</div>
+    </div>
+  </div>
+</div>
+
+<div class="header">
+  <div style="font-size:22px;">📦</div>
+  <div>
+    <h1>생산계획 대비 자재부족현황</h1>
+    <div class="sub">BOM × 생산계획 → 재고 + 키팅 비교 분석</div>
+  </div>
+  <button class="btn-auto-kit" onclick="openAutoKitModal()" title="sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다">
+    🤖 키팅 자동화
+  </button>
+  <div class="header-user" id="header-user" style="display:none;">
+    <span class="hdr-uname" id="hdr-uname"></span>
+    <button class="btn-admin-open" id="btn-admin-open" onclick="openAdminPanel()" style="display:none;">👥 회원관리</button>
+    <button class="btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
+</div>
+
+<!-- 키팅 자동화 모달 -->
+<div class="auto-kit-modal" id="auto-kit-modal">
+  <div class="auto-kit-box">
+    <h3>🤖 sMES 키팅 자동화</h3>
+    <div class="auto-kit-step"><span class="num">1</span><span>sMES 실행 → 로그인 (SSAT045)</span></div>
+    <div class="auto-kit-step"><span class="num">2</span><span>생산관리 → 조립 자재 kitting → 오늘 날짜 조회</span></div>
+    <div class="auto-kit-step"><span class="num">3</span><span>품목 전체 선택 후 Excel 다운로드 반복</span></div>
+    <div class="auto-kit-step"><span class="num">4</span><span>자재부족현황 로그인 → 키팅 초기화 → 전체 업로드</span></div>
+    <div class="auto-kit-step"><span class="num">5</span><span>실행완료 알림 표시</span></div>
+    <div class="auto-kit-note">⚠️ 최초 1회 setup_url_protocol.bat를 관리자로 실행하여 프로토콜을 등록해야 합니다.</div>
+    <div class="auto-kit-btns">
+      <button class="btn-start-auto" onclick="startAutoKit()">▶ 자동화 시작</button>
+      <button class="btn-setup" onclick="downloadSetupBat()">⚙️ 최초 설정</button>
+      <button class="btn-cancel" onclick="closeAutoKitModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="restore-notice" id="restore-notice">💾 이전에 업로드된 파일이 복원되었습니다. 새 파일을 선택하면 덮어씁니다.</div>
+
+  <!-- 파일 업로드 -->
+  <div class="upload-section">
+    <h2>📂 파일 업로드</h2>
+    <div class="upload-grid">
+      <div class="upload-item" id="drop-bom">
+        <input type="file" accept=".xlsx,.xls" id="file-bom" onchange="handleFile('bom',this)">
+        <div class="icon">🗂️</div>
+        <div class="label">BOM</div>
+        <div class="desc">부품 소요량 정보</div>
+        <div class="status" id="status-bom">클릭하여 파일 선택</div>
+        <div class="upload-time" id="uptime-bom"></div>
+      </div>
+      <div class="upload-item" id="drop-plan">
+        <input type="file" accept=".xlsx,.xls" id="file-plan" onchange="handleFile('plan',this)">
+        <div class="icon">📅</div>
+        <div class="label">생산계획</div>
+        <div class="desc">조립_A/B/C/D 시트 포함</div>
+        <div class="status" id="status-plan">클릭하여 파일 선택</div>
+        <div class="upload-time" id="uptime-plan"></div>
+      </div>
+      <div class="upload-item" id="drop-inv">
+        <input type="file" accept=".xlsx,.xls" id="file-inv" onchange="handleFile('inv',this)">
+        <div class="icon">🏭</div>
+        <div class="label">재고현황</div>
+        <div class="desc">현재 재고 수량</div>
+        <div class="status" id="status-inv">클릭하여 파일 선택</div>
+        <div class="upload-time" id="uptime-inv"></div>
+      </div>
+    </div>
+
+    <!-- 키팅 복수 업로드 -->
+    <div class="kit-section">
+      <div class="kit-header">
+        <span class="kit-title">📋 키팅된 자재 <span class="optional-badge">선택 · 복수등록</span></span>
+        <div class="kit-actions">
+          <label class="btn-kit-add">
+            ＋ 파일 추가
+            <input type="file" accept=".xlsx,.xls" multiple id="file-kit" onchange="handleKitFiles(this)" style="display:none">
+          </label>
+          <button class="btn-kit-clear" onclick="clearKitFiles()">🗑️ 초기화</button>
+        </div>
+      </div>
+      <div class="kit-chips" id="kit-chips">
+        <span class="kit-empty">등록된 키팅 파일 없음 (선택사항)</span>
+      </div>
+      <div class="upload-time" id="uptime-kit"></div>
+    </div>
+  </div>
+
+  <!-- 설정 & 실행 -->
+  <div class="settings-section">
+    <div class="setting-item">
+      <label>📅 기준일자 이후</label>
+      <input type="date" id="fromDate">
+    </div>
+    <div class="setting-item">
+      <label>BOM 레벨</label>
+      <select id="bomLevel">
+        <option value="all">전체</option>
+        <option value="1" selected>레벨 1</option>
+        <option value="1,2">레벨 1+2</option>
+      </select>
+    </div>
+    <div class="setting-item">
+      <label>부품유형</label>
+      <select id="partType">
+        <option value="all" selected>전체</option>
+        <option value="구매">구매</option>
+        <option value="사출">사출</option>
+        <option value="도장">도장</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="btn-run" onclick="runAnalysis()" disabled>🔍 분석 실행</button>
+    <button class="btn btn-export" id="btn-export" onclick="exportExcel()" disabled>📥 Excel 내보내기</button>
+    <span id="run-info" style="font-size:11px;color:#777;"></span>
+  </div>
+
+  <!-- 긴급도 기준 라벨 -->
+  <div id="cutoff-info" style="display:none;background:#fff;border-radius:8px;padding:8px 16px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.08);font-size:12px;color:#444;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <span>📅 <strong>긴급도 기준:</strong></span>
+    <span id="cutoff-range" style="color:#1e3a5f;font-weight:700;"></span>
+    <span style="color:#999;">· 일요일 제외 3영업일 이내 = 🔴 긴급</span>
+  </div>
+
+  <!-- 요약 카드 -->
+  <div class="summary-cards" id="summary-cards" style="display:none;">
+    <div class="card" style="border-top:3px solid #7b0000;"><div class="val" id="cnt-urgent1" style="color:#7b0000;">0</div><div class="lbl">🚨 즉시부족 (1일이내)</div></div>
+    <div class="card" style="border-top:3px solid #c0392b;"><div class="val" id="cnt-urgent" style="color:#c0392b;">0</div><div class="lbl">🔴 긴급 부족 (3일이내)</div></div>
+    <div class="card" style="border-top:3px solid #7f8c8d;"><div class="val" id="cnt-later" style="color:#7f8c8d;">0</div><div class="lbl">📋 여유 부족 (3일이후)</div></div>
+    <div class="card warning"><div class="val" id="cnt-warning">0</div><div class="lbl">⚠️ 위험 자재 (&lt;120%)</div></div>
+    <div class="card ok"><div class="val" id="cnt-ok">0</div><div class="lbl">✅ 충분</div></div>
+    <div class="card kit"><div class="val" id="cnt-kit">0</div><div class="lbl">🟣 키팅 적용</div></div>
+    <div class="card info"><div class="val" id="cnt-total">0</div><div class="lbl">📦 분석 부품 총계</div></div>
+  </div>
+
+  <!-- 결과 탭 -->
+  <div class="result-section">
+    <div class="tab-row">
+      <div class="tab active" id="tab-parts" onclick="switchTab('parts')">📊 자재별 부족현황</div>
+      <div class="tab" id="tab-model" onclick="switchTab('model')">🏭 모델별 부족현황</div>
+      <div class="tab" id="tab-date" onclick="switchTab('date')">📅 일자별 부족현황</div>
+      <div class="tab" id="tab-inv" onclick="switchTab('inv')">📦 재고현황</div>
+      <div class="tab" id="tab-modinv" onclick="switchTab('modinv')">🗂️ 모델별 재고현황</div>
+    </div>
+
+    <!-- 자재별 탭 -->
+    <div class="tab-panel active" id="panel-parts">
+      <div class="result-header">
+        <h2 id="result-title">📊 분석 결과</h2>
+        <div class="filter-bar">
+          <input type="text" id="search-input" placeholder="부품코드 / 부품명 검색..." oninput="filterTable()" style="display:none;">
+          <select id="filter-status" onchange="filterTable()" style="display:none;">
+            <option value="all">전체</option>
+            <option value="danger">🚨 부족만</option>
+            <option value="warning">⚠️ 위험만</option>
+            <option value="ok">✅ 충분만</option>
+            <option value="na">미등록</option>
+          </select>
+          <select id="filter-sheet" onchange="filterTable()" style="display:none;">
+            <option value="all">전체 라인</option>
+          </select>
+          <select id="filter-urgency" onchange="filterTable()" style="display:none;">
+            <option value="all">전체 긴급도</option>
+            <option value="urgent1">🚨 1일이내 즉시</option>
+            <option value="urgent3">🔴 3일이내 긴급</option>
+            <option value="later">📋 3일이후 여유</option>
+          </select>
+        </div>
+      </div>
+      <div id="result-body">
+        <div class="empty"><div class="icon">📤</div><div>파일을 업로드하고 분석 실행 버튼을 클릭하세요.</div></div>
+      </div>
+    </div>
+
+    <!-- 모델별 탭 -->
+    <div class="tab-panel" id="panel-model">
+      <div class="result-header">
+        <h2 id="model-title">🏭 모델별 부족현황</h2>
+        <div class="filter-bar">
+          <input type="text" id="model-search" placeholder="모델명 / 제품번호 검색..." oninput="filterModelTable()" style="display:none;">
+          <select id="model-filter-status" onchange="filterModelTable()" style="display:none;">
+            <option value="all">전체</option>
+            <option value="danger">🚨 부족 모델만</option>
+            <option value="warning">⚠️ 위험 모델만</option>
+            <option value="ok">✅ 정상만</option>
+            <option value="na">BOM 미등록</option>
+          </select>
+          <select id="model-filter-sheet" onchange="filterModelTable()" style="display:none;">
+            <option value="all">전체 라인</option>
+          </select>
+          <select id="model-filter-urgency" onchange="filterModelTable()" style="display:none;">
+            <option value="all">전체 긴급도</option>
+            <option value="urgent1">🚨 1일이내 즉시</option>
+            <option value="urgent3">🔴 3일이내 긴급</option>
+            <option value="later">📋 3일이후 여유</option>
+          </select>
+        </div>
+      </div>
+      <div id="model-body">
+        <div class="empty"><div class="icon">🏭</div><div>분석을 실행하면 모델별 현황이 표시됩니다.</div></div>
+      </div>
+    </div>
+
+    <!-- 일자별 부족현황 탭 -->
+    <div class="tab-panel" id="panel-date">
+      <div class="result-header">
+        <h2 id="date-title">📅 일자별 부족현황</h2>
+        <div class="filter-bar">
+          <select id="date-filter-status" onchange="filterDateTable()" style="display:none;">
+            <option value="all">전체</option>
+            <option value="danger">🚨 부족 있음</option>
+            <option value="warning">⚠️ 위험 있음</option>
+            <option value="ok">✅ 정상</option>
+          </select>
+          <select id="date-filter-sheet" onchange="filterDateTable()" style="display:none;">
+            <option value="all">전체 라인</option>
+          </select>
+        </div>
+      </div>
+      <div id="date-body">
+        <div class="empty"><div class="icon">📅</div><div>분석을 실행하면 일자별 현황이 표시됩니다.</div></div>
+      </div>
+    </div>
+
+    <!-- 재고현황 탭 -->
+    <div class="tab-panel" id="panel-inv">
+      <div class="result-header">
+        <h2 id="inv-title">📦 재고현황</h2>
+        <div class="filter-bar">
+          <input type="text" id="inv-search" placeholder="품목코드 / 품목명 검색..." oninput="filterInvTable()" style="display:none;">
+          <select id="inv-filter-type" onchange="filterInvTable()" style="display:none;">
+            <option value="all">전체 자재</option>
+            <option value="warehouse">🏭 창고자재</option>
+            <option value="kitting">🟣 키팅된 자재</option>
+            <option value="both">창고+키팅 모두</option>
+          </select>
+          <select id="inv-filter-sort" onchange="filterInvTable()" style="display:none;">
+            <option value="total">총 수량 순</option>
+            <option value="stock">창고재고 순</option>
+            <option value="kit">키팅수량 순</option>
+            <option value="code">품목코드 순</option>
+          </select>
+        </div>
+      </div>
+      <div id="inv-body">
+        <div class="empty"><div class="icon">📦</div><div>분석을 실행하면 재고현황이 표시됩니다.</div></div>
+      </div>
+    </div>
+
+    <!-- 모델별 재고현황 탭 -->
+    <div class="tab-panel" id="panel-modinv">
+      <div class="result-header">
+        <h2>🗂️ 모델별 재고현황</h2>
+        <div class="filter-bar">
+          <input type="text" id="modinv-search" placeholder="모델명 / 제품코드 / 제품명 검색..." oninput="filterModelInvTable()" style="display:none;">
+        </div>
+      </div>
+      <div id="modinv-body">
+        <div class="empty"><div class="icon">🗂️</div><div>분석을 실행하면 모델별 재고현황이 표시됩니다.</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── 전역 상태 ──────────────────────────────────────
+const state = { bom: null, plan: null, inv: null, kitFiles: [] };
+// kitFiles: [{ wb, name, rawData: ArrayBuffer }]
+
+let analysisResult = [];
+let filteredResult = [];
+let modelResult = [];
+let filteredModelResult = [];
+let inventoryResult = [];
+let filteredInventory = [];
+let modelInvResult = [];
+let filteredModelInvResult = [];
+let partToProductsMap = {};
+let globalHasKit = false;
+let dateResult = [];
+let filteredDateResult = [];
+
+// ── IndexedDB ──────────────────────────────────────
+const DB_NAME = 'MaterialShortageDB';
+const DB_STORE = 'uploadedFiles';
+
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+    };
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function dbPut(key, val) {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).put(val, key);
+    return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+  } catch(e) { console.warn('DB put 실패', key, e); }
+}
+
+async function dbGet(key) {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, 'readonly');
+      const req = tx.objectStore(DB_STORE).get(key);
+      req.onsuccess = e => resolve(e.target.result ?? null);
+      req.onerror = () => resolve(null);
+    });
+  } catch(e) { return null; }
+}
+
+// ── 날짜 유틸: 오늘 / 영업일 계산 ────────────────────
+function getTodayStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+// 일요일 제외 n영업일 이후 Date 반환
+function addBusinessDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  let count = 0;
+  while (count < n) {
+    d.setDate(d.getDate() + 1);
+    if (d.getDay() !== 0) count++; // 0=일요일 제외
+  }
+  return d;
+}
+
+function dateObjToStr(d) {
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+// ── 페이지 로드 시 파일 복원 ───────────────────────
+window.addEventListener('load', async () => {
+  await initAuth();
+  // 기준일자 기본값 = 오늘
+  document.getElementById('fromDate').value = getTodayStr();
+  let restored = 0;
+  for (const type of ['bom', 'plan', 'inv']) {
+    const stored = await dbGet(type);
+    if (!stored) continue;
+    try {
+      state[type] = XLSX.read(stored.data, { type: 'array' });
+      document.getElementById('drop-' + type).classList.add('loaded');
+      document.getElementById('status-' + type).textContent = '✅ ' + stored.name + ' (저장됨)';
+      restored++;
+    } catch(e) { console.warn('복원 실패:', type); }
+  }
+  const kitList = await dbGet('kit_list');
+  if (Array.isArray(kitList) && kitList.length > 0) {
+    for (const item of kitList) {
+      try {
+        const wb = XLSX.read(item.data, { type: 'array' });
+        state.kitFiles.push({ wb, name: item.name, rawData: item.data });
+        restored++;
+      } catch(e) { console.warn('키팅 복원 실패:', item.name); }
+    }
+    if (state.kitFiles.length > 0) renderKitChips();
+  }
+  if (restored > 0) document.getElementById('restore-notice').style.display = 'block';
+  // 업로드 타임스탬프 복원
+  ['bom', 'plan', 'inv'].forEach(type => {
+    const ts = localStorage.getItem('ms_uptime_' + type);
+    const name = localStorage.getItem('ms_uploader_' + type) || '';
+    if (ts) document.getElementById('uptime-' + type).textContent = fmtUpTime(ts, name);
+  });
+  const tsKit = localStorage.getItem('ms_uptime_kit');
+  const nameKit = localStorage.getItem('ms_uploader_kit') || '';
+  if (tsKit) document.getElementById('uptime-kit').textContent = fmtUpTime(tsKit, nameKit);
+  checkReady();
+  initDragDrop();
+  loadUploadLogsFromSupabase();
+});
+
+function fmtUpTime(ts, name) {
+  if (!ts) return '';
+  const d = new Date(Number(ts));
+  const timeStr = '📅 ' + d.toLocaleDateString('ko-KR') + ' ' + d.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+  return name ? timeStr + ' · ' + name : timeStr;
+}
+
+// ── 필수 파일 업로드 (공통 처리) ────────────────────
+function _processFile(type, file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const ab = e.target.result;
+      state[type] = XLSX.read(ab, { type: 'array' });
+      document.getElementById('drop-' + type).classList.remove('error');
+      document.getElementById('drop-' + type).classList.add('loaded');
+      document.getElementById('status-' + type).textContent = '✅ ' + file.name;
+      dbPut(type, { data: ab, name: file.name });
+      const ts = Date.now();
+      const uname = currentUser ? currentUser.displayName : '';
+      localStorage.setItem('ms_uptime_' + type, ts);
+      if (uname) localStorage.setItem('ms_uploader_' + type, uname);
+      document.getElementById('uptime-' + type).textContent = fmtUpTime(ts, uname);
+      syncUploadLog(type, ts, uname);
+      checkReady();
+    } catch(err) {
+      document.getElementById('drop-' + type).classList.add('error');
+      document.getElementById('status-' + type).textContent = '❌ 오류: ' + err.message;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function handleFile(type, input) { _processFile(type, input.files[0]); }
+
+// ── 키팅 복수 파일 (공통 처리) ─────────────────────
+function _processKitFiles(files) {
+  if (!files.length) return;
+  let remaining = files.length;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const ab = e.target.result;
+        const wb = XLSX.read(ab, { type: 'array' });
+        state.kitFiles.push({ wb, name: file.name, rawData: ab });
+      } catch(err) { console.warn('키팅 파일 오류:', file.name); }
+      remaining--;
+      if (remaining === 0) {
+        saveKitList(); renderKitChips(); checkReady();
+        const ts = Date.now();
+        const uname = currentUser ? currentUser.displayName : '';
+        localStorage.setItem('ms_uptime_kit', ts);
+        if (uname) localStorage.setItem('ms_uploader_kit', uname);
+        document.getElementById('uptime-kit').textContent = fmtUpTime(ts, uname);
+        syncUploadLog('kit', ts, uname);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+}
+function handleKitFiles(input) { _processKitFiles(Array.from(input.files)); input.value = ''; }
+
+// ── 드래그앤드롭 초기화 ──────────────────────────────
+function initDragDrop() {
+  // BOM · 생산계획 · 재고현황 — 단일 파일 드래그앤드롭
+  ['bom', 'plan', 'inv'].forEach(type => {
+    const el = document.getElementById('drop-' + type);
+
+    el.addEventListener('dragover', e => {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.add('drag-over');
+    });
+    el.addEventListener('dragleave', e => {
+      if (!el.contains(e.relatedTarget)) el.classList.remove('drag-over');
+    });
+    el.addEventListener('drop', e => {
+      e.preventDefault(); e.stopPropagation();
+      el.classList.remove('drag-over');
+      const file = Array.from(e.dataTransfer.files)
+                        .find(f => /\.xlsx?$/i.test(f.name));
+      if (file) _processFile(type, file);
+    });
+  });
+
+  // 키팅된 자재 — 복수 파일 드래그앤드롭
+  const kitEl = document.querySelector('.kit-section');
+  kitEl.addEventListener('dragover', e => {
+    e.preventDefault(); e.stopPropagation();
+    kitEl.classList.add('drag-over');
+  });
+  kitEl.addEventListener('dragleave', e => {
+    if (!kitEl.contains(e.relatedTarget)) kitEl.classList.remove('drag-over');
+  });
+  kitEl.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    kitEl.classList.remove('drag-over');
+    const files = Array.from(e.dataTransfer.files)
+                       .filter(f => /\.xlsx?$/i.test(f.name));
+    if (files.length) _processKitFiles(files);
+  });
+}
+
+function removeKitFile(idx) {
+  state.kitFiles.splice(idx, 1);
+  saveKitList(); renderKitChips(); checkReady();
+}
+
+function clearKitFiles() {
+  state.kitFiles = [];
+  dbPut('kit_list', []); renderKitChips(); checkReady();
+  localStorage.removeItem('ms_uptime_kit');
+  localStorage.removeItem('ms_uploader_kit');
+  document.getElementById('uptime-kit').textContent = '';
+}
+
+function saveKitList() {
+  dbPut('kit_list', state.kitFiles.map(f => ({ data: f.rawData, name: f.name })));
+}
+
+function renderKitChips() {
+  const el = document.getElementById('kit-chips');
+  if (state.kitFiles.length === 0) {
+    el.innerHTML = '<span class="kit-empty">등록된 키팅 파일 없음 (선택사항)</span>';
+    return;
+  }
+  el.innerHTML = state.kitFiles.map((f, i) =>
+    `<span class="kit-chip">📋 ${f.name} <span class="rm" onclick="removeKitFile(${i})" title="제거">✕</span></span>`
+  ).join('');
+}
+
+function checkReady() {
+  const ready = !!(state.bom && state.plan && state.inv);
+  const permDenied = !!document.getElementById('btn-run').dataset.permDenied;
+  document.getElementById('btn-run').disabled = !ready || permDenied;
+  if (ready) {
+    const kitMsg = state.kitFiles.length > 0 ? ` | 🟣 키팅 ${state.kitFiles.length}개` : '';
+    document.getElementById('run-info').textContent = '✅ 필수 3개 로드됨' + kitMsg;
+  }
+}
+
+// ── 탭 ────────────────────────────────────────────
+function switchTab(tab) {
+  ['parts','model','date','inv','modinv'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t===tab);
+    document.getElementById('panel-'+t).classList.toggle('active', t===tab);
+  });
+}
+
+// ── 날짜 유틸 ──────────────────────────────────────
+function excelDateToJs(s) { return new Date((s-25569)*86400*1000); }
+function dateToSerial(str) { const d=new Date(str); return Math.round((d-new Date('1899-12-30'))/86400000); }
+function formatDate(s) {
+  if (!s||isNaN(s)) return '';
+  const d=excelDateToJs(s);
+  return (d.getMonth()+1)+'/'+d.getDate();
+}
+function fmt(n) {
+  if (n===null||n===undefined) return '-';
+  return Math.round(n).toLocaleString();
+}
+
+// ── 제품코드 시트 파싱 (모델명 매핑) ──────────────────
+function parseProductCodeMap(wb) {
+  const sn = wb.SheetNames.find(n => n.includes('제품코드'));
+  if (!sn) return {};
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
+  let cCode=-1, cModel=-1, cName=-1, hRow=0;
+  for (let i=0; i<Math.min(5, rows.length); i++) {
+    const r = rows[i].map(v=>String(v).trim());
+    const ci = r.findIndex(v=>v.includes('제품코드')||v.includes('품목코드'));
+    if (ci>=0) {
+      cCode=ci;
+      cModel=r.findIndex(v=>v.includes('모델명')||v==='모델');
+      cName=r.findIndex(v=>v.includes('제품명'));
+      hRow=i; break;
+    }
+  }
+  if (cCode<0) { cCode=0; cModel=1; cName=2; }
+  const map={};
+  for (let i=hRow+1; i<rows.length; i++) {
+    const r=rows[i];
+    const code=String(r[cCode]||'').trim();
+    if (!code) continue;
+    const productName = cName>=0 ? String(r[cName]||'').trim() : '';
+    const modelName = productName ? productName.split('_')[0].trim() : (cModel>=0 ? String(r[cModel]||'').trim() : '');
+    map[code]={ modelName, productName };
+  }
+  return map;
+}
+
+// ── BOM 파싱 ───────────────────────────────────────
+function parseBOM(wb, levelFilter, partTypeFilter) {
+  // BOM정보 시트 우선 (제품명·규격 포함), 없으면 BOM, 없으면 첫 시트
+  const sn = wb.SheetNames.find(n=>n.includes('BOM정보'))
+    || (wb.SheetNames.includes('BOM') ? 'BOM' : wb.SheetNames[0]);
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
+  let hRow=-1, c={};
+  for (let i=0; i<Math.min(5,rows.length); i++) {
+    const r=rows[i].map(v=>String(v).trim());
+    const ip=r.findIndex(v=>v==='제품번호');
+    if (ip>=0) {
+      hRow=i;
+      c={ 제품번호:ip,
+        제품명:r.findIndex(v=>v==='제품명'||v.includes('제품명')),
+        레벨:r.findIndex(v=>v==='레벨'), 모품번:r.findIndex(v=>v==='모품번'),
+        자품번:r.findIndex(v=>v==='자품번'), 자품명:r.findIndex(v=>v.includes('자품명')),
+        규격:r.findIndex(v=>v==='규격'), 부품유형:r.findIndex(v=>v.includes('부품유형')),
+        단위:r.findIndex(v=>v==='단위'), 소요량:r.findIndex(v=>v==='소요량') };
+      break;
+    }
+  }
+  if (hRow<0) { c={제품번호:2,제품명:6,레벨:8,모품번:9,자품번:10,자품명:12,규격:13,부품유형:14,단위:15,소요량:16}; hRow=0; }
+  const bomMap={};
+  const productNameMap={}; // pn → 제품명
+  let cur='';
+  const al = levelFilter==='all'?null:levelFilter.split(',').map(Number);
+  for (let i=hRow+1; i<rows.length; i++) {
+    const r=rows[i];
+    const pn=String(r[c.제품번호]||'').trim(); if (pn) cur=pn;
+    if (!cur) continue;
+    // 제품명 수집
+    if (cur && c.제품명>=0 && !productNameMap[cur]) {
+      const nm=String(r[c.제품명]||'').trim();
+      if (nm) productNameMap[cur]=nm;
+    }
+    const lv=Number(r[c.레벨]);
+    const jp=String(r[c.자품번]||'').trim();
+    const bt=String(r[c.부품유형]||'').trim();
+    const qty=parseFloat(r[c.소요량])||0;
+    if (!jp||!qty) continue;
+    if (al&&!al.includes(lv)) continue;
+    if (partTypeFilter!=='all'&&bt!==partTypeFilter) continue;
+    if (!bomMap[cur]) bomMap[cur]=[];
+    bomMap[cur].push({ 자품번:jp, 자품명:String(r[c.자품명]||'').trim(),
+      규격:String(r[c.규격]||'').trim(), 부품유형:bt,
+      단위:String(r[c.단위]||'').trim(), 소요량:qty });
+  }
+  return { bomMap, productNameMap };
+}
+
+// ── 생산계획 파싱 ──────────────────────────────────
+function parsePlan(wb, fromSerial) {
+  // 조립 시트 탐색 (A, B, C, D 등 모두 포함)
+  const sheets = wb.SheetNames.filter(n => /조립/i.test(n));
+  const result = [];
+  for (const sn of sheets) {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
+    let ds=-1, cD=0, cP=1, cQ=5, cM=3, cS=4;
+
+    // 헤더 탐색: 최대 20행, 더 넓은 키워드 매칭
+    for (let i=0; i<Math.min(20,rows.length); i++) {
+      const r=rows[i].map(v=>String(v).trim());
+      const hasDateKW  = r.some(v=>v.includes('일자')||v.includes('날짜'));
+      const hasPNkw    = r.some(v=>v.includes('P/N')||v.includes('품번')||v.includes('제품번호')||v.includes('시스템'));
+      const hasQtyKW   = r.some(v=>v.includes('수량'));
+      if (hasDateKW||hasPNkw||hasQtyKW) {
+        ds=i+1;
+        const a=r.findIndex(v=>v.includes('일자')||v.includes('날짜'));
+        const b=r.findIndex(v=>v.includes('P/N')||v.includes('품번')||v.includes('제품번호')||v.includes('시스템'));
+        // 계획수량 → 조립수량 → 수량(한글) → Qty(영문) 순
+        let c2=r.findIndex(v=>v.includes('계획')&&v.includes('수량'));
+        if (c2<0) c2=r.findIndex(v=>v.includes('조립')&&v.includes('수량'));
+        if (c2<0) c2=r.findIndex(v=>v==='수량'||v==='계획수량'||v==='조립수량');
+        if (c2<0) c2=r.findIndex(v=>v.includes('수량')&&!v.includes('누계')&&!v.includes('실적'));
+        if (c2<0) c2=r.findIndex(v=>v.toUpperCase()==='QTY');
+        const d=r.findIndex(v=>v.toUpperCase().includes('MODEL')||v.includes('모델'));
+        const e=r.findIndex(v=>v.includes('사양')||v.toUpperCase().includes('SPEC'));
+        if (a>=0) cD=a; if (b>=0) cP=b; if (c2>=0) cQ=c2;
+        if (d>=0) cM=d; if (e>=0) cS=e;
+        break;
+      }
+    }
+    // 헤더를 못 찾았으면 1행부터 시도
+    if (ds<0) ds=1;
+
+    const ln=sn.replace(/\(.*\)/,'').trim().replace(/\s+/g,'_');
+    for (let i=ds; i<rows.length; i++) {
+      const r=rows[i];
+      const ds2=r[cD]; if (!ds2||isNaN(Number(ds2))) continue;
+      if (Number(ds2)<fromSerial) continue;
+      const pn=String(r[cP]||'').trim();
+      const qty=parseFloat(r[cQ])||0;
+      if (!pn||qty<=0) continue;
+      result.push({ sheet:ln, dateSerial:Number(ds2), dateStr:formatDate(Number(ds2)),
+        pn, qty, model:String(r[cM]||'').trim(), spec:String(r[cS]||'').trim() });
+    }
+  }
+  return result;
+}
+
+// ── 재고 파싱 ──────────────────────────────────────
+function parseInventory(wb) {
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
+  let cC=2, cN=4, cS=5, cU=6, cQ=11;
+  const h=rows[0].map(v=>String(v).trim());
+  const ic=h.findIndex(v=>v.includes('품목코드'));
+  const in_=h.findIndex(v=>v.includes('품목명'));
+  const is=h.findIndex(v=>v==='규격');
+  const iu=h.findIndex(v=>v==='단위');
+  const iq=h.findIndex(v=>v==='재고'||v==='재고수량');
+  if (ic>=0) cC=ic; if (in_>=0) cN=in_; if (is>=0) cS=is; if (iu>=0) cU=iu; if (iq>=0) cQ=iq;
+  const inv={};
+  for (let i=1; i<rows.length; i++) {
+    const r=rows[i];
+    const code=String(r[cC]||'').trim(); if (!code) continue;
+    const stock=parseFloat(r[cQ])||0;
+    if (inv[code]) { inv[code].stock+=stock; }
+    else { inv[code]={ code, name:String(r[cN]||'').trim(),
+      spec:String(r[cS]||'').trim(), unit:String(r[cU]||'').trim(), stock }; }
+  }
+  return inv;
+}
+
+// ── 키팅 파싱 (복수 합산) ──────────────────────────
+function parseKitting(kitFiles) {
+  const km={};
+  if (!kitFiles||kitFiles.length===0) return km;
+  const codeKW=['자재코드','품번','부품코드','자품번','품목코드','PART','CODE','코드'];
+  const modelKW=['모델','MODEL','제품번호','제품명','품명'];
+  const qtyKW=['키팅수량','키팅','출고수량','피킹수량','수량','QTY','QUANTITY'];
+  for (const fi of kitFiles) {
+    for (const sn of fi.wb.SheetNames) {
+      const rows=XLSX.utils.sheet_to_json(fi.wb.Sheets[sn],{header:1,defval:''});
+      if (rows.length<2) continue;
+      const h=rows[0].map(v=>String(v).trim());
+      let cc=h.findIndex(v=>codeKW.some(k=>v.toUpperCase().includes(k.toUpperCase())));
+      let cm=h.findIndex(v=>modelKW.some(k=>v.toUpperCase().includes(k.toUpperCase())));
+      let cq=h.findIndex(v=>qtyKW.some(k=>v.toUpperCase().includes(k.toUpperCase())));
+      if (cc<0) cc=1; if (cm<0) cm=0; if (cq<0) cq=h.length-1;
+      for (let i=1; i<rows.length; i++) {
+        const r=rows[i];
+        const code=String(r[cc]||'').trim();
+        const model=String(r[cm]||'').trim()||sn;
+        const qty=parseFloat(r[cq])||0;
+        if (!code||qty<=0) continue;
+        if (!km[code]) km[code]={totalKitted:0,byModel:{}};
+        km[code].totalKitted+=qty;
+        km[code].byModel[model]=(km[code].byModel[model]||0)+qty;
+      }
+    }
+  }
+  return km;
+}
+
+// ── 메인 분석 ──────────────────────────────────────
+function runAnalysis() {
+  document.getElementById('result-body').innerHTML='<div class="loading"><div class="spinner"></div><br>분석 중...</div>';
+  document.getElementById('model-body').innerHTML='<div class="loading"><div class="spinner"></div><br>분석 중...</div>';
+  setTimeout(()=>{
+    try {
+      const fromDateStr=document.getElementById('fromDate').value;
+      const fromSerial=dateToSerial(fromDateStr);
+      const bomLevel=document.getElementById('bomLevel').value;
+      const partType=document.getElementById('partType').value;
+
+      // 긴급도 기준: 1영업일 / 3영업일 (일요일 제외)
+      const cutoff1DateObj=addBusinessDays(fromDateStr,1);
+      const cutoff1Serial=dateToSerial(dateObjToStr(cutoff1DateObj));
+      const cutoffDateObj=addBusinessDays(fromDateStr,3);
+      const cutoffSerial=dateToSerial(dateObjToStr(cutoffDateObj));
+      const fmtShort=d=>`${d.getMonth()+1}/${d.getDate()}`;
+      const fromDateObj=new Date(fromDateStr+'T00:00:00');
+      document.getElementById('cutoff-range').textContent=
+        `기준일 ${fmtShort(fromDateObj)} | 🚨 1일이내: ~${fmtShort(cutoff1DateObj)} | 🔴 3일이내: ~${fmtShort(cutoffDateObj)}`;
+      document.getElementById('cutoff-info').style.display='flex';
+
+      const { bomMap, productNameMap }=parseBOM(state.bom,bomLevel,partType);
+      const planRows=parsePlan(state.plan,fromSerial);
+      const invMap=parseInventory(state.inv);
+      const kitMap=parseKitting(state.kitFiles);
+      const hasKit=Object.keys(kitMap).length>0;
+      globalHasKit=hasKit;
+
+      // ── 자재별 집계 ──
+      const reqMap={};
+      let matched=0; const unmatched=new Set();
+      for (const row of planRows) {
+        const comps=bomMap[row.pn];
+        if (!comps||comps.length===0){ unmatched.add(row.pn); continue; }
+        matched++;
+        for (const comp of comps) {
+          const req=row.qty*comp.소요량;
+          if (!reqMap[comp.자품번]) {
+            reqMap[comp.자품번]={ 자품번:comp.자품번, 자품명:comp.자품명, 규격:comp.규격,
+              부품유형:comp.부품유형, 단위:comp.단위, totalReq:0, bySheet:{}, byDateSerial:{} };
+          }
+          reqMap[comp.자품번].totalReq+=req;
+          reqMap[comp.자품번].bySheet[row.sheet]=(reqMap[comp.자품번].bySheet[row.sheet]||0)+req;
+          reqMap[comp.자품번].byDateSerial[row.dateSerial]=true;
+        }
+      }
+
+      analysisResult=Object.values(reqMap).map(item=>{
+        const inv=invMap[item.자품번];
+        const stock=inv?inv.stock:null;
+        const kit=kitMap[item.자품번];
+        const kitTotal=kit?kit.totalKitted:0;
+        const available=(stock!==null||kitTotal>0)?(stock||0)+kitTotal:null;
+        const shortage=available!==null?available-item.totalReq:null;
+        const ratio=(available!==null&&item.totalReq>0)?available/item.totalReq:null;
+        let status='na';
+        if (available!==null){
+          if (shortage<0) status='danger';
+          else if (ratio<1.2) status='warning';
+          else status='ok';
+        }
+        // 긴급도: 1일이내=urgent1, 3일이내=urgent3, 이후=later
+        const dates=Object.keys(item.byDateSerial).map(Number);
+        const has1=dates.some(ds=>ds<=cutoff1Serial);
+        const has3=dates.some(ds=>ds<=cutoffSerial);
+        const urgency=(status==='danger'||status==='warning')
+          ?(has1?'urgent1':has3?'urgent3':'later')
+          :'ok';
+        return { ...item, stock, kitTotal, kitByModel:kit?kit.byModel:{},
+          available, shortage, ratio, status, urgency, unit:inv?inv.unit:item.단위 };
+      });
+
+      const statOrd={danger:0,warning:1,ok:2,na:3};
+      analysisResult.sort((a,b)=>{
+        if (statOrd[a.status]!==statOrd[b.status]) return statOrd[a.status]-statOrd[b.status];
+        return (a.shortage||0)-(b.shortage||0);
+      });
+      filteredResult=[...analysisResult];
+
+      // ── 모델별 분석 ──
+      const partMap={}; // 자품번 → analysisResult 항목
+      analysisResult.forEach(r=>{ partMap[r.자품번]=r; });
+
+      // Step1: ALL planRows → modelMap (BOM 여부 관계없이)
+      const modelMap={};
+      for (const row of planRows) {
+        const key=`${row.sheet}||${row.pn}||${row.model}`;
+        if (!modelMap[key]) {
+          modelMap[key]={ model:row.model||row.pn, pn:row.pn,
+            품목명:productNameMap[row.pn]||row.spec||'', spec:row.spec,
+            sheet:row.sheet, totalQty:0, byDate:{}, byDateSerials:new Set(),
+            hasBOM:!!bomMap[row.pn], dangerParts:[], warningParts:[] };
+        }
+        modelMap[key].totalQty+=row.qty;
+        modelMap[key].byDate[row.dateStr]=(modelMap[key].byDate[row.dateStr]||0)+row.qty;
+        modelMap[key].byDateSerials.add(row.dateSerial);
+        if (bomMap[row.pn]) modelMap[key].hasBOM=true;
+      }
+
+      // Step2: BOM 있는 것만 shortage 계산 + byDateReq 포함
+      for (const entry of Object.values(modelMap)) {
+        if (!entry.hasBOM){ entry.status='na'; continue; }
+        const comps=bomMap[entry.pn]||[];
+        const seen=new Set();
+        for (const comp of comps) {
+          if (seen.has(comp.자품번)) continue;
+          seen.add(comp.자품번);
+          const pr=partMap[comp.자품번];
+          if (!pr||pr.status==='ok'||pr.status==='na') continue;
+          // 일자별 소요량
+          const byDateReq={};
+          for (const [date,qty] of Object.entries(entry.byDate)) {
+            byDateReq[date]=qty*comp.소요량;
+          }
+          const info={
+            자품번:comp.자품번, 자품명:comp.자품명, 소요량:comp.소요량,
+            modelReq:entry.totalQty*comp.소요량, byDateReq,
+            stock:pr.stock, kitTotal:pr.kitTotal, available:pr.available,
+            totalGlobalReq:pr.totalReq, globalShortage:pr.shortage,
+          };
+          if (pr.status==='danger') entry.dangerParts.push(info);
+          else entry.warningParts.push(info);
+        }
+        entry.status=entry.dangerParts.length>0?'danger':entry.warningParts.length>0?'warning':'ok';
+        const hasUrgent1=[...entry.byDateSerials].some(ds=>ds<=cutoff1Serial);
+        const hasUrgent3=[...entry.byDateSerials].some(ds=>ds<=cutoffSerial);
+        entry.urgency=(entry.dangerParts.length>0||entry.warningParts.length>0)
+          ?(hasUrgent1?'urgent1':hasUrgent3?'urgent3':'later'):'ok';
+      }
+
+      modelResult=Object.values(modelMap);
+      modelResult.sort((a,b)=>{
+        const sa=a.dangerParts.length*1000+a.warningParts.length;
+        const sb=b.dangerParts.length*1000+b.warningParts.length;
+        return sb-sa;
+      });
+      filteredModelResult=[...modelResult];
+
+      // ── 요약 ──
+      const cnt={danger:0,warning:0,ok:0,na:0,kit:0,urgent1:0,urgent:0,later:0};
+      analysisResult.forEach(r=>{
+        cnt[r.status]++;
+        if(r.kitTotal>0) cnt.kit++;
+        if(r.urgency==='urgent1'){ cnt.urgent1++; cnt.urgent++; }
+        else if(r.urgency==='urgent3') cnt.urgent++;
+        else if(r.urgency==='later') cnt.later++;
+      });
+      document.getElementById('cnt-urgent1').textContent=cnt.urgent1.toLocaleString();
+      document.getElementById('cnt-urgent').textContent=cnt.urgent.toLocaleString();
+      document.getElementById('cnt-later').textContent=cnt.later.toLocaleString();
+      document.getElementById('cnt-warning').textContent=cnt.warning.toLocaleString();
+      document.getElementById('cnt-ok').textContent=cnt.ok.toLocaleString();
+      document.getElementById('cnt-kit').textContent=cnt.kit.toLocaleString();
+      document.getElementById('cnt-total').textContent=analysisResult.length.toLocaleString();
+      document.getElementById('summary-cards').style.display='grid';
+
+      // 라인 필터 옵션 (planRows 전체 기준, 모든 조립 라인 포함)
+      const allSheets=new Set(planRows.map(r=>r.sheet));
+      analysisResult.forEach(r=>Object.keys(r.bySheet).forEach(s=>allSheets.add(s)));
+      const sheetOpts='<option value="all">전체 라인</option>'+
+        [...allSheets].sort().map(s=>`<option value="${s}">${s}</option>`).join('');
+      ['filter-sheet','model-filter-sheet'].forEach(id=>
+        document.getElementById(id).innerHTML=sheetOpts);
+
+      ['search-input','filter-status','filter-sheet','filter-urgency'].forEach(id=>
+        document.getElementById(id).style.display='');
+      ['model-search','model-filter-status','model-filter-sheet','model-filter-urgency'].forEach(id=>
+        document.getElementById(id).style.display='');
+
+      const kitInfo=hasKit?` | 🟣 키팅 적용: ${cnt.kit}건`:'';
+      document.getElementById('run-info').textContent=
+        `계획: ${planRows.length}건 | BOM 매칭: ${matched}건 | 미매칭: ${unmatched.size}건${kitInfo}`;
+
+      // ── 재고현황 데이터 빌드 (BOM 전체 부품 기준) ──
+      const bomComponents={};
+      Object.values(bomMap).forEach(comps=>comps.forEach(comp=>{
+        if(!bomComponents[comp.자품번])
+          bomComponents[comp.자품번]={ name:comp.자품명, spec:comp.규격, unit:comp.단위, type:comp.부품유형 };
+      }));
+      const allCodes=new Set([...Object.keys(bomComponents),...Object.keys(invMap),...Object.keys(kitMap)]);
+      inventoryResult=[...allCodes].map(code=>{
+        const inv=invMap[code];
+        const kit=kitMap[code];
+        const bom=bomComponents[code];
+        return { code,
+          name:inv?inv.name:(bom?bom.name:''),
+          spec:inv?inv.spec:(bom?bom.spec:''),
+          unit:inv?inv.unit:(bom?bom.unit:''),
+          type:bom?bom.type:'',
+          stock:inv?inv.stock:0,
+          kitTotal:kit?kit.totalKitted:0, kitByModel:kit?kit.byModel:{} };
+      });
+      inventoryResult.forEach(r=>{ r.total=r.stock+r.kitTotal; });
+      inventoryResult.sort((a,b)=>b.total-a.total);
+      filteredInventory=[...inventoryResult];
+      ['inv-search','inv-filter-type','inv-filter-sort'].forEach(id=>
+        document.getElementById(id).style.display='');
+
+      // ── 모델별 재고현황 빌드 ──
+      const productCodeMap = parseProductCodeMap(state.bom);
+      // 자품번 → 사용 제품 역방향 맵
+      partToProductsMap = {};
+      Object.entries(bomMap).forEach(([pn, comps]) => {
+        comps.forEach(comp => {
+          if (!partToProductsMap[comp.자품번]) partToProductsMap[comp.자품번] = [];
+          const entry = productCodeMap[pn];
+          partToProductsMap[comp.자품번].push({
+            pn,
+            modelName: entry ? entry.modelName : '',
+            productName: entry ? entry.productName : (productNameMap[pn] || ''),
+            소요량: comp.소요량
+          });
+        });
+      });
+
+      modelInvResult = Object.entries(productCodeMap).map(([pn, info]) => {
+        const comps = bomMap[pn] || [];
+        const components = comps.map(comp => {
+          const inv = invMap[comp.자품번];
+          const kit = kitMap[comp.자품번];
+          const stock = inv ? inv.stock : 0;
+          const kitQty = kit ? kit.totalKitted : 0;
+          return { 자품번:comp.자품번, 자품명:comp.자품명, 규격:comp.규격,
+            부품유형:comp.부품유형, 단위:comp.단위, 소요량:comp.소요량,
+            stock, kitQty, total:stock+kitQty };
+        });
+        return { pn, modelName:info.modelName, productName:info.productName, components };
+      });
+      modelInvResult.sort((a,b)=>(a.modelName||a.pn).localeCompare(b.modelName||b.pn));
+      filteredModelInvResult=[...modelInvResult];
+      document.getElementById('modinv-search').style.display='';
+
+      // ── 일자별 부족현황 빌드 (누적 차감 방식) ──
+      // Step1: 날짜 그룹핑
+      const dayMap={};
+      planRows.forEach(row=>{
+        const ds=row.dateSerial;
+        if(!dayMap[ds]) dayMap[ds]={dateStr:row.dateStr, dateSerial:ds, entries:[]};
+        dayMap[ds].entries.push(row);
+      });
+      const sortedDays=Object.values(dayMap).sort((a,b)=>a.dateSerial-b.dateSerial);
+
+      // Step2: 부품별 일자별 소요량 집계 (날짜 순서대로)
+      const partDayReq={}; // {자품번: [{dateSerial,dateStr,totalReq,자품명,단위}]}
+      sortedDays.forEach(day=>{
+        const mdMap={};
+        day.entries.forEach(row=>{
+          const key=`${row.sheet}||${row.pn}`;
+          if(!mdMap[key]) mdMap[key]={pn:row.pn, qty:0};
+          mdMap[key].qty+=row.qty;
+        });
+        Object.values(mdMap).forEach(m=>{
+          (bomMap[m.pn]||[]).forEach(comp=>{
+            const dayReq=m.qty*comp.소요량;
+            if(!partDayReq[comp.자품번]) partDayReq[comp.자품번]=[];
+            let e=partDayReq[comp.자품번].find(x=>x.dateSerial===day.dateSerial);
+            if(!e){ e={dateSerial:day.dateSerial,dateStr:day.dateStr,totalReq:0,
+              자품명:comp.자품명, 단위:comp.단위}; partDayReq[comp.자품번].push(e); }
+            e.totalReq+=dayReq;
+          });
+        });
+      });
+
+      // Step3: 부품별 날짜별 누적 차감 → 상태 결정
+      const partDayStat={}; // {자품번: {dateSerial: {status,dayReq,remaining,available,cumConsumed}}}
+      Object.entries(partDayReq).forEach(([jp,dayEntries])=>{
+        const pr=partMap[jp];
+        const avail=pr?(pr.available!==null?pr.available:0):0;
+        let cum=0;
+        partDayStat[jp]={};
+        dayEntries.sort((a,b)=>a.dateSerial-b.dateSerial).forEach(e=>{
+          const remaining=avail-cum;
+          partDayStat[jp][e.dateSerial]={
+            status:remaining>=e.totalReq?'ok':'danger',
+            dayReq:e.totalReq, remaining, available:avail, cumConsumed:cum,
+            자품명:e.자품명, 단위:e.단위
+          };
+          cum+=e.totalReq;
+        });
+      });
+
+      // Step4: 날짜별 모델 × 부품 상태 빌드
+      dateResult=sortedDays.map(day=>{
+        const mdMap={};
+        day.entries.forEach(row=>{
+          const key=`${row.sheet}||${row.pn}||${row.model}`;
+          if(!mdMap[key]) mdMap[key]={pn:row.pn, model:row.model||row.pn,
+            품목명:productNameMap[row.pn]||row.spec||'',
+            sheet:row.sheet, qty:0, hasBOM:!!bomMap[row.pn]};
+          mdMap[key].qty+=row.qty;
+        });
+        const models=Object.values(mdMap).map(m=>{
+          const comps=bomMap[m.pn]||[];
+          const dangerParts=[], okParts=[];
+          comps.forEach(comp=>{
+            const st=partDayStat[comp.자품번]?.[day.dateSerial];
+            if(!st) return;
+            const info={자품번:comp.자품번, 자품명:comp.자품명, 단위:comp.단위,
+              소요량:comp.소요량, dayReq:st.dayReq/m.qty*comp.소요량*m.qty||st.dayReq,
+              available:st.available, remaining:st.remaining,
+              cumConsumed:st.cumConsumed, status:st.status};
+            if(st.status==='danger') dangerParts.push(info);
+            else okParts.push(info);
+          });
+          const status=dangerParts.length>0?'danger':comps.length>0?'ok':'na';
+          return {...m, dangerParts, okParts, status};
+        });
+        const dangerModels=models.filter(m=>m.status==='danger').length;
+        const warningModels=models.filter(m=>m.status==='warning').length;
+        return {dateStr:day.dateStr, dateSerial:day.dateSerial, models,
+          totalModels:models.length, dangerModels, warningModels,
+          status:dangerModels>0?'danger':warningModels>0?'warning':'ok'};
+      });
+      filteredDateResult=[...dateResult];
+      // 라인 필터 옵션 (일자별)
+      const dateSheetSet=new Set(planRows.map(r=>r.sheet));
+      const dateSheetOpts='<option value="all">전체 라인</option>'+
+        [...dateSheetSet].sort().map(s=>`<option value="${s}">${s}</option>`).join('');
+      document.getElementById('date-filter-sheet').innerHTML=dateSheetOpts;
+      ['date-filter-status','date-filter-sheet'].forEach(id=>document.getElementById(id).style.display='');
+
+      document.getElementById('btn-export').disabled=false;
+      renderTable(filteredResult,hasKit);
+      renderModelTable(filteredModelResult);
+      renderDateTable(filteredDateResult);
+      renderInvTable(filteredInventory);
+      renderModelInvTable(filteredModelInvResult);
+
+    } catch(err) {
+      const e=`<div class="empty"><div class="icon">❌</div><div>오류: ${err.message}</div><pre style="font-size:10px;color:#999;text-align:left;margin-top:8px;">${err.stack}</pre></div>`;
+      document.getElementById('result-body').innerHTML=e;
+      document.getElementById('model-body').innerHTML=e;
+      console.error(err);
+    }
+  },50);
+}
+
+// ── 자재별 테이블 ──────────────────────────────────
+function renderTable(data,hasKit) {
+  if (hasKit===undefined) hasKit=globalHasKit;
+  if (data.length===0) {
+    document.getElementById('result-body').innerHTML='<div class="empty"><div class="icon">🔍</div><div>조건에 맞는 결과가 없습니다.</div></div>';
+    return;
+  }
+  const aSheets=new Set(); analysisResult.forEach(r=>Object.keys(r.bySheet).forEach(s=>aSheets.add(s)));
+  const sc=[...aSheets].sort();
+  const totalCols = 6 + sc.length + 2 + (hasKit?2:0) + 4 + 1; // +1 상세
+  let html=`<div class="table-wrap"><table><thead><tr>
+    <th rowspan="2" style="width:26px;">#</th>
+    <th rowspan="2">품목코드</th><th rowspan="2">품목명</th>
+    <th rowspan="2">규격/사양</th><th rowspan="2">유형</th><th rowspan="2">단위</th>
+    ${sc.map(s=>`<th>${s}<br><span style="font-size:10px;font-weight:400;">필요수량</span></th>`).join('')}
+    <th rowspan="2">총 필요수량</th><th rowspan="2">창고 재고</th>
+    ${hasKit?`<th rowspan="2" class="kit-col">🟣 키팅수량</th><th rowspan="2" class="kit-col">가용수량<br><span style="font-size:10px;font-weight:400;">(재고+키팅)</span></th>`:''}
+    <th rowspan="2">부족수량</th><th rowspan="2">가용률</th><th rowspan="2">상태</th><th rowspan="2">긴급도</th>
+    <th rowspan="2">상세</th>
+  </tr></thead><tbody>`;
+  data.forEach((r,i)=>{
+    const bg=r.status==='danger'?'background:#fff5f5;':r.status==='warning'?'background:#fffbf2;':'';
+    const tip=r.kitTotal>0?`title="${Object.entries(r.kitByModel).map(([m,q])=>`${m}: ${fmt(q)}`).join('\n')}"`:'';
+    const products=partToProductsMap[r.자품번]||[];
+    const detailId=`pd-${i}`;
+    html+=`<tr style="${bg}">
+      <td class="center" style="color:#999;">${i+1}</td>
+      <td><code style="font-size:11px;">${r.자품번}</code></td>
+      <td>${r.자품명}</td>
+      <td style="color:#777;font-size:11px;">${r.규격||''}</td>
+      <td class="center"><span class="detail-tag">${r.부품유형||''}</span></td>
+      <td class="center">${r.unit||''}</td>
+      ${sc.map(s=>`<td class="num">${r.bySheet[s]?fmt(r.bySheet[s]):''}</td>`).join('')}
+      <td class="num" style="font-weight:700;">${fmt(r.totalReq)}</td>
+      <td class="num" style="${(r.stock===null||r.stock===0||r.stock<r.totalReq)?'color:#e74c3c;font-weight:700;':''}">${r.stock!==null?fmt(r.stock):'0'}</td>
+      ${hasKit?`
+        <td class="kit-val" ${tip} style="cursor:${r.kitTotal>0?'help':'default'}">
+          ${r.kitTotal>0?'🟣 '+fmt(r.kitTotal):'<span style="color:#ddd;">-</span>'}
+        </td>
+        <td class="kit-val" style="font-weight:700;${r.kitTotal>0&&(r.stock===null||r.stock===0)?'color:#8e44ad;':''}">${r.available!==null?fmt(r.available):'0'}</td>`:''}
+      <td class="num" style="${r.shortage!==null&&r.shortage<0?'color:#e74c3c;font-weight:700;':''}">${r.shortage!==null?(r.shortage<0?'▼':'')+fmt(Math.abs(r.shortage)):'-'}</td>
+      <td class="center">${getBar(r.ratio)}</td>
+      <td class="center">${getBadge(r.status)}</td>
+      <td class="center">${getUrgencyBadge(r.urgency,r.status)}</td>
+      <td class="center">${products.length>0?`<button class="expand-btn" onclick="toggleDetail('${detailId}',this)">▶ 상세</button>`:'<span style="color:#ccc;font-size:11px;">-</span>'}</td>
+    </tr>
+    <tr class="detail-row">
+      <td colspan="${totalCols}" style="padding:0;border-top:none;">
+        <div class="detail-inner" id="${detailId}">${buildPartProductDetail(products)}</div>
+      </td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  document.getElementById('result-body').innerHTML=html;
+  document.getElementById('result-title').textContent=`📊 분석 결과 (${data.length}건)`;
+  makeTableResizable(document.querySelector('#result-body table'));
+}
+
+// ── 모델별 테이블 ──────────────────────────────────
+function renderModelTable(data) {
+  if (data.length===0) {
+    document.getElementById('model-body').innerHTML='<div class="empty"><div class="icon">🔍</div><div>조건에 맞는 결과가 없습니다.</div></div>';
+    return;
+  }
+  let html=`<div class="table-wrap"><table><thead><tr>
+    <th style="width:26px;">#</th>
+    <th>모델명</th><th>품목코드</th><th>품목명</th><th>라인</th><th>계획수량</th>
+    <th>🚨 부족자재</th><th>⚠️ 위험자재</th><th>상태</th><th>긴급도</th><th>상세</th>
+  </tr></thead><tbody>`;
+
+  data.forEach((r,i)=>{
+    const bg=r.status==='danger'?'background:#fff5f5;':r.status==='warning'?'background:#fffbf2;':'';
+    const allParts=[...r.dangerParts,...r.warningParts];
+    const detailHtml=buildModelDetailHtml(r);
+    const badge=r.status==='danger'?'<span class="shortage-badge danger">🚨 부족있음</span>'
+      :r.status==='warning'?'<span class="shortage-badge warning">⚠️ 위험있음</span>'
+      :r.status==='na'?'<span class="shortage-badge na">📋 BOM없음</span>'
+      :'<span class="shortage-badge ok">✅ 정상</span>';
+    const detailId=`md-${i}`;
+    html+=`<tr style="${bg}">
+      <td class="center" style="color:#999;">${i+1}</td>
+      <td style="font-weight:600;">${r.model||'-'}</td>
+      <td><code style="font-size:11px;">${r.pn}</code></td>
+      <td style="font-size:11px;color:#444;">${r.품목명||r.spec||''}</td>
+      <td class="center"><span class="detail-tag">${r.sheet}</span></td>
+      <td class="num">${fmt(r.totalQty)}</td>
+      <td class="center" style="color:#c0392b;font-weight:700;">${r.dangerParts.length>0?r.dangerParts.length+'건':'-'}</td>
+      <td class="center" style="color:#d68910;font-weight:700;">${r.warningParts.length>0?r.warningParts.length+'건':'-'}</td>
+      <td class="center">${badge}</td>
+      <td class="center">${getUrgencyBadge(r.urgency,r.status)}</td>
+      <td class="center">${allParts.length>0?`<button class="expand-btn" onclick="toggleDetail('${detailId}',this)">▶ 상세</button>`:'<span style="color:#ccc;font-size:11px;">-</span>'}</td>
+    </tr>
+    <tr class="detail-row">
+      <td colspan="11" style="padding:0;border-top:none;">
+        <div class="detail-inner" id="${detailId}">${detailHtml}</div>
+      </td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  document.getElementById('model-body').innerHTML=html;
+  document.getElementById('model-title').textContent=`🏭 모델별 부족현황 (${data.length}건)`;
+  makeTableResizable(document.querySelector('#model-body table'));
+}
+
+// ── 컬럼 리사이즈 ──────────────────────────────────
+function makeTableResizable(table) {
+  if (!table) return;
+  // 첫 번째 헤더 행의 th만 대상 (rowspan 있는 th 포함)
+  const ths = Array.from(table.querySelectorAll('thead tr:first-child th'));
+  // 현재 렌더 너비 캡처 후 fixed 레이아웃으로 고정
+  const widths = ths.map(th => th.getBoundingClientRect().width);
+  table.style.tableLayout = 'fixed';
+  ths.forEach((th, idx) => {
+    th.style.width = widths[idx] + 'px';
+    th.style.minWidth = '30px';
+    if (th.querySelector('.col-resize')) return; // 중복 방지
+    const handle = document.createElement('div');
+    handle.className = 'col-resize';
+    handle.addEventListener('mousedown', e => {
+      e.preventDefault();
+      handle.classList.add('dragging');
+      const startX = e.pageX;
+      const startW = th.getBoundingClientRect().width;
+      const onMove = e => {
+        const newW = Math.max(30, startW + e.pageX - startX);
+        th.style.width = newW + 'px';
+        th.style.minWidth = newW + 'px';
+      };
+      const onUp = () => {
+        handle.classList.remove('dragging');
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    th.appendChild(handle);
+  });
+}
+
+function toggleDetail(id,btn) {
+  const el=document.getElementById(id);
+  const isOpen=el.classList.toggle('open');
+  btn.textContent=isOpen?'▼ 닫기':'▶ 상세';
+}
+
+function buildPartProductDetail(products) {
+  if(!products.length) return '';
+  let html=`<div style="padding:8px 14px;">
+    <div style="font-size:11px;font-weight:700;color:#1e3a5f;margin-bottom:6px;">📦 이 부품이 사용되는 제품 (${products.length}건)</div>
+    <table style="font-size:11px;border-collapse:collapse;width:auto;">
+      <thead><tr>
+        <th style="padding:4px 10px;background:#1e3a5f;color:white;border:1px solid #2952a3;">제품코드</th>
+        <th style="padding:4px 10px;background:#1e3a5f;color:white;border:1px solid #2952a3;">모델명</th>
+        <th style="padding:4px 10px;background:#1e3a5f;color:white;border:1px solid #2952a3;">제품명</th>
+        <th style="padding:4px 10px;background:#1e3a5f;color:white;border:1px solid #2952a3;">소요량/개</th>
+      </tr></thead><tbody>`;
+  products.forEach((p,i)=>{
+    const bg=i%2===0?'background:white;':'background:#f0f4f8;';
+    html+=`<tr style="${bg}">
+      <td style="padding:3px 10px;border:1px solid #ddd;"><code>${p.pn}</code></td>
+      <td style="padding:3px 10px;border:1px solid #ddd;font-weight:600;">${p.modelName||'-'}</td>
+      <td style="padding:3px 10px;border:1px solid #ddd;color:#555;">${p.productName||''}</td>
+      <td style="padding:3px 10px;border:1px solid #ddd;text-align:right;font-weight:700;">${p.소요량}</td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  return html;
+}
+
+// ── 모델 상세 HTML 빌드 ────────────────────────────
+function buildModelDetailHtml(entry) {
+  const allParts=[...entry.dangerParts,...entry.warningParts];
+  if (allParts.length===0) return '<span style="color:#27ae60;font-size:12px;">✅ 부족/위험 자재 없음</span>';
+
+  // 날짜 정렬 (M/D 형식)
+  const dates=Object.keys(entry.byDate).sort((a,b)=>{
+    const [am,ad]=a.split('/').map(Number);
+    const [bm,bd]=b.split('/').map(Number);
+    return am!==bm?am-bm:ad-bd;
+  });
+
+  // ── 일자별 소요량 테이블 ──
+  let html='';
+  if (dates.length>0) {
+    html+=`<div style="margin-bottom:12px;">
+      <div style="font-weight:700;font-size:12px;color:#2c3e50;margin-bottom:6px;">📅 일자별 생산계획 및 자재 소요량</div>
+      <div style="overflow-x:auto;">
+      <table class="date-req-table">
+        <thead><tr>
+          <th>일자</th>
+          <th>계획수량</th>
+          ${entry.dangerParts.map(p=>`<th class="part-col" title="${p.자품명}">${p.자품번}<br><span style="font-size:10px;font-weight:400;">${p.자품명.length>8?p.자품명.slice(0,8)+'…':p.자품명}</span><br><span style="font-size:10px;opacity:0.85;">×${p.소요량}/개</span></th>`).join('')}
+          ${entry.warningParts.map(p=>`<th class="part-col warn-col" title="${p.자품명}">${p.자품번}<br><span style="font-size:10px;font-weight:400;">${p.자품명.length>8?p.자품명.slice(0,8)+'…':p.자품명}</span><br><span style="font-size:10px;opacity:0.85;">×${p.소요량}/개</span></th>`).join('')}
+        </tr></thead>
+        <tbody>`;
+    // 누적 계산용
+    const cumByPart={};
+    allParts.forEach(p=>{ cumByPart[p.자품번]=0; });
+    dates.forEach(date=>{
+      html+=`<tr><td class="date-cell">${date}</td><td class="qty-cell" style="text-align:right;">${fmt(entry.byDate[date])}</td>`;
+      allParts.forEach(p=>{
+        const dayReq=p.byDateReq[date]||0;
+        cumByPart[p.자품번]+=dayReq;
+        const isShortagePt=cumByPart[p.자품번]>(p.available||0);
+        html+=`<td style="${dayReq>0?(isShortagePt?'color:#c0392b;font-weight:700;background:#fff0f0;':''):'color:#ccc;'}">${dayReq>0?fmt(dayReq):'-'}</td>`;
+      });
+      html+='</tr>';
+    });
+    // 합계 행
+    html+=`<tr class="total-row"><td class="date-cell">합 계</td><td style="text-align:right;">${fmt(entry.totalQty)}</td>`;
+    allParts.forEach(p=>{
+      html+=`<td style="${p.modelReq>(p.available||0)?'color:#c0392b;font-weight:700;':''}">${fmt(p.modelReq)}</td>`;
+    });
+    html+=`</tr></tbody></table></div></div>`;
+  }
+
+  // ── 부족자재 칩 ──
+  html+=`<div style="font-weight:700;font-size:12px;color:#2c3e50;margin-bottom:7px;">`;
+  if (entry.dangerParts.length>0) html+=`🚨 부족자재 ${entry.dangerParts.length}건  `;
+  if (entry.warningParts.length>0) html+=`⚠️ 위험자재 ${entry.warningParts.length}건`;
+  html+=`</div><div class="detail-parts">`;
+
+  entry.dangerParts.forEach(p=>{
+    const kitLine=p.kitTotal>0?` | 🟣 키팅 ${fmt(p.kitTotal)}`:'';
+    html+=`<div class="part-chip danger">
+      <span class="chip-code">${p.자품번} <span style="font-size:10px;font-weight:400;color:#888;">소요량 ${p.소요량}/개</span></span>
+      <span class="chip-name">${p.자품명}</span>
+      <span class="chip-stock">재고 ${fmt(p.stock)}${kitLine} | 가용 ${fmt(p.available)}</span>
+      <span class="chip-req">이 모델 소요: ${fmt(p.modelReq)}</span>
+      <span class="chip-req">전체 부족: ▼${fmt(Math.abs(p.globalShortage))}</span>
+    </div>`;
+  });
+  entry.warningParts.forEach(p=>{
+    const kitLine=p.kitTotal>0?` | 🟣 키팅 ${fmt(p.kitTotal)}`:'';
+    html+=`<div class="part-chip warning">
+      <span class="chip-code">${p.자품번} <span style="font-size:10px;font-weight:400;color:#888;">소요량 ${p.소요량}/개</span></span>
+      <span class="chip-name">${p.자품명}</span>
+      <span class="chip-stock">재고 ${fmt(p.stock)}${kitLine} | 가용 ${fmt(p.available)}</span>
+      <span class="chip-req">이 모델 소요: ${fmt(p.modelReq)}</span>
+      <span class="chip-req">가용 ${fmt(p.available)} / 전체소요 ${fmt(p.totalGlobalReq)}</span>
+    </div>`;
+  });
+  html+=`</div>`;
+  return html;
+}
+
+// ── 필터 ───────────────────────────────────────────
+function filterTable() {
+  const s=document.getElementById('search-input').value.toLowerCase();
+  const st=document.getElementById('filter-status').value;
+  const sh=document.getElementById('filter-sheet').value;
+  const urg=document.getElementById('filter-urgency').value;
+  filteredResult=analysisResult.filter(r=>{
+    if (s&&!r.자품번.toLowerCase().includes(s)&&!r.자품명.toLowerCase().includes(s)) return false;
+    if (st!=='all'&&r.status!==st) return false;
+    if (sh!=='all'&&!r.bySheet[sh]) return false;
+    if (urg==='urgent1'&&r.urgency!=='urgent1') return false;
+    if (urg==='urgent3'&&r.urgency!=='urgent1'&&r.urgency!=='urgent3') return false;
+    if (urg==='later'&&r.urgency!=='later') return false;
+    return true;
+  });
+  renderTable(filteredResult);
+}
+
+// ── 일자별 부족현황 ────────────────────────────────
+function renderDateTable(data) {
+  const el=document.getElementById('date-body');
+  if(!data.length){
+    el.innerHTML='<div class="empty"><div class="icon">🔍</div><div>조건에 맞는 결과가 없습니다.</div></div>';
+    return;
+  }
+  let html=`<div class="table-wrap"><table><thead><tr>
+    <th style="width:26px;">#</th>
+    <th>계획일자</th>
+    <th>총 모델수</th>
+    <th style="color:#ffaaaa;">🚨 부족모델</th>
+    <th style="color:#ffd080;">⚠️ 위험모델</th>
+    <th>✅ 정상모델</th>
+    <th>상태</th>
+    <th>상세</th>
+  </tr></thead><tbody>`;
+  data.forEach((d,i)=>{
+    const bg=d.status==='danger'?'background:#fff5f5;':d.status==='warning'?'background:#fffbf2;':'';
+    const badge=d.status==='danger'?'<span class="shortage-badge danger">🚨 부족있음</span>'
+      :d.status==='warning'?'<span class="shortage-badge warning">⚠️ 위험있음</span>'
+      :'<span class="shortage-badge ok">✅ 정상</span>';
+    const okCnt=d.totalModels-d.dangerModels-d.warningModels;
+    const detailId=`dd-${i}`;
+    html+=`<tr style="${bg}">
+      <td class="center" style="color:#999;">${i+1}</td>
+      <td style="font-weight:700;font-size:13px;">${d.dateStr}</td>
+      <td class="center">${d.totalModels}</td>
+      <td class="center" style="color:#c0392b;font-weight:700;">${d.dangerModels>0?d.dangerModels+'건':'-'}</td>
+      <td class="center" style="color:#d68910;font-weight:700;">${d.warningModels>0?d.warningModels+'건':'-'}</td>
+      <td class="center" style="color:#27ae60;">${okCnt>0?okCnt+'건':'-'}</td>
+      <td class="center">${badge}</td>
+      <td class="center"><button class="expand-btn" onclick="toggleDetail('${detailId}',this)">▶ 상세</button></td>
+    </tr>
+    <tr class="detail-row">
+      <td colspan="8" style="padding:0;border-top:none;">
+        <div class="detail-inner" id="${detailId}">${buildDateDetailHtml(d)}</div>
+      </td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+  document.getElementById('date-title').textContent=`📅 일자별 부족현황 (${data.length}일)`;
+  makeTableResizable(el.querySelector('table'));
+}
+
+function buildDateDetailHtml(day) {
+  const sheetFilter=document.getElementById('date-filter-sheet').value;
+  const models=sheetFilter==='all'?day.models:day.models.filter(m=>m.sheet===sheetFilter);
+  if(!models.length) return '<div style="padding:10px;color:#999;">해당 조건의 모델 없음</div>';
+  let html=`<div style="padding:10px 16px;background:#f7f8fa;border-top:1px solid #dde4ed;">
+    <div style="font-size:11px;color:#555;font-weight:700;margin-bottom:8px;">
+      📅 ${day.dateStr} 계획 모델 (${models.length}건)
+    </div>`;
+  models.forEach(m=>{
+    const mbg=m.status==='danger'?'background:#fff0f0;border:1px solid #f5c6c6;'
+      :'background:#f0faf4;border:1px solid #a9dfbf;';
+    const mBadge=m.status==='danger'?'<span class="shortage-badge danger">🚨 부족있음</span>'
+      :m.status==='na'?'<span class="shortage-badge na">📋 BOM없음</span>'
+      :'<span class="shortage-badge ok">✅ 정상</span>';
+    const allParts=[...m.dangerParts,...m.okParts];
+    html+=`<div style="margin-bottom:8px;padding:10px 14px;border-radius:6px;${mbg}">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+        <span style="font-weight:700;font-size:12px;">${m.model||m.pn}</span>
+        <code style="font-size:10px;color:#666;">${m.pn}</code>
+        <span class="detail-tag">${m.sheet}</span>
+        <span style="font-size:11px;color:#555;">계획: <b>${Math.round(m.qty).toLocaleString()}</b>대</span>
+        ${m.품목명?`<span style="font-size:11px;color:#777;">${m.품목명}</span>`:''}
+        ${mBadge}
+      </div>`;
+    if(allParts.length>0){
+      html+=`<table style="width:100%;font-size:11px;border-collapse:collapse;">
+        <thead><tr>
+          <th style="padding:3px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;text-align:left;">품목코드</th>
+          <th style="padding:3px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">품목명</th>
+          <th style="padding:3px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">단위</th>
+          <th style="padding:3px 8px;background:#1a5276;color:white;border:1px solid #154360;">총 가용재고</th>
+          <th style="padding:3px 8px;background:#1a5276;color:white;border:1px solid #154360;">이전일 누적소비</th>
+          <th style="padding:3px 8px;background:#1a5276;color:white;border:1px solid #154360;">잔여재고</th>
+          <th style="padding:3px 8px;background:#922b21;color:white;border:1px solid #7b241c;">이 날 소요량</th>
+          <th style="padding:3px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">상태</th>
+        </tr></thead><tbody>`;
+      allParts.forEach((p,pi)=>{
+        const isDanger=p.status==='danger';
+        const rowBg=isDanger?(pi%2===0?'background:#fff0f0;':'background:#ffe8e8;')
+          :(pi%2===0?'background:white;':'background:#f0faf4;');
+        const stCell=isDanger
+          ?'<span style="color:#c0392b;font-weight:700;">🚨 부족</span>'
+          :'<span style="color:#27ae60;font-weight:700;">✅ 정상</span>';
+        const remainStyle=isDanger?'color:#c0392b;font-weight:700;':'color:#1e8449;font-weight:700;';
+        html+=`<tr style="${rowBg}">
+          <td style="padding:3px 8px;border:1px solid #ddd;"><code>${p.자품번}</code></td>
+          <td style="padding:3px 8px;border:1px solid #ddd;">${p.자품명}</td>
+          <td style="padding:3px 8px;border:1px solid #ddd;text-align:center;">${p.단위||''}</td>
+          <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;">${Math.round(p.available).toLocaleString()}</td>
+          <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;color:#888;">${Math.round(p.cumConsumed).toLocaleString()}</td>
+          <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;${remainStyle}">${Math.round(p.remaining).toLocaleString()}</td>
+          <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;font-weight:700;">${Math.round(p.dayReq).toLocaleString()}</td>
+          <td style="padding:3px 8px;border:1px solid #ddd;text-align:center;">${stCell}</td>
+        </tr>`;
+      });
+      html+='</tbody></table>';
+    } else if(m.hasBOM){
+      html+='<div style="font-size:11px;color:#27ae60;">✅ 구성 부품 정보 없음</div>';
+    }
+    html+='</div>';
+  });
+  html+='</div>';
+  return html;
+}
+
+function filterDateTable() {
+  const st=document.getElementById('date-filter-status').value;
+  const sh=document.getElementById('date-filter-sheet').value;
+  filteredDateResult=dateResult.filter(d=>{
+    if(st!=='all'&&d.status!==st) return false;
+    if(sh!=='all'&&!d.models.some(m=>m.sheet===sh)) return false;
+    return true;
+  });
+  renderDateTable(filteredDateResult);
+}
+
+function filterModelTable() {
+  const s=document.getElementById('model-search').value.toLowerCase();
+  const st=document.getElementById('model-filter-status').value;
+  const sh=document.getElementById('model-filter-sheet').value;
+  const urg=document.getElementById('model-filter-urgency').value;
+  filteredModelResult=modelResult.filter(r=>{
+    if (s&&!r.model.toLowerCase().includes(s)&&!r.pn.toLowerCase().includes(s)) return false;
+    if (st!=='all'&&r.status!==st) return false;
+    if (sh!=='all'&&r.sheet!==sh) return false;
+    if (urg==='urgent1'&&r.urgency!=='urgent1') return false;
+    if (urg==='urgent3'&&r.urgency!=='urgent1'&&r.urgency!=='urgent3') return false;
+    if (urg==='later'&&r.urgency!=='later') return false;
+    return true;
+  });
+  renderModelTable(filteredModelResult);
+}
+
+// ── 재고현황 테이블 ────────────────────────────────
+function renderInvTable(data) {
+  const el=document.getElementById('inv-body');
+  if(!data.length){ el.innerHTML='<div class="empty"><div class="icon">🔍</div><div>조건에 맞는 항목이 없습니다.</div></div>'; return; }
+  const hasKit=data.some(r=>r.kitTotal>0);
+  let html=`<div class="table-wrap"><table><thead><tr>
+    <th style="width:26px;">#</th>
+    <th>품목코드</th><th>품목명</th><th>규격/사양</th><th>부품유형</th><th>단위</th>
+    <th>🏭 창고재고</th>
+    ${hasKit?'<th class="kit-col">🟣 키팅수량</th>':''}
+    <th style="background:#1a5276;">📦 총 수량<br><span style="font-size:10px;font-weight:400;">(창고+키팅)</span></th>
+    <th>비고</th>
+  </tr></thead><tbody>`;
+  data.forEach((r,i)=>{
+    const hasKitRow=r.kitTotal>0;
+    const tip=hasKitRow?`title="${Object.entries(r.kitByModel).map(([m,q])=>`${m}: ${fmt(q)}`).join('\n')}"`:'';
+    const totalCls=r.total>0?'color:#1a5276;font-weight:700;':'color:#bbb;';
+    const note=hasKitRow&&r.stock>0?'창고+키팅':hasKitRow?'키팅전용':r.stock>0?'창고전용':'재고없음';
+    html+=`<tr>
+      <td class="center" style="color:#999;">${i+1}</td>
+      <td><code style="font-size:11px;">${r.code}</code></td>
+      <td>${r.name}</td>
+      <td style="color:#777;font-size:11px;">${r.spec||''}</td>
+      <td class="center"><span class="detail-tag">${r.type||''}</span></td>
+      <td class="center">${r.unit||''}</td>
+      <td class="num" style="${r.stock>0?'':'color:#bbb;'}">${r.stock>0?fmt(r.stock):'0'}</td>
+      ${hasKit?`<td class="kit-val" ${tip} style="cursor:${hasKitRow?'help':'default'}">${hasKitRow?'🟣 '+fmt(r.kitTotal):'<span style="color:#ddd;">-</span>'}</td>`:''}
+      <td class="num" style="${totalCls}">${fmt(r.total)||'0'}</td>
+      <td class="center"><span class="detail-tag">${note}</span></td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+  document.getElementById('inv-title').textContent=`📦 재고현황 (${data.length}건)`;
+  makeTableResizable(el.querySelector('table'));
+}
+
+function filterInvTable() {
+  const s=document.getElementById('inv-search').value.toLowerCase();
+  const type=document.getElementById('inv-filter-type').value;
+  const sort=document.getElementById('inv-filter-sort').value;
+  filteredInventory=inventoryResult.filter(r=>{
+    if(s&&!r.code.toLowerCase().includes(s)&&!r.name.toLowerCase().includes(s)) return false;
+    if(type==='warehouse'&&r.stock<=0) return false;
+    if(type==='kitting'&&r.kitTotal<=0) return false;
+    if(type==='both'&&(r.stock<=0||r.kitTotal<=0)) return false;
+    return true;
+  });
+  const sortFns={total:(a,b)=>b.total-a.total, stock:(a,b)=>b.stock-a.stock,
+    kit:(a,b)=>b.kitTotal-a.kitTotal, code:(a,b)=>a.code.localeCompare(b.code)};
+  filteredInventory.sort(sortFns[sort]||sortFns.total);
+  renderInvTable(filteredInventory);
+}
+
+// ── 모델별 재고현황 ────────────────────────────────
+function renderModelInvTable(data) {
+  const el=document.getElementById('modinv-body');
+  if(!data.length){ el.innerHTML='<div class="empty"><div class="icon">🔍</div><div>조건에 맞는 항목이 없습니다.</div></div>'; return; }
+  let html=`<div class="table-wrap"><table><thead><tr>
+    <th style="width:26px;">#</th>
+    <th>모델명</th><th>제품코드</th><th>제품명</th>
+    <th>구성 부품수</th><th style="width:100px;">상세</th>
+  </tr></thead><tbody>`;
+  data.forEach((r,i)=>{
+    const count=r.components.length;
+    const safeId=r.pn.replace(/[^a-zA-Z0-9_\-]/g,'_');
+    html+=`<tr>
+      <td class="center" style="color:#999;">${i+1}</td>
+      <td style="font-weight:700;">${r.modelName||'-'}</td>
+      <td><code style="font-size:11px;">${r.pn}</code></td>
+      <td>${r.productName||''}</td>
+      <td class="center">${count}개</td>
+      <td class="center">${count>0?`<button class="expand-btn" id="btn-modinv-${safeId}" onclick="toggleModelInvDetail('${safeId}')">▶ 상세보기</button>`:'-'}</td>
+    </tr>
+    <tr id="modinv-detail-${safeId}" style="display:none;">
+      <td colspan="6" style="padding:0;border:none;">${buildModelInvDetail(r.components)}</td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+  makeTableResizable(el.querySelector('table'));
+}
+
+function buildModelInvDetail(comps) {
+  if(!comps.length) return '<div style="padding:10px;color:#999;text-align:center;">BOM 부품 없음</div>';
+  const hasKit=comps.some(c=>c.kitQty>0);
+  let html=`<div style="padding:10px 16px;background:#f0f4f8;border-top:2px solid #2c3e50;">
+  <table style="width:100%;font-size:11px;border-collapse:collapse;">
+    <thead><tr>
+      <th style="padding:5px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">품목코드</th>
+      <th style="padding:5px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">품목명</th>
+      <th style="padding:5px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">규격/사양</th>
+      <th style="padding:5px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">부품유형</th>
+      <th style="padding:5px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">단위</th>
+      <th style="padding:5px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">소요량/개</th>
+      <th style="padding:5px 8px;background:#1a5276;color:white;border:1px solid #154360;">🏭 창고재고</th>
+      ${hasKit?'<th style="padding:5px 8px;background:#6c3483;color:white;border:1px solid #5b2c6f;">🟣 키팅재고</th>':''}
+      <th style="padding:5px 8px;background:#1e8449;color:white;border:1px solid #196f3d;">📦 총재고</th>
+    </tr></thead><tbody>`;
+  comps.forEach((c,i)=>{
+    const bg=i%2===0?'background:white;':'background:#eaf0fb;';
+    const tStyle=c.total>0?'color:#1e8449;font-weight:700;':'color:#bbb;';
+    html+=`<tr style="${bg}">
+      <td style="padding:4px 8px;border:1px solid #ddd;"><code>${c.자품번}</code></td>
+      <td style="padding:4px 8px;border:1px solid #ddd;">${c.자품명}</td>
+      <td style="padding:4px 8px;border:1px solid #ddd;color:#777;">${c.규격||''}</td>
+      <td style="padding:4px 8px;border:1px solid #ddd;text-align:center;"><span class="detail-tag">${c.부품유형||''}</span></td>
+      <td style="padding:4px 8px;border:1px solid #ddd;text-align:center;">${c.단위||''}</td>
+      <td style="padding:4px 8px;border:1px solid #ddd;text-align:right;">${c.소요량}</td>
+      <td style="padding:4px 8px;border:1px solid #ddd;text-align:right;${c.stock>0?'':'color:#bbb;'}">${c.stock>0?fmt(c.stock):'0'}</td>
+      ${hasKit?`<td style="padding:4px 8px;border:1px solid #ddd;text-align:right;background:#faf5ff;color:#6c3483;font-weight:600;">${c.kitQty>0?'🟣 '+fmt(c.kitQty):'<span style="color:#ddd;">-</span>'}</td>`:''}
+      <td style="padding:4px 8px;border:1px solid #ddd;text-align:right;${tStyle}">${fmt(c.total)||'0'}</td>
+    </tr>`;
+  });
+  html+='</tbody></table></div>';
+  return html;
+}
+
+function toggleModelInvDetail(safeId) {
+  const row=document.getElementById('modinv-detail-'+safeId);
+  const btn=document.getElementById('btn-modinv-'+safeId);
+  if(!row) return;
+  const hidden=row.style.display==='none';
+  row.style.display=hidden?'':'none';
+  if(btn) btn.textContent=hidden?'▼ 닫기':'▶ 상세보기';
+}
+
+function filterModelInvTable() {
+  const s=document.getElementById('modinv-search').value.toLowerCase();
+  filteredModelInvResult=modelInvResult.filter(r=>{
+    if(!s) return true;
+    return (r.modelName||'').toLowerCase().includes(s)||
+           r.pn.toLowerCase().includes(s)||
+           (r.productName||'').toLowerCase().includes(s);
+  });
+  renderModelInvTable(filteredModelInvResult);
+}
+
+// ── 배지/바 ────────────────────────────────────────
+function getBadge(s) {
+  return {danger:'<span class="shortage-badge danger">🚨 부족</span>',
+    warning:'<span class="shortage-badge warning">⚠️ 위험</span>',
+    ok:'<span class="shortage-badge ok">✅ 충분</span>',
+    na:'<span class="shortage-badge na">📋 미등록</span>'}[s]||'';
+}
+function getUrgencyBadge(urgency,status) {
+  if (status==='ok'||status==='na') return '<span style="color:#ccc;font-size:11px;">-</span>';
+  if (urgency==='urgent1') return '<span class="shortage-badge danger" style="background:#ffd0d0;border:1px solid #c0392b;">🚨 1일이내</span>';
+  if (urgency==='urgent3') return '<span class="shortage-badge danger">🔴 3일이내</span>';
+  return '<span class="shortage-badge" style="background:#f0f0f0;color:#555;">📋 3일이후</span>';
+}
+function getBar(ratio) {
+  if (ratio===null) return '<span style="color:#bbb;font-size:11px;">-</span>';
+  const pct=Math.min(ratio*100,100);
+  const cls=ratio<1?'danger':ratio<1.2?'warning':'ok';
+  return `<div style="display:flex;align-items:center;gap:4px;">
+    <div class="bar-wrap"><div class="bar-fill ${cls}" style="width:${pct}%;"></div></div>
+    <span style="font-size:11px;${cls==='danger'?'color:#e74c3c;font-weight:700;':''}">${Math.round(ratio*100)}%</span>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+// ── 인증 시스템 ─────────────────────────────────────
+// ═══════════════════════════════════════════════════
+// ── Supabase 연결 ──────────────────────────────────
+const _SB_URL = 'https://tpqgdaasporsmpuvtaee.supabase.co';
+const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwcWdkYWFzcG9yc21wdXZ0YWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NTcwODgsImV4cCI6MjA4OTAzMzA4OH0.JhrkWhrz4VnwUvzMIrDX5QgKFGQr485USo-NIpq1zDk';
+const sb = window.supabase.createClient(_SB_URL, _SB_KEY);
+
+let currentUser = null;
+function setSession() {} // Supabase가 세션 자동 관리
+function clearSession() {}
+
+// ─── 프로필 조회 ─────────────────────────────────────
+async function getProfile(userId) {
+  const { data } = await sb.from('profiles').select('*').eq('id', userId).single();
+  return data;
+}
+
+// ─── 로그인 ──────────────────────────────────────────
+async function authLogin(email, pw) {
+  const { data, error } = await sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: pw });
+  if (error) throw (error.message === 'Invalid login credentials' ? '이메일 또는 비밀번호가 올바르지 않습니다.' : error.message);
+  const profile = await getProfile(data.user.id);
+  if (!profile) throw '프로필을 찾을 수 없습니다. 관리자에게 문의하세요.';
+  if (profile.status === 'pending') throw '__PENDING__';
+  if (profile.status === 'rejected') throw '계정 사용이 거부되었습니다. 관리자에게 문의하세요.';
+  return { id: data.user.id, email: data.user.email, displayName: profile.display_name,
+    isAdmin: profile.is_admin, permissions: profile.permissions || {}, status: profile.status };
+}
+
+// ─── 회원가입 ─────────────────────────────────────────
+async function authRegister(email, pw, name) {
+  if (!email || !pw || !name) throw '모든 항목을 입력해주세요.';
+  if (pw.length < 6) throw '비밀번호는 6자 이상이어야 합니다.';
+  const { data, error } = await sb.auth.signUp({ email: email.trim().toLowerCase(), password: pw });
+  if (error) throw error.message;
+  if (!data.user) throw '회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.';
+  await sb.from('profiles').insert({
+    id: data.user.id, email: email.trim().toLowerCase(),
+    display_name: name.trim(), status: 'pending', is_admin: false,
+    permissions: { read: false, upload: false, modify: false }
+  });
+}
+
+// ─── 사용자 목록 / 수정 (관리자) ─────────────────────
+async function dbGetAllUsers() {
+  const { data } = await sb.from('profiles').select('*').order('created_at');
+  return (data || []).map(p => ({
+    id: p.id, email: p.email, displayName: p.display_name,
+    status: p.status, isAdmin: p.is_admin, permissions: p.permissions || {},
+    createdAt: new Date(p.created_at).getTime()
+  }));
+}
+
+async function dbUpdateUser(user) {
+  await sb.from('profiles').update({
+    status: user.status, is_admin: user.isAdmin, permissions: user.permissions,
+    approved_at: user.status === 'approved' ? new Date().toISOString() : null
+  }).eq('id', user.id);
+}
+
+// ─── 업로드 이력 동기화 ──────────────────────────────
+async function syncUploadLog(type, ts, name) {
+  try {
+    await sb.from('upload_logs').upsert(
+      { file_type: type, uploaded_at: String(ts), uploader_name: name || '' },
+      { onConflict: 'file_type' }
+    );
+  } catch(e) {}
+}
+
+async function loadUploadLogsFromSupabase() {
+  try {
+    const { data } = await sb.from('upload_logs').select('*');
+    if (!data) return;
+    data.forEach(row => {
+      const el = document.getElementById('uptime-' + row.file_type);
+      const localTs = localStorage.getItem('ms_uptime_' + row.file_type);
+      // Supabase가 더 최신이거나 로컬에 없으면 Supabase 데이터 사용
+      if (!el || (localTs && Number(localTs) >= Number(row.uploaded_at))) return;
+      el.textContent = fmtUpTime(row.uploaded_at, row.uploader_name);
+      localStorage.setItem('ms_uptime_' + row.file_type, row.uploaded_at);
+      if (row.uploader_name) localStorage.setItem('ms_uploader_' + row.file_type, row.uploader_name);
+    });
+  } catch(e) {}
+}
+
+// ── 권한 적용 ──
+function applyPermissions(perm){
+  const canUpload=perm&&(perm.upload||perm.modify);
+  const canModify=perm&&perm.modify;
+  document.querySelectorAll('.upload-item input[type=file]').forEach(el=>{
+    el.disabled=!canUpload;
+    el.parentElement.style.opacity=canUpload?'1':'0.5';
+    el.parentElement.style.pointerEvents=canUpload?'':'none';
+    el.parentElement.title=canUpload?'':'파일 업로드 권한이 없습니다';
+  });
+  document.querySelectorAll('.btn-kit-add,.btn-kit-clear').forEach(el=>{
+    el.style.opacity=canUpload?'1':'0.5';
+    el.style.pointerEvents=canUpload?'':'none';
+  });
+  if(!canModify){
+    document.getElementById('btn-run').dataset.permDenied='1';
+    document.getElementById('btn-run').title='분석 실행 권한이 없습니다';
+    ['bomLevel','partType','fromDate'].forEach(id=>document.getElementById(id).disabled=true);
+  }
+}
+
+// ── 인증 UI ──
+function showAuthOverlay(){ document.getElementById('auth-overlay').style.display='flex'; showLogin(); }
+function hideAuthOverlay(){ document.getElementById('auth-overlay').style.display='none'; }
+function showLogin(){
+  document.getElementById('auth-login').style.display='';
+  document.getElementById('auth-register').style.display='none';
+  document.getElementById('auth-pending').style.display='none';
+  const savedEmail=localStorage.getItem('ms_saved_email');
+  const savedPw=localStorage.getItem('ms_saved_pw');
+  if(savedEmail){ document.getElementById('login-email').value=savedEmail; document.getElementById('login-remember').checked=true; }
+  if(savedPw){ document.getElementById('login-pw').value=savedPw; }
+}
+function showRegister(){
+  document.getElementById('auth-login').style.display='none';
+  document.getElementById('auth-register').style.display='';
+  document.getElementById('auth-pending').style.display='none';
+}
+function showPending(){
+  document.getElementById('auth-login').style.display='none';
+  document.getElementById('auth-register').style.display='none';
+  document.getElementById('auth-pending').style.display='';
+}
+
+async function doLogin(){
+  const email=document.getElementById('login-email').value;
+  const pw=document.getElementById('login-pw').value;
+  const remember=document.getElementById('login-remember').checked;
+  const errEl=document.getElementById('login-err');
+  errEl.textContent='';
+  try{
+    const user=await authLogin(email,pw);
+    if(remember){
+      localStorage.setItem('ms_saved_email', email);
+      localStorage.setItem('ms_saved_pw', pw);
+    } else {
+      localStorage.removeItem('ms_saved_email');
+      localStorage.removeItem('ms_saved_pw');
+    }
+    currentUser=user; setSession(user);
+    hideAuthOverlay(); renderUserHeader(user); applyPermissions(user.permissions);
+  }catch(e){
+    if(e==='__PENDING__') showPending();
+    else{ errEl.textContent=e; }
+  }
+}
+
+async function doRegister(){
+  const name=document.getElementById('reg-name').value;
+  const email=document.getElementById('reg-email').value;
+  const pw=document.getElementById('reg-pw').value;
+  const pw2=document.getElementById('reg-pw2').value;
+  const errEl=document.getElementById('reg-err');
+  errEl.textContent='';
+  if(pw!==pw2){ errEl.textContent='비밀번호가 일치하지 않습니다.'; return; }
+  try{ await authRegister(email,pw,name); showPending(); }
+  catch(e){ errEl.textContent=e; }
+}
+
+async function doLogout(){ await sb.auth.signOut(); currentUser=null; showAuthOverlay(); }
+
+function renderUserHeader(user){
+  document.getElementById('hdr-uname').textContent='👤 '+user.displayName+' ('+user.email+')';
+  if(user.isAdmin) document.getElementById('btn-admin-open').style.display='';
+  document.getElementById('header-user').style.display='';
+}
+
+// ── 관리자 패널 ──
+async function openAdminPanel(){
+  document.getElementById('admin-modal').classList.add('open');
+  await renderAdminPanel();
+}
+function closeAdminPanel(){ document.getElementById('admin-modal').classList.remove('open'); }
+
+async function renderAdminPanel(){
+  const users=await dbGetAllUsers();
+  const body=document.getElementById('admin-body');
+  const members=users.filter(u=>!u.isAdmin);
+  if(!members.length){ body.innerHTML='<div style="text-align:center;color:#999;padding:30px;">등록된 회원이 없습니다.</div>'; return; }
+  const stLabel={pending:'⏳ 승인대기',approved:'✅ 승인됨',rejected:'❌ 거부됨'};
+  const stCls={pending:'st-pending',approved:'st-approved',rejected:'st-rejected'};
+  body.innerHTML=members.map(u=>`
+    <div class="user-card" id="uc-${u.id}">
+      <div class="user-top">
+        <strong>${u.displayName}</strong>
+        <span class="u-email">${u.email}</span>
+        <span class="badge-st ${stCls[u.status]||''}">${stLabel[u.status]||u.status}</span>
+        <div class="u-actions">
+          ${u.status!=='approved'?`<button class="btn-approve" onclick="adminApprove('${u.id}')">✅ 승인</button>`:''}
+          ${u.status!=='rejected'?`<button class="btn-reject" onclick="adminReject('${u.id}')">❌ 거부</button>`:''}
+        </div>
+        <span class="u-date">가입: ${new Date(u.createdAt).toLocaleDateString('ko-KR')}</span>
+      </div>
+      <div class="perm-row">
+        <span class="perm-label">권한:</span>
+        <label class="perm-chk"><input type="checkbox" id="pr-${u.id}" ${u.permissions.read?'checked':''} onchange="adminSavePerm('${u.id}')"> 읽기</label>
+        <label class="perm-chk"><input type="checkbox" id="pu-${u.id}" ${u.permissions.upload?'checked':''} onchange="adminSavePerm('${u.id}')"> 파일 업로드</label>
+        <label class="perm-chk"><input type="checkbox" id="pm-${u.id}" ${u.permissions.modify?'checked':''} onchange="adminSavePerm('${u.id}')"> 분석 실행</label>
+      </div>
+    </div>`).join('');
+}
+
+async function adminApprove(uid){
+  const users=await dbGetAllUsers();
+  const u=users.find(x=>x.id===uid); if(!u) return;
+  u.status='approved'; u.approvedAt=Date.now();
+  if(!u.permissions.read) u.permissions.read=true;
+  await dbUpdateUser(u); await renderAdminPanel();
+}
+async function adminReject(uid){
+  const users=await dbGetAllUsers();
+  const u=users.find(x=>x.id===uid); if(!u) return;
+  u.status='rejected'; await dbUpdateUser(u); await renderAdminPanel();
+}
+async function adminSavePerm(uid){
+  const users=await dbGetAllUsers();
+  const u=users.find(x=>x.id===uid); if(!u) return;
+  u.permissions={
+    read:!!document.getElementById(`pr-${uid}`)?.checked,
+    upload:!!document.getElementById(`pu-${uid}`)?.checked,
+    modify:!!document.getElementById(`pm-${uid}`)?.checked
+  };
+  await dbUpdateUser(u);
+}
+
+// ── 앱 초기화 ──
+async function initAuth(){
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    const profile = await getProfile(session.user.id);
+    if (profile && profile.status === 'approved') {
+      currentUser = { id: session.user.id, email: session.user.email,
+        displayName: profile.display_name, isAdmin: profile.is_admin,
+        permissions: profile.permissions || {}, status: profile.status };
+      hideAuthOverlay(); renderUserHeader(currentUser); applyPermissions(currentUser.permissions);
+      return;
+    }
+  }
+  showAuthOverlay();
+}
+
+// ── Excel 내보내기 ─────────────────────────────────
+function exportExcel() {
+  if (!analysisResult.length) return;
+  const aSheets=new Set(); analysisResult.forEach(r=>Object.keys(r.bySheet).forEach(s=>aSheets.add(s)));
+  const sc=[...aSheets].sort();
+  const hasKit=analysisResult.some(r=>r.kitTotal>0);
+  const sl={danger:'부족',warning:'위험',ok:'충분',na:'재고미등록'};
+
+  const header=['자품번','자품명','규격','부품유형','단위',
+    ...sc.map(s=>s+'_필요수량'),'총필요수량','창고재고',
+    ...(hasKit?['키팅수량','가용수량(재고+키팅)']:[]),
+    '부족수량','가용률(%)','상태'];
+  const mkRow=r=>[r.자품번,r.자품명,r.규격,r.부품유형,r.unit,
+    ...sc.map(s=>r.bySheet[s]?Math.round(r.bySheet[s]):0),
+    Math.round(r.totalReq),r.stock!==null?Math.round(r.stock):'',
+    ...(hasKit?[Math.round(r.kitTotal),r.available!==null?Math.round(r.available):'']:[]),
+    r.shortage!==null?Math.round(r.shortage):'',
+    r.ratio!==null?Math.round(r.ratio*100):'',sl[r.status]||''];
+
+  const wbOut=XLSX.utils.book_new();
+  const ws1=XLSX.utils.aoa_to_sheet([header,...filteredResult.map(mkRow)]);
+  ws1['!cols']=header.map((_,i)=>({wch:i<2?20:13}));
+  XLSX.utils.book_append_sheet(wbOut,ws1,'자재별부족현황');
+
+  const dangerRows=filteredResult.filter(r=>r.status==='danger');
+  if (dangerRows.length>0) {
+    const ws2=XLSX.utils.aoa_to_sheet([header,...dangerRows.map(mkRow)]);
+    ws2['!cols']=header.map(()=>({wch:15}));
+    XLSX.utils.book_append_sheet(wbOut,ws2,'🚨부족자재');
+  }
+
+  // 모델별 시트 (일자별 소요 포함)
+  const modelHeader=['모델명','제품번호','사양','라인','계획수량','부족자재수','위험자재수','상태',
+    '부족자재목록','일자별계획'];
+  const modelRows=filteredModelResult.map(r=>[
+    r.model,r.pn,r.spec,r.sheet,Math.round(r.totalQty),
+    r.dangerParts.length,r.warningParts.length,
+    {danger:'부족있음',warning:'위험있음',ok:'정상',na:'BOM없음'}[r.status]||'',
+    [...r.dangerParts,...r.warningParts].map(p=>p.자품번).join(', '),
+    Object.entries(r.byDate).map(([d,q])=>`${d}:${Math.round(q)}`).join(' | ')
+  ]);
+  const ws3=XLSX.utils.aoa_to_sheet([modelHeader,...modelRows]);
+  ws3['!cols']=modelHeader.map((_,i)=>({wch:i===0?20:i===8?40:i===9?30:14}));
+  XLSX.utils.book_append_sheet(wbOut,ws3,'🏭모델별현황');
+
+  if (hasKit) {
+    const kr=filteredResult.filter(r=>r.kitTotal>0);
+    if (kr.length>0) {
+      const kh=['자품번','자품명','총필요수량','창고재고','키팅수량','가용수량','부족수량','상태'];
+      const ws4=XLSX.utils.aoa_to_sheet([kh,...kr.map(r=>[r.자품번,r.자품명,
+        Math.round(r.totalReq),r.stock!==null?Math.round(r.stock):'',Math.round(r.kitTotal),
+        r.available!==null?Math.round(r.available):'',r.shortage!==null?Math.round(r.shortage):'',sl[r.status]||''])]);
+      ws4['!cols']=kh.map(()=>({wch:15}));
+      XLSX.utils.book_append_sheet(wbOut,ws4,'🟣키팅자재');
+    }
+  }
+
+  const today=new Date();
+  XLSX.writeFile(wbOut,`자재부족현황_${today.getFullYear()}${String(today.getMonth()+1).padStart(2,'0')}${String(today.getDate()).padStart(2,'0')}.xlsx`);
+}
+// ── 키팅 자동화 모달 ─────────────────────────────────────────────────────────
+function openAutoKitModal() {
+  document.getElementById('auto-kit-modal').classList.add('open');
+}
+function closeAutoKitModal() {
+  document.getElementById('auto-kit-modal').classList.remove('open');
+}
+function startAutoKit() {
+  closeAutoKitModal();
+  // mes-kit:// 프로토콜로 자동화 스크립트 실행
+  window.location.href = 'mes-kit://start';
+}
+function downloadSetupBat() {
+  // setup_url_protocol.bat 경로 안내 (로컬 파일 다운로드 불가 → 경로 복사 안내)
+  const path = String.raw`C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting_auto\setup_url_protocol.bat`;
+  alert(
+    '최초 1회 설정 방법:\n\n' +
+    '1. 아래 경로의 파일을 마우스 우클릭\n' +
+    '2. "관리자로 실행" 선택\n\n' +
+    path
+  );
+  // 경로를 클립보드에 복사
+  try { navigator.clipboard.writeText(path); } catch(e) {}
+}
+document.getElementById('auto-kit-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeAutoKitModal();
+});
+</script>
+</body>
+</html>

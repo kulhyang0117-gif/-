@@ -1,0 +1,9 @@
+node_modules/
+*.xlsx
+*.xls
+*.png
+*.jpg
+생산계획/
+재고현황/
+kitting 자재/
+프로젝트 루트/SUPABASE.xlsx

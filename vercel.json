@@ -1,0 +1,3 @@
+{
+  "rewrites": [{ "source": "/", "destination": "/자재부족현황.html" }]
+}
