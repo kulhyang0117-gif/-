@@ -1927,14 +1927,41 @@ async function getProfile(userId) {
   return data;
 }
 
+const ADMIN_EMAIL = 'kulhyang0117@gmail.com';
+const ADMIN_PERMS = { read: true, upload: true, modify: true };
+
+// ─── 관리자 프로필 자동 생성/복구 ────────────────────
+async function ensureAdminProfile(userId, email) {
+  const profile = await getProfile(userId);
+  if (profile) {
+    if (!profile.is_admin || profile.status !== 'approved') {
+      await sb.from('profiles').update({
+        status: 'approved', is_admin: true, permissions: ADMIN_PERMS, approved_at: new Date().toISOString()
+      }).eq('id', userId);
+    }
+    return { ...profile, status: 'approved', is_admin: true, permissions: ADMIN_PERMS };
+  }
+  await sb.from('profiles').insert({
+    id: userId, email, display_name: '관리자',
+    status: 'approved', is_admin: true, permissions: ADMIN_PERMS, approved_at: new Date().toISOString()
+  });
+  return { display_name: '관리자', status: 'approved', is_admin: true, permissions: ADMIN_PERMS };
+}
+
 // ─── 로그인 ──────────────────────────────────────────
 async function authLogin(email, pw) {
-  const { data, error } = await sb.auth.signInWithPassword({ email: email.trim().toLowerCase(), password: pw });
+  const emailL = email.trim().toLowerCase();
+  const { data, error } = await sb.auth.signInWithPassword({ email: emailL, password: pw });
   if (error) throw (error.message === 'Invalid login credentials' ? '이메일 또는 비밀번호가 올바르지 않습니다.' : error.message);
-  const profile = await getProfile(data.user.id);
-  if (!profile) throw '프로필을 찾을 수 없습니다. 관리자에게 문의하세요.';
-  if (profile.status === 'pending') throw '__PENDING__';
-  if (profile.status === 'rejected') throw '계정 사용이 거부되었습니다. 관리자에게 문의하세요.';
+  let profile;
+  if (emailL === ADMIN_EMAIL) {
+    profile = await ensureAdminProfile(data.user.id, emailL);
+  } else {
+    profile = await getProfile(data.user.id);
+    if (!profile) throw '프로필을 찾을 수 없습니다. 관리자에게 문의하세요.';
+    if (profile.status === 'pending') throw '__PENDING__';
+    if (profile.status === 'rejected') throw '계정 사용이 거부되었습니다. 관리자에게 문의하세요.';
+  }
   return { id: data.user.id, email: data.user.email, displayName: profile.display_name,
     isAdmin: profile.is_admin, permissions: profile.permissions || {}, status: profile.status };
 }
@@ -1943,14 +1970,20 @@ async function authLogin(email, pw) {
 async function authRegister(email, pw, name) {
   if (!email || !pw || !name) throw '모든 항목을 입력해주세요.';
   if (pw.length < 6) throw '비밀번호는 6자 이상이어야 합니다.';
-  const { data, error } = await sb.auth.signUp({ email: email.trim().toLowerCase(), password: pw });
+  const emailL = email.trim().toLowerCase();
+  const isAdmin = emailL === ADMIN_EMAIL;
+  const { data, error } = await sb.auth.signUp({ email: emailL, password: pw });
   if (error) throw error.message;
   if (!data.user) throw '회원가입에 실패했습니다. 잠시 후 다시 시도해주세요.';
   await sb.from('profiles').insert({
-    id: data.user.id, email: email.trim().toLowerCase(),
-    display_name: name.trim(), status: 'pending', is_admin: false,
-    permissions: { read: false, upload: false, modify: false }
+    id: data.user.id, email: emailL,
+    display_name: isAdmin ? '관리자' : name.trim(),
+    status: isAdmin ? 'approved' : 'pending',
+    is_admin: isAdmin,
+    permissions: isAdmin ? ADMIN_PERMS : { read: false, upload: false, modify: false },
+    approved_at: isAdmin ? new Date().toISOString() : null
   });
+  if (isAdmin) return { autoLogin: true };
 }
 
 // ─── 사용자 목록 / 수정 (관리자) ─────────────────────
@@ -2071,7 +2104,14 @@ async function doRegister(){
   const errEl=document.getElementById('reg-err');
   errEl.textContent='';
   if(pw!==pw2){ errEl.textContent='비밀번호가 일치하지 않습니다.'; return; }
-  try{ await authRegister(email,pw,name); showPending(); }
+  try{
+    const result = await authRegister(email,pw,name);
+    if(result && result.autoLogin){
+      const user = await authLogin(email, pw);
+      currentUser=user; setSession(user);
+      hideAuthOverlay(); renderUserHeader(user); applyPermissions(user.permissions);
+    } else { showPending(); }
+  }
   catch(e){ errEl.textContent=e; }
 }
 
