@@ -658,7 +658,7 @@ window.addEventListener('load', async () => {
   if (tsKit) document.getElementById('uptime-kit').textContent = fmtUpTime(tsKit, nameKit);
   checkReady();
   initDragDrop();
-  loadUploadLogsFromSupabase();
+  syncFilesFromSupabase();
 });
 
 function fmtUpTime(ts, name) {
@@ -680,6 +680,7 @@ function _processFile(type, file) {
       document.getElementById('drop-' + type).classList.add('loaded');
       document.getElementById('status-' + type).textContent = '✅ ' + file.name;
       dbPut(type, { data: ab, name: file.name });
+      uploadFileToStorage(type + '.xlsx', ab);
       const ts = Date.now();
       const uname = currentUser ? currentUser.displayName : '';
       localStorage.setItem('ms_uptime_' + type, ts);
@@ -716,7 +717,9 @@ function _processKitFiles(files) {
         localStorage.setItem('ms_uptime_kit', ts);
         if (uname) localStorage.setItem('ms_uploader_kit', uname);
         document.getElementById('uptime-kit').textContent = fmtUpTime(ts, uname);
-        syncUploadLog('kit', ts, uname);
+        // Storage 업로드 + file_names 저장
+        files.forEach(f => { const kf = state.kitFiles.find(k => k.name === f.name); if(kf) uploadFileToStorage('kit/' + f.name, kf.rawData); });
+        syncUploadLog('kit', ts, uname, state.kitFiles.map(f => f.name));
       }
     };
     reader.readAsArrayBuffer(file);
@@ -775,6 +778,7 @@ function clearKitFiles() {
   localStorage.removeItem('ms_uptime_kit');
   localStorage.removeItem('ms_uploader_kit');
   document.getElementById('uptime-kit').textContent = '';
+  syncUploadLog('kit', Date.now(), '', []);
 }
 
 function saveKitList() {
@@ -2004,12 +2008,11 @@ async function dbUpdateUser(user) {
 }
 
 // ─── 업로드 이력 동기화 ──────────────────────────────
-async function syncUploadLog(type, ts, name) {
+async function syncUploadLog(type, ts, name, fileNames) {
   try {
-    await sb.from('upload_logs').upsert(
-      { file_type: type, uploaded_at: String(ts), uploader_name: name || '' },
-      { onConflict: 'file_type' }
-    );
+    const row = { file_type: type, uploaded_at: String(ts), uploader_name: name || '' };
+    if (fileNames !== undefined) row.file_names = fileNames;
+    await sb.from('upload_logs').upsert(row, { onConflict: 'file_type' });
   } catch(e) {}
 }
 
@@ -2020,13 +2023,64 @@ async function loadUploadLogsFromSupabase() {
     data.forEach(row => {
       const el = document.getElementById('uptime-' + row.file_type);
       const localTs = localStorage.getItem('ms_uptime_' + row.file_type);
-      // Supabase가 더 최신이거나 로컬에 없으면 Supabase 데이터 사용
       if (!el || (localTs && Number(localTs) >= Number(row.uploaded_at))) return;
       el.textContent = fmtUpTime(row.uploaded_at, row.uploader_name);
       localStorage.setItem('ms_uptime_' + row.file_type, row.uploaded_at);
       if (row.uploader_name) localStorage.setItem('ms_uploader_' + row.file_type, row.uploader_name);
     });
   } catch(e) {}
+}
+
+// ─── Supabase Storage 파일 동기화 ────────────────────
+const STORAGE_BUCKET = 'ms-files';
+
+async function uploadFileToStorage(path, arrayBuffer) {
+  try {
+    const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
+    await sb.storage.from(STORAGE_BUCKET).upload(path, blob, { upsert: true });
+  } catch(e) {}
+}
+
+async function downloadFileFromStorage(path) {
+  try {
+    const { data, error } = await sb.storage.from(STORAGE_BUCKET).download(path);
+    if (error || !data) return null;
+    return await data.arrayBuffer();
+  } catch(e) { return null; }
+}
+
+async function syncFilesFromSupabase() {
+  // BOM · 생산계획 · 재고현황: 로컬에 없으면 Storage에서 다운로드
+  for (const type of ['bom', 'plan', 'inv']) {
+    if (state[type]) continue;
+    const ab = await downloadFileFromStorage(type + '.xlsx');
+    if (!ab) continue;
+    try {
+      const arr = new Uint8Array(ab);
+      state[type] = XLSX.read(arr, { type: 'array' });
+      document.getElementById('drop-' + type).classList.add('loaded');
+      document.getElementById('status-' + type).textContent = '✅ (클라우드 복원)';
+      await dbPut(type, { data: arr, name: type + '.xlsx' });
+    } catch(e) {}
+  }
+  // 키팅 파일: upload_logs에 저장된 파일 목록으로 다운로드
+  if (state.kitFiles.length === 0) {
+    try {
+      const { data: logRow } = await sb.from('upload_logs').select('file_names').eq('file_type', 'kit').single();
+      const names = logRow?.file_names || [];
+      for (const name of names) {
+        const ab = await downloadFileFromStorage('kit/' + name);
+        if (!ab) continue;
+        try {
+          const arr = new Uint8Array(ab);
+          const wb = XLSX.read(arr, { type: 'array' });
+          state.kitFiles.push({ wb, name, rawData: arr });
+        } catch(e) {}
+      }
+      if (state.kitFiles.length > 0) { renderKitChips(); checkReady(); }
+    } catch(e) {}
+  }
+  loadUploadLogsFromSupabase();
 }
 
 // ── 권한 적용 ──
@@ -2090,7 +2144,7 @@ async function doLogin(){
     }
     currentUser=user; setSession(user);
     hideAuthOverlay(); renderUserHeader(user); applyPermissions(user.permissions);
-    loadUploadLogsFromSupabase();
+    syncFilesFromSupabase();
   }catch(e){
     if(e==='__PENDING__') showPending();
     else{ errEl.textContent=e; }
@@ -2193,7 +2247,7 @@ async function initAuth(){
         displayName: profile.display_name, isAdmin: profile.is_admin,
         permissions: profile.permissions || {}, status: profile.status };
       hideAuthOverlay(); renderUserHeader(currentUser); applyPermissions(currentUser.permissions);
-      loadUploadLogsFromSupabase();
+      syncFilesFromSupabase();
       return;
     }
   }
