@@ -20,8 +20,12 @@ CREATE TABLE IF NOT EXISTS upload_logs (
   file_type     TEXT PRIMARY KEY,   -- bom / plan / inv / kit
   uploaded_at   TEXT,               -- Unix ms timestamp
   uploader_name TEXT DEFAULT '',
+  file_name     TEXT DEFAULT '',    -- 원본 파일명 (bom/plan/inv용)
   file_names    JSONB DEFAULT '[]'  -- 키팅 파일 목록
 );
+-- 기존 테이블에 컬럼 추가 (이미 테이블 있을 경우)
+ALTER TABLE upload_logs ADD COLUMN IF NOT EXISTS file_name TEXT DEFAULT '';
+ALTER TABLE upload_logs ADD COLUMN IF NOT EXISTS file_names JSONB DEFAULT '[]';
 
 -- ── 3. Row Level Security ─────────────────────────────────────────
 ALTER TABLE profiles    ENABLE ROW LEVEL SECURITY;
