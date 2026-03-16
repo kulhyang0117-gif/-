@@ -31,7 +31,7 @@ playwright install chromium --quiet 2>nul
 echo.
 echo 🚀 sMES 키팅 자동화를 시작합니다...
 echo.
-python kitting_automation.py
+python kitting_automation.py --step login
 
 echo.
 pause

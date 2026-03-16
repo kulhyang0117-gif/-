@@ -8,7 +8,7 @@ sMES 키팅 자재 자동 다운로드 & 자재부족현황 자동 업로드
   playwright install chromium
 """
 
-import os, sys, time, ctypes, subprocess
+import os, sys, time, ctypes, subprocess, argparse
 from datetime import datetime
 from pathlib import Path
 
@@ -811,8 +811,15 @@ def automate_upload(downloaded_files):
 # 메인
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--step', default='login',
+                        help='실행 단계: login | navigate | all')
+    # mes-kit:// 프로토콜에서 전달되는 URL 인자 무시
+    parser.add_argument('url', nargs='?', default='')
+    args, _ = parser.parse_known_args()
+
     log("=" * 60)
-    log(f"sMES 키팅 자동화 시작  ({TODAY})")
+    log(f"sMES 키팅 자동화 시작  ({TODAY})  [step={args.step}]")
     log("=" * 60)
 
     if not is_admin():
@@ -822,7 +829,7 @@ def main():
         return
 
     try:
-        # Step 1: 실행
+        # Step 1: sMES 실행
         launch_smes()
 
         # sMES 창 연결
@@ -840,11 +847,29 @@ def main():
         log("▶ Step 3: 로그인...")
         login_smes(win)
 
-        # Step 3~5: 메뉴 이동 + 다운로드
+        log("")
+        log("✅ sMES 로그인 완료!")
+
+        if args.step == 'login':
+            log("=" * 60)
+            log("  [Step 1 완료] MES 실행 및 로그인 성공.")
+            log("  다음 단계(메뉴 이동 → 다운로드)는 추후 추가 예정입니다.")
+            log("=" * 60)
+            input("  확인 후 Enter → ")
+            return
+
+        # Step 3~5: 메뉴 이동 + 다운로드 (step=navigate 또는 all)
         log("▶ Step 4~5: 메뉴 이동 및 다운로드...")
         downloaded = navigate_and_download(app)
 
-        # Step 6: 업로드
+        if args.step == 'navigate':
+            log("=" * 60)
+            log(f"  [Step 2 완료] 다운로드 {len(downloaded)}개 파일.")
+            log("=" * 60)
+            input("  확인 후 Enter → ")
+            return
+
+        # Step 6: 업로드 (step=all)
         automate_upload(downloaded)
 
     except Exception as e:
