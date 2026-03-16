@@ -10,12 +10,14 @@ if %errorLevel% neq 0 (
 )
 
 set "RUN_BAT=%~dp0run.bat"
+set "ELEVATED_BAT=%~dp0run_elevated.bat"
 
 :: ── 레지스트리 등록 ───────────────────────────────────────────────────────
 reg add "HKEY_CLASSES_ROOT\mes-kit"                         /f /ve /d "URL:MES Kitting Automation"
 reg add "HKEY_CLASSES_ROOT\mes-kit"                         /f /v "URL Protocol" /d ""
 reg add "HKEY_CLASSES_ROOT\mes-kit\DefaultIcon"             /f /ve /d "%RUN_BAT%,0"
-reg add "HKEY_CLASSES_ROOT\mes-kit\shell\open\command"      /f /ve /d "cmd.exe /c \"\"%RUN_BAT%\"\" \"%1\""
+:: run_elevated.bat 이 PowerShell을 통해 관리자로 run.bat을 실행
+reg add "HKEY_CLASSES_ROOT\mes-kit\shell\open\command"      /f /ve /d "cmd.exe /c \"\"%ELEVATED_BAT%\"\""
 
 echo.
 echo ✅ mes-kit:// 프로토콜 등록 완료!

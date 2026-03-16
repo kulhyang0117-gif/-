@@ -421,36 +421,51 @@ def _login_by_coords(dlg, hwnd):
 
 
 def _login_by_edit_scan(dlg, hwnd):
-    """3순위: Edit 컨트롤 자동 스캔 — auto_id·좌표 불필요"""
+    """3순위: children() 직접 스캔 — 로그 덤프 확인 기반 (C1TextBox + C1Button)"""
     import pyautogui, pyperclip
-    log("  [3순위] Edit 컨트롤 스캔 방식 시도...")
+    log("  [3순위] children() 직접 스캔 방식 시도...")
 
     try:
-        # WindowsForms10 Edit 컨트롤 수집 (Y좌표 오름차순)
+        # ── Edit 컨트롤 (C1TextBox) — 직접 자식만, Y좌표 정렬 ──────────────
         edits = []
-        for pat in ["WindowsForms10.EDIT.*", ".*Edit.*", ".*TextBox.*"]:
+        # 1차: children() 직접 자식 (로그 덤프 확인: 2개만 존재)
+        try:
+            edits = sorted(
+                dlg.children(class_name_re="WindowsForms10.EDIT.*"),
+                key=lambda c: c.rectangle().top
+            )
+            log(f"  children() Edit {len(edits)}개")
+        except Exception:
+            pass
+
+        # 2차: 그래도 부족하면 descendants() fallback
+        if len(edits) < 2:
             try:
-                found = sorted(
-                    dlg.descendants(class_name_re=pat),
+                all_edits = sorted(
+                    dlg.descendants(class_name_re="WindowsForms10.EDIT.*"),
                     key=lambda c: c.rectangle().top
                 )
-                if len(found) >= 2:
-                    edits = found
-                    log(f"  Edit {len(edits)}개 발견 (pattern={pat})")
-                    break
+                # 로그인 패널 Edit만 필터: 빈 값이거나 ID/PW 후보인 것
+                login_edits = [
+                    e for e in all_edits
+                    if e.window_text().strip() in ('', SMES_ID, SMES_PW)
+                    or len(e.window_text().strip()) <= 20
+                ][:4]  # 최대 4개
+                edits = login_edits
+                log(f"  descendants() Edit 후보 {len(edits)}개")
             except Exception:
                 pass
 
         if len(edits) < 2:
-            log(f"  Edit 컨트롤 2개 미만 ({len(edits)}개) → 실패")
+            log(f"  Edit 컨트롤 2개 미만 → 실패")
             return False
 
-        id_ctrl = edits[0]
-        pw_ctrl = edits[1]
-        log(f"  ID 컨트롤: class='{id_ctrl.class_name()}' pos={id_ctrl.rectangle()}")
-        log(f"  PW 컨트롤: class='{pw_ctrl.class_name()}' pos={pw_ctrl.rectangle()}")
+        id_ctrl = edits[0]   # Y 작은 = 위쪽 = ID
+        pw_ctrl = edits[1]   # Y 큰  = 아래쪽 = PW
+        log(f"  ID: class='{id_ctrl.class_name()}' val='{id_ctrl.window_text()[:10]}' pos={id_ctrl.rectangle().top}")
+        log(f"  PW: class='{pw_ctrl.class_name()}' val='****' pos={pw_ctrl.rectangle().top}")
 
-        # ① ID 입력
+        # ── ① ID 입력 ────────────────────────────────────────────────────
         existing_id = ""
         try:
             existing_id = id_ctrl.window_text().strip()
@@ -458,7 +473,7 @@ def _login_by_edit_scan(dlg, hwnd):
             pass
 
         if existing_id:
-            log(f"  ① ID '{existing_id}' 이미 입력됨 → 스킵")
+            log(f"  ① ID '{existing_id}' 이미 있음 → 스킵")
         else:
             _verify_foreground(hwnd)
             try:
@@ -469,13 +484,16 @@ def _login_by_edit_scan(dlg, hwnd):
                 pyautogui.hotkey("ctrl", "v")
                 log(f"  ① ID 입력: {SMES_ID}")
             except Exception:
-                id_ctrl.set_edit_text(SMES_ID)
-                log(f"  ① ID 입력 (set_edit_text): {SMES_ID}")
+                try:
+                    id_ctrl.set_edit_text(SMES_ID)
+                    log(f"  ① ID set_edit_text: {SMES_ID}")
+                except Exception as e2:
+                    log(f"  ① ID 입력 실패: {e2}")
             time.sleep(0.3)
 
         _check_caps_lock()
 
-        # ② PW 입력
+        # ── ② PW 입력 ────────────────────────────────────────────────────
         _verify_foreground(hwnd)
         try:
             pw_ctrl.click_input()
@@ -485,27 +503,47 @@ def _login_by_edit_scan(dlg, hwnd):
             _type_password(SMES_PW)
             log("  ② PW 입력 완료")
         except Exception:
-            pw_ctrl.set_edit_text(SMES_PW)
-            log("  ② PW 입력 (set_edit_text) 완료")
+            try:
+                pw_ctrl.set_edit_text(SMES_PW)
+                log("  ② PW set_edit_text 완료")
+            except Exception as e2:
+                log(f"  ② PW 입력 실패: {e2}")
         time.sleep(0.3)
 
-        # ③ 로그인 버튼
+        # ── ③ 로그인 버튼 — title='Login' 직접 탐색 ─────────────────────
         _verify_foreground(hwnd)
         btn_found = False
-        for btn_kw in ["btn_login", "로그인", "LOGIN", "Login", "확인", "OK"]:
+        # children() 에서 BUTTON 중 'Login' 찾기 (덤프 확인됨)
+        try:
+            for btn in dlg.children(class_name_re="WindowsForms10.BUTTON.*"):
+                try:
+                    txt = btn.window_text().strip()
+                    if txt.lower() in ("login", "로그인", "확인", "ok"):
+                        btn.click_input()
+                        log(f"  ③ 버튼 클릭: '{txt}'")
+                        btn_found = True
+                        break
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        if not btn_found:
+            # descendants 에서도 탐색
             try:
-                btn = dlg.child_window(title_re=f".*{btn_kw}.*")
-                if btn.exists(timeout=0.5):
-                    btn.click_input()
-                    log(f"  ③ 버튼 클릭: '{btn_kw}'")
-                    btn_found = True
-                    break
+                for btn_kw in ["Login", "로그인", "LOGIN"]:
+                    b = dlg.child_window(title=btn_kw, class_name_re="WindowsForms10.BUTTON.*")
+                    if b.exists(timeout=0.5):
+                        b.click_input()
+                        log(f"  ③ 버튼 클릭 (child_window): '{btn_kw}'")
+                        btn_found = True
+                        break
             except Exception:
                 pass
 
         if not btn_found:
             pw_ctrl.type_keys("{ENTER}")
-            log("  ③ Enter 키로 로그인 시도")
+            log("  ③ Enter 키로 로그인")
 
         return True
 
