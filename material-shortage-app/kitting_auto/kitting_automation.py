@@ -142,13 +142,26 @@ def _paste_text(text):
 
 def _type_password(pwd: str):
     """
-    비밀번호 입력 — 클립보드 방식 우선.
-    typewrite는 !@# 등 Shift+숫자 조합 키를 누락하므로 사용하지 않음.
+    비밀번호 직접 키 입력.
+    일반 문자는 typewrite, Shift 조합 특수문자는 hotkey로 각각 타이핑.
     """
-    import pyperclip, pyautogui
-    pyperclip.copy(pwd)
-    pyautogui.hotkey("ctrl", "v")
-    time.sleep(0.1)
+    import pyautogui
+
+    # Shift+키 조합이 필요한 특수문자 매핑
+    SHIFT_MAP = {
+        '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
+        '^': '6', '&': '7', '*': '8', '(': '9', ')': '0',
+        '_': '-', '+': '=', '{': '[', '}': ']', '|': '\\',
+        ':': ';', '"': "'", '<': ',', '>': '.', '?': '/',
+        '~': '`',
+    }
+
+    for ch in pwd:
+        if ch in SHIFT_MAP:
+            pyautogui.hotkey('shift', SHIFT_MAP[ch])
+        else:
+            pyautogui.typewrite(ch, interval=0.0)
+        time.sleep(0.05)
 
 
 def _check_caps_lock():
