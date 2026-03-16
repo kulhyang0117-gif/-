@@ -2033,14 +2033,14 @@ function buildPkgData() {
         계획수량:      qty,
         매핑:          !!spec,
         박스유형:      spec?.박스유형      || '',
-        박스소요량:    spec ? qty * spec.박스소요량_개   : 0,
+        박스소요량:    spec ? Math.ceil(qty * spec.박스소요량_개)   : 0,
         포장지:        spec?.포장지        || '',
         포장지색상:    spec?.포장지색상    || '',
-        포장지소요량:  spec ? qty * spec.포장지소요량_개 : 0,
+        포장지소요량:  spec ? Math.ceil(qty * spec.포장지소요량_개) : 0,
         발포지:        spec?.발포지        || '',
-        발포지소요량:  spec ? qty * spec.발포지소요량_개 : 0,
+        발포지소요량:  spec ? Math.ceil(qty * spec.발포지소요량_개) : 0,
         패드:          spec?.패드          || '',
-        패드소요량:    spec ? qty * spec.패드소요량_개   : 0,
+        패드소요량:    spec ? Math.ceil(qty * spec.패드소요량_개)   : 0,
       });
     });
   });
@@ -2080,7 +2080,7 @@ function buildPkgDetailHtml(s) {
   let html = `<div style="padding:10px 16px;background:#f7f8fa;border-top:1px solid #dde4ed;">
     <div style="font-size:11px;font-weight:700;color:${c};margin-bottom:8px;">
       ${s.구분}: ${s.품목명}${s.색상 ? ' / ' + s.색상 : ''}
-      &nbsp;—&nbsp; 총 필요수량 <span style="font-size:13px;">${Number(s.필요수량합.toFixed(2)).toLocaleString()}</span>
+      &nbsp;—&nbsp; 총 필요수량 <span style="font-size:13px;">${Math.ceil(s.필요수량합).toLocaleString()}</span>
     </div>
     <div class="table-wrap" style="max-height:260px;">
     <table style="font-size:11px;border-collapse:collapse;width:100%;">
@@ -2106,7 +2106,7 @@ function buildPkgDetailHtml(s) {
   html += `<tr style="background:#eaf0fb;font-weight:700;">
     <td colspan="4" style="padding:3px 8px;border:1px solid #ddd;text-align:right;">합계</td>
     <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;color:#1e3a5f;">${Math.round(totalPlan).toLocaleString()}</td>
-    <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;color:${c};">${Number(s.필요수량합.toFixed(2)).toLocaleString()}</td>
+    <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;color:${c};">${Math.ceil(s.필요수량합).toLocaleString()}</td>
   </tr></tbody></table></div></div>`;
   return html;
 }
@@ -2200,7 +2200,7 @@ function renderPkgTable(rawData) {
         <td style="font-weight:700;">${item.품목명}</td>
         <td class="center" style="color:#555;">${item.색상||'-'}</td>
         <td class="num" style="color:#1e3a5f;font-weight:700;">${Math.round(item.계획수량합).toLocaleString()}</td>
-        <td class="num" style="color:#c0392b;font-weight:700;font-size:13px;">${Number(item.필요수량합.toFixed(2)).toLocaleString()}</td>
+        <td class="num" style="color:#c0392b;font-weight:700;font-size:13px;">${Math.ceil(item.필요수량합).toLocaleString()}</td>
         <td class="center" style="color:#666;">${item.detail.length}건</td>
         <td class="center"><button class="expand-btn" onclick="togglePkgDetail('${detId}',this)">▶ 상세</button></td>
       </tr>
@@ -2333,7 +2333,7 @@ function buildPkgDateDetailHtml(d) {
       <div style="padding:10px 14px;">
         <div style="font-size:10px;font-weight:700;color:${col.bg};margin-bottom:4px;">${item.구분}</div>
         <div style="font-weight:700;font-size:12px;margin-bottom:2px;">${item.품목명}${item.색상 && item.색상 !== 'X' ? ' / '+item.색상 : ''}</div>
-        <div style="font-size:15px;font-weight:700;color:${col.bg};margin-bottom:6px;">${Number(item.필요수량.toFixed(2)).toLocaleString()}</div>
+        <div style="font-size:15px;font-weight:700;color:${col.bg};margin-bottom:6px;">${Math.ceil(item.필요수량).toLocaleString()}</div>
         <button onclick="togglePkgCard('${cardDetailId}',this)"
           style="font-size:10px;padding:2px 8px;border-radius:4px;border:1px solid ${col.bg}80;background:white;color:${col.bg};cursor:pointer;font-weight:600;">
           ▼ 모델별 상세
