@@ -189,12 +189,11 @@ def _verify_foreground(hwnd, fallback_hwnd=None):
 
 
 def _force_foreground(hwnd):
-    """UAC 환경에서도 창 강제 활성화 (AttachThreadInput 방식)"""
-    import win32con, win32gui, win32process
+    """UAC 환경에서도 창 강제 활성화 (AttachThreadInput 방식, ctypes 전용)"""
     try:
-        fg_tid  = ctypes.windll.user32.GetWindowThreadProcessId(
+        fg_tid = ctypes.windll.user32.GetWindowThreadProcessId(
             ctypes.windll.user32.GetForegroundWindow(), None)
-        my_tid  = ctypes.windll.kernel32.GetCurrentThreadId()
+        my_tid = ctypes.windll.kernel32.GetCurrentThreadId()
         if fg_tid != my_tid:
             ctypes.windll.user32.AttachThreadInput(fg_tid, my_tid, True)
         ctypes.windll.user32.SetForegroundWindow(hwnd)
@@ -253,7 +252,7 @@ def _find_login_dialog(timeout=20):
 
 def _login_by_autoid(dlg, hwnd):
     """1순위: pywinauto auto_id 방식 (txt_id / txt_pw / btn_login)"""
-    import pyautogui
+    import pyautogui, pyperclip
     log("  [1순위] auto_id 방식 시도...")
 
     try:
@@ -262,11 +261,13 @@ def _login_by_autoid(dlg, hwnd):
         if not id_field.exists(timeout=2) or not pw_field.exists(timeout=2):
             raise RuntimeError("auto_id 컨트롤 없음")
 
-        # ID 입력
+        # ① ID 입력 — 클릭 전 포그라운드 검증
+        if not _verify_foreground(hwnd):
+            return False
         id_field.click_input()
         time.sleep(0.2)
         pyautogui.hotkey("ctrl", "a")
-        import pyperclip; pyperclip.copy(SMES_ID)
+        pyperclip.copy(SMES_ID)
         pyautogui.hotkey("ctrl", "v")
         log(f"  ① ID 입력: {SMES_ID}")
         time.sleep(0.3)
@@ -274,7 +275,9 @@ def _login_by_autoid(dlg, hwnd):
         # Caps Lock 확인
         _check_caps_lock()
 
-        # PW 입력 (typewrite 1순위, 클립보드 폴백)
+        # ② PW 입력 — 클릭 전 포그라운드 재검증
+        if not _verify_foreground(hwnd):
+            return False
         pw_field.click_input()
         time.sleep(0.2)
         pyautogui.hotkey("ctrl", "a")
@@ -283,12 +286,12 @@ def _login_by_autoid(dlg, hwnd):
         log("  ② PW 입력 완료")
         time.sleep(0.3)
 
-        # 로그인 버튼
+        # ③ 로그인 버튼 — 클릭 전 포그라운드 재검증
+        if not _verify_foreground(hwnd):
+            return False
         try:
             login_btn = dlg.child_window(auto_id="btn_login")
             if login_btn.exists(timeout=1):
-                if not _verify_foreground(hwnd):
-                    return False
                 login_btn.click_input()
                 log("  ③ 로그인 버튼 클릭 (auto_id)")
                 return True
@@ -342,10 +345,9 @@ def _login_by_coords(dlg, hwnd):
         log(f"  창 위치: left={left} top={top} w={width} h={height}")
         log(f"  ID 좌표: {id_pos} / PW 좌표: {pwd_pos} / 버튼 좌표: {btn_pos}")
 
+        # ① ID 입력 — 클릭 전 포그라운드 검증
         if not _verify_foreground(hwnd):
             return False
-
-        # ID 입력
         pyperclip.copy(SMES_ID)
         pyautogui.click(*id_pos)
         time.sleep(0.4)
@@ -356,7 +358,9 @@ def _login_by_coords(dlg, hwnd):
         # Caps Lock 확인
         _check_caps_lock()
 
-        # PW 입력 (Tab 이동 후 typewrite)
+        # ② PW 입력 — 클릭 전 포그라운드 재검증
+        if not _verify_foreground(hwnd):
+            return False
         pyautogui.press("tab")
         time.sleep(0.3)
         pyautogui.hotkey("ctrl", "a")
@@ -364,7 +368,7 @@ def _login_by_coords(dlg, hwnd):
         _type_password(SMES_PW)
         log("  ② PW 입력 완료")
 
-        # 로그인 버튼 클릭
+        # ③ 로그인 버튼 클릭 — 포그라운드 재검증
         if not _verify_foreground(hwnd):
             return False
         pyautogui.click(*btn_pos)
