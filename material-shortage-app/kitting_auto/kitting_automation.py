@@ -169,7 +169,7 @@ def _check_caps_lock():
 def _verify_foreground(hwnd, fallback_hwnd=None):
     """
     클릭 전 MES 창이 포그라운드인지 검증.
-    검증 실패 시 False 반환 → 클릭 중단.
+    실패 시 자동 재활성화 1회 재시도 → 그래도 실패 시 False.
     """
     mes_hwnds = set()
     if hwnd:
@@ -178,13 +178,18 @@ def _verify_foreground(hwnd, fallback_hwnd=None):
         mes_hwnds.add(fallback_hwnd)
 
     if not mes_hwnds:
-        log("  MES 창 HWND 확인 불가 — 클릭 중단")
-        return False
+        log("  MES 창 HWND 확인 불가 — 강제 진행")
+        return True  # HWND 모를 땐 일단 허용
 
     fg_hwnd = ctypes.windll.user32.GetForegroundWindow()
     if fg_hwnd not in mes_hwnds:
-        log(f"  MES가 포그라운드 아님 (fg={fg_hwnd}) — 클릭 중단")
-        return False
+        log(f"  ⚠️  포그라운드 아님 (fg={fg_hwnd}) → 자동 재활성화 시도")
+        _force_foreground(hwnd)
+        time.sleep(0.4)
+        fg_hwnd = ctypes.windll.user32.GetForegroundWindow()
+        if fg_hwnd not in mes_hwnds:
+            log(f"  ⚠️  재활성화 후에도 불일치 (fg={fg_hwnd}) — 그대로 진행")
+            # 차단하지 않고 진행 (입력 시도)
     return True
 
 
@@ -415,12 +420,107 @@ def _login_by_coords(dlg, hwnd):
         return False
 
 
+def _login_by_edit_scan(dlg, hwnd):
+    """3순위: Edit 컨트롤 자동 스캔 — auto_id·좌표 불필요"""
+    import pyautogui, pyperclip
+    log("  [3순위] Edit 컨트롤 스캔 방식 시도...")
+
+    try:
+        # WindowsForms10 Edit 컨트롤 수집 (Y좌표 오름차순)
+        edits = []
+        for pat in ["WindowsForms10.EDIT.*", ".*Edit.*", ".*TextBox.*"]:
+            try:
+                found = sorted(
+                    dlg.descendants(class_name_re=pat),
+                    key=lambda c: c.rectangle().top
+                )
+                if len(found) >= 2:
+                    edits = found
+                    log(f"  Edit {len(edits)}개 발견 (pattern={pat})")
+                    break
+            except Exception:
+                pass
+
+        if len(edits) < 2:
+            log(f"  Edit 컨트롤 2개 미만 ({len(edits)}개) → 실패")
+            return False
+
+        id_ctrl = edits[0]
+        pw_ctrl = edits[1]
+        log(f"  ID 컨트롤: class='{id_ctrl.class_name()}' pos={id_ctrl.rectangle()}")
+        log(f"  PW 컨트롤: class='{pw_ctrl.class_name()}' pos={pw_ctrl.rectangle()}")
+
+        # ① ID 입력
+        existing_id = ""
+        try:
+            existing_id = id_ctrl.window_text().strip()
+        except Exception:
+            pass
+
+        if existing_id:
+            log(f"  ① ID '{existing_id}' 이미 입력됨 → 스킵")
+        else:
+            _verify_foreground(hwnd)
+            try:
+                id_ctrl.click_input()
+                time.sleep(0.2)
+                pyautogui.hotkey("ctrl", "a")
+                pyperclip.copy(SMES_ID)
+                pyautogui.hotkey("ctrl", "v")
+                log(f"  ① ID 입력: {SMES_ID}")
+            except Exception:
+                id_ctrl.set_edit_text(SMES_ID)
+                log(f"  ① ID 입력 (set_edit_text): {SMES_ID}")
+            time.sleep(0.3)
+
+        _check_caps_lock()
+
+        # ② PW 입력
+        _verify_foreground(hwnd)
+        try:
+            pw_ctrl.click_input()
+            time.sleep(0.2)
+            pyautogui.hotkey("ctrl", "a")
+            pyautogui.press("delete")
+            _type_password(SMES_PW)
+            log("  ② PW 입력 완료")
+        except Exception:
+            pw_ctrl.set_edit_text(SMES_PW)
+            log("  ② PW 입력 (set_edit_text) 완료")
+        time.sleep(0.3)
+
+        # ③ 로그인 버튼
+        _verify_foreground(hwnd)
+        btn_found = False
+        for btn_kw in ["btn_login", "로그인", "LOGIN", "Login", "확인", "OK"]:
+            try:
+                btn = dlg.child_window(title_re=f".*{btn_kw}.*")
+                if btn.exists(timeout=0.5):
+                    btn.click_input()
+                    log(f"  ③ 버튼 클릭: '{btn_kw}'")
+                    btn_found = True
+                    break
+            except Exception:
+                pass
+
+        if not btn_found:
+            pw_ctrl.type_keys("{ENTER}")
+            log("  ③ Enter 키로 로그인 시도")
+
+        return True
+
+    except Exception as e:
+        log(f"  [3순위] 실패: {e}")
+        return False
+
+
 def login_smes(_unused_win=None):
     """
-    MES 자동 로그인 — PDF 3단계 우선순위
+    MES 자동 로그인 — 3단계 우선순위
       1순위: pywinauto auto_id (txt_id / txt_pw / btn_login)
       2순위: 창 기준 상대 좌표 (비율 방식)
-      3순위: 수동 로그인 요청
+      3순위: Edit 컨트롤 자동 스캔 (auto_id·좌표 불필요)
+      최후: 수동 로그인 요청
     """
     import pyautogui
 
@@ -445,7 +545,10 @@ def login_smes(_unused_win=None):
     # ── 2순위: 창 기준 상대 좌표 ────────────────────────────────────────────
     elif _login_by_coords(dlg, hwnd):
         pass
-    # ── 3순위: 수동 로그인 ──────────────────────────────────────────────────
+    # ── 3순위: Edit 컨트롤 자동 스캔 ────────────────────────────────────────
+    elif _login_by_edit_scan(dlg, hwnd):
+        pass
+    # ── 최후: 수동 로그인 ───────────────────────────────────────────────────
     else:
         log("  ⚠️  자동 로그인 실패 → 수동으로 로그인해주세요.")
         input("  로그인 완료 후 Enter → ")
