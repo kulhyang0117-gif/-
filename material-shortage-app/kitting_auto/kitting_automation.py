@@ -142,20 +142,13 @@ def _paste_text(text):
 
 def _type_password(pwd: str):
     """
-    typewrite는 ASCII만 지원. 특수문자/한글 포함 시 클립보드 fallback.
-    MES 비밀번호 필드는 ctrl+v 차단이 많아 typewrite 1순위.
+    비밀번호 입력 — 클립보드 방식 우선.
+    typewrite는 !@# 등 Shift+숫자 조합 키를 누락하므로 사용하지 않음.
     """
-    import pyautogui, pyperclip
-    SAFE = set(
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "0123456789 !@#$%^&*()-_=+[]{}|;':\",./<>?"
-    )
-    if all(c in SAFE for c in pwd):
-        pyautogui.typewrite(pwd, interval=0.06)
-    else:
-        pyperclip.copy(pwd)
-        pyautogui.hotkey("ctrl", "v")
+    import pyperclip, pyautogui
+    pyperclip.copy(pwd)
+    pyautogui.hotkey("ctrl", "v")
+    time.sleep(0.1)
 
 
 def _check_caps_lock():
@@ -267,61 +260,68 @@ def _find_login_dialog(timeout=20):
     raise RuntimeError("로그인 폼을 찾을 수 없습니다.")
 
 
+def _find_login_controls(dlg):
+    """
+    children()에서 Edit 2개(ID/PW)와 Login 버튼을 찾아 반환.
+    로그 덤프 확인: C1TextBox(WindowsForms10.EDIT) 2개, C1Button(WindowsForms10.BUTTON) title='Login'
+    """
+    login_btn = None
+    for btn in dlg.children(class_name_re="WindowsForms10.BUTTON.*"):
+        try:
+            if btn.window_text().strip().lower() in ("login", "로그인"):
+                login_btn = btn
+                break
+        except Exception:
+            pass
+
+    edits = sorted(
+        dlg.children(class_name_re="WindowsForms10.EDIT.*"),
+        key=lambda c: c.rectangle().top
+    )
+    return edits, login_btn
+
+
 def _login_by_autoid(dlg, hwnd):
-    """1순위: pywinauto auto_id 방식 (txt_id / txt_pw / btn_login)"""
+    """1순위: children() 직접 스캔 — C1TextBox ID/PW + C1Button Login"""
     import pyautogui, pyperclip
-    log("  [1순위] auto_id 방식 시도...")
+    log("  [1순위] children() 직접 스캔 방식 시도...")
 
     try:
-        id_field = dlg.child_window(auto_id="txt_id")
-        pw_field = dlg.child_window(auto_id="txt_pw")
-        if not id_field.exists(timeout=2) or not pw_field.exists(timeout=2):
-            raise RuntimeError("auto_id 컨트롤 없음")
+        edits, login_btn = _find_login_controls(dlg)
+        log(f"  Edit {len(edits)}개, Login 버튼: {'있음' if login_btn else '없음'}")
 
-        # ① ID 필드 — 기존 값 있으면 스킵, 없으면 입력
-        existing_id = id_field.window_text().strip()
+        if len(edits) < 2 or not login_btn:
+            raise RuntimeError(f"컨트롤 부족 (Edit={len(edits)}, Btn={login_btn})")
+
+        id_ctrl = edits[0]   # Y 작은 = 위 = ID
+        pw_ctrl = edits[1]   # Y 큰  = 아래 = PW
+
+        # ① ID
+        existing_id = id_ctrl.window_text().strip()
         if existing_id:
-            log(f"  ① ID 필드에 '{existing_id}' 있음 → 스킵, 패스워드로 이동")
+            log(f"  ① ID '{existing_id}' 이미 있음 → 스킵")
         else:
-            if not _verify_foreground(hwnd):
-                return False
-            id_field.click_input()
-            time.sleep(0.2)
+            _verify_foreground(hwnd)
+            id_ctrl.click_input(); time.sleep(0.2)
             pyautogui.hotkey("ctrl", "a")
-            pyperclip.copy(SMES_ID)
-            pyautogui.hotkey("ctrl", "v")
+            pyperclip.copy(SMES_ID); pyautogui.hotkey("ctrl", "v")
             log(f"  ① ID 입력: {SMES_ID}")
             time.sleep(0.3)
 
-        # Caps Lock 확인
         _check_caps_lock()
 
-        # ② PW 입력 — 클릭 전 포그라운드 재검증
-        if not _verify_foreground(hwnd):
-            return False
-        pw_field.click_input()
-        time.sleep(0.2)
-        pyautogui.hotkey("ctrl", "a")
-        pyautogui.press("delete")
+        # ② PW
+        _verify_foreground(hwnd)
+        pw_ctrl.click_input(); time.sleep(0.2)
+        pyautogui.hotkey("ctrl", "a"); pyautogui.press("delete")
         _type_password(SMES_PW)
         log("  ② PW 입력 완료")
         time.sleep(0.3)
 
-        # ③ 로그인 버튼 — 클릭 전 포그라운드 재검증
-        if not _verify_foreground(hwnd):
-            return False
-        try:
-            login_btn = dlg.child_window(auto_id="btn_login")
-            if login_btn.exists(timeout=1):
-                login_btn.click_input()
-                log("  ③ 로그인 버튼 클릭 (auto_id)")
-                return True
-        except Exception:
-            pass
-
-        # 버튼 없으면 Enter
-        pw_field.type_keys("{ENTER}")
-        log("  ③ Enter 로 로그인 시도")
+        # ③ Login 버튼
+        _verify_foreground(hwnd)
+        login_btn.click_input()
+        log("  ③ Login 버튼 클릭")
         return True
 
     except Exception as e:
@@ -408,11 +408,20 @@ def _login_by_coords(dlg, hwnd):
         _type_password(SMES_PW)
         log("  ② PW 입력 완료")
 
-        # ③ 로그인 버튼 클릭 — 포그라운드 재검증
-        if not _verify_foreground(hwnd):
-            return False
-        pyautogui.click(*btn_pos)
-        log("  ③ 로그인 버튼 클릭 (좌표)")
+        # ③ 로그인 버튼 — children()에서 먼저 탐색, 없으면 좌표
+        _verify_foreground(hwnd)
+        btn_clicked = False
+        try:
+            _, login_btn = _find_login_controls(dlg)
+            if login_btn:
+                login_btn.click_input()
+                log("  ③ 로그인 버튼 클릭 (children)")
+                btn_clicked = True
+        except Exception:
+            pass
+        if not btn_clicked:
+            pyautogui.click(*btn_pos)
+            log(f"  ③ 로그인 버튼 클릭 (좌표 fallback) {btn_pos}")
         return True
 
     except Exception as e:
@@ -598,38 +607,40 @@ def login_smes(_unused_win=None):
     deadline = time.time() + 12
     while time.time() < deadline:
         time.sleep(0.5)
-        # pnl_login 패널이 사라졌는지 확인 (권장)
+
+        # ① Login 버튼이 사라졌는지 확인 (가장 신뢰도 높음)
         try:
-            pnl = dlg.child_window(auto_id="pnl_login")
-            if not pnl.exists(timeout=0.3) or not pnl.is_visible():
-                log("  ✅ 로그인 성공 (pnl_login 비가시)")
+            _, login_btn = _find_login_controls(dlg)
+            if not login_btn or not login_btn.is_visible():
+                log("  ✅ 로그인 성공 (Login 버튼 비가시)")
                 time.sleep(LOAD_DELAY)
                 return
         except Exception:
             pass
-        # 창 자체가 사라졌는지 확인 (폴백)
+
+        # ② Edit 컨트롤(ID/PW)이 사라졌는지 확인
         try:
-            if not dlg.exists(timeout=0.3):
-                log("  ✅ 로그인 성공 (로그인 창 닫힘)")
+            edits, _ = _find_login_controls(dlg)
+            if len(edits) == 0:
+                log("  ✅ 로그인 성공 (로그인 패널 사라짐)")
                 time.sleep(LOAD_DELAY)
                 return
         except Exception:
-            log("  ✅ 로그인 성공 (로그인 창 닫힘)")
-            time.sleep(LOAD_DELAY)
-            return
-        # 에러 메시지 출력
+            pass
+
+        # ③ 화면에 에러 메시지 있는지 출력 (MES 오류 팝업 감지)
         try:
             for child in dlg.children():
                 txt = child.window_text().strip()
                 if txt and txt not in (SMES_ID, '') and len(txt) < 100:
-                    log(f"  ⚠️  화면 메시지: '{txt}'")
+                    if any(kw in txt for kw in ["오류", "실패", "틀", "error", "invalid", "wrong"]):
+                        log(f"  ❌ 오류 메시지: '{txt}'")
         except Exception:
             pass
 
-    raise RuntimeError(
-        "로그인 실패: 로그인 창이 닫히지 않았습니다.\n"
-        "  → ID/PW를 확인하거나 수동으로 로그인 후 Enter를 눌러주세요."
-    )
+    log("  ⚠️  로그인 확인 실패 — 수동으로 로그인해주세요.")
+    input("  로그인 완료 후 Enter → ")
+    time.sleep(LOAD_DELAY)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Step 3~5 : 메뉴 이동 → 조회 → Excel 다운로드
