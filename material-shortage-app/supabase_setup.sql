@@ -17,10 +17,16 @@ CREATE TABLE IF NOT EXISTS profiles (
 
 -- ── 2. upload_logs 테이블 (업로드 이력, 장치간 공유) ─────────────
 CREATE TABLE IF NOT EXISTS upload_logs (
-  file_type     TEXT PRIMARY KEY,   -- bom / plan / inv / kit
+  file_type     TEXT PRIMARY KEY,   -- bom / plan / inv / pkg / kit
   uploaded_at   TEXT,               -- Unix ms timestamp (문자열)
-  uploader_name TEXT DEFAULT ''
+  uploader_name TEXT DEFAULT '',
+  file_name     TEXT DEFAULT '',    -- 원본 파일명 (단일 파일)
+  file_names    TEXT[] DEFAULT '{}' -- 원본 파일명 목록 (키팅 복수 파일)
 );
+
+-- 기존 테이블에 컬럼 추가 (이미 생성된 경우)
+ALTER TABLE upload_logs ADD COLUMN IF NOT EXISTS file_name  TEXT DEFAULT '';
+ALTER TABLE upload_logs ADD COLUMN IF NOT EXISTS file_names TEXT[] DEFAULT '{}';
 
 -- ── 3. Row Level Security 활성화 ────────────────────────────────
 ALTER TABLE profiles    ENABLE ROW LEVEL SECURITY;
@@ -54,7 +60,25 @@ CREATE POLICY "upload_logs_all" ON upload_logs
 --   approved_at = now()
 -- WHERE email = 'kulhyang0117@gmail.com';
 
--- ── 7. Supabase Auth 설정 권장사항 ──────────────────────────────
+-- ── 7. Storage 버킷 정책 (파일 공유) ───────────────────────────
+-- Supabase 대시보드 → Storage → ms-files 버킷 → Policies 에서 설정하거나
+-- 아래 SQL을 실행하세요. (버킷이 없으면 대시보드에서 먼저 생성)
+
+-- 인증된 회원은 모든 파일 읽기 가능 (링크로 들어와도 이전 업로드 파일 조회)
+CREATE POLICY "storage_read_authenticated" ON storage.objects
+  FOR SELECT
+  USING (bucket_id = 'ms-files' AND auth.role() = 'authenticated');
+
+-- 인증된 회원은 파일 업로드/덮어쓰기 가능 (upsert)
+CREATE POLICY "storage_insert_authenticated" ON storage.objects
+  FOR INSERT
+  WITH CHECK (bucket_id = 'ms-files' AND auth.role() = 'authenticated');
+
+CREATE POLICY "storage_update_authenticated" ON storage.objects
+  FOR UPDATE
+  USING (bucket_id = 'ms-files' AND auth.role() = 'authenticated');
+
+-- ── 8. Supabase Auth 설정 권장사항 ──────────────────────────────
 -- Authentication → Settings 에서:
 --   - "Enable email confirmations" → OFF (내부 앱이므로 이메일 확인 불필요)
 --   - "Allow new users to sign up" → ON

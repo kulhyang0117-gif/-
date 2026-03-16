@@ -2549,9 +2549,12 @@ async function syncFilesFromSupabase() {
     if (data) data.forEach(row => { logs[row.file_type] = row; });
   } catch(e) {}
 
-  // BOM · 생산계획 · 재고현황: 로컬에 없으면 Storage에서 다운로드
-  for (const type of ['bom', 'plan', 'inv']) {
-    if (state[type]) continue;
+  // BOM · 생산계획 · 재고현황 · 포장사양: 서버 업로드 시각이 더 최신이면 덮어쓰기
+  for (const type of ['bom', 'plan', 'inv', 'pkg']) {
+    const serverTs = Number(logs[type]?.uploaded_at || 0);
+    const localTs  = Number(localStorage.getItem('ms_uptime_' + type) || 0);
+    // 로컬에 없거나 서버 파일이 더 최신인 경우 다운로드
+    if (state[type] && localTs >= serverTs) continue;
     const ab = await downloadFileFromStorage(type + '.xlsx');
     if (!ab) continue;
     try {
@@ -2561,22 +2564,31 @@ async function syncFilesFromSupabase() {
       const fname = logs[type]?.file_name || (type + '.xlsx');
       document.getElementById('status-' + type).textContent = '✅ ' + fname;
       await dbPut(type, { data: arr, name: fname });
+      if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
     } catch(e) {}
   }
 
-  // 키팅 파일: upload_logs의 file_names 목록으로 다운로드
-  if (state.kitFiles.length === 0) {
+  // 키팅 파일: 서버 목록과 로컬 목록이 다르면 전체 갱신
+  const serverKitTs = Number(logs['kit']?.uploaded_at || 0);
+  const localKitTs  = Number(localStorage.getItem('ms_uptime_kit') || 0);
+  if (serverKitTs > localKitTs || state.kitFiles.length === 0) {
     const names = logs['kit']?.file_names || [];
-    for (const name of names) {
-      const ab = await downloadFileFromStorage('kit/' + name);
-      if (!ab) continue;
-      try {
-        const arr = new Uint8Array(ab);
-        const wb = XLSX.read(arr, { type: 'array' });
-        state.kitFiles.push({ wb, name, rawData: arr });
-      } catch(e) {}
+    if (names.length > 0) {
+      const newKitFiles = [];
+      for (const name of names) {
+        const ab = await downloadFileFromStorage('kit/' + name);
+        if (!ab) continue;
+        try {
+          const arr = new Uint8Array(ab);
+          const wb = XLSX.read(arr, { type: 'array' });
+          newKitFiles.push({ wb, name, rawData: arr });
+        } catch(e) {}
+      }
+      if (newKitFiles.length > 0) {
+        state.kitFiles = newKitFiles;
+        renderKitChips(); checkReady();
+      }
     }
-    if (state.kitFiles.length > 0) { renderKitChips(); checkReady(); }
   }
 
   // 업로드 시각 표시 (Supabase 기준)
