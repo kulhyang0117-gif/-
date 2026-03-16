@@ -137,13 +137,78 @@ def _paste_text(text):
     time.sleep(0.2)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Step 2 : sMES 로그인  (IMMES MEMBERS LOGIN 창)
+# Step 2 : sMES 로그인  (PDF 3단계 우선순위 구현)
 # ──────────────────────────────────────────────────────────────────────────────
+
+def _type_password(pwd: str):
+    """
+    typewrite는 ASCII만 지원. 특수문자/한글 포함 시 클립보드 fallback.
+    MES 비밀번호 필드는 ctrl+v 차단이 많아 typewrite 1순위.
+    """
+    import pyautogui, pyperclip
+    SAFE = set(
+        "abcdefghijklmnopqrstuvwxyz"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "0123456789 !@#$%^&*()-_=+[]{}|;':\",./<>?"
+    )
+    if all(c in SAFE for c in pwd):
+        pyautogui.typewrite(pwd, interval=0.06)
+    else:
+        pyperclip.copy(pwd)
+        pyautogui.hotkey("ctrl", "v")
+
+
+def _check_caps_lock():
+    """Caps Lock 켜져 있으면 자동 해제"""
+    import pyautogui
+    if ctypes.windll.user32.GetKeyState(0x14) & 1:
+        log("  ⚠️  Caps Lock 켜져 있음 → 자동 해제")
+        pyautogui.press("capslock")
+
+
+def _verify_foreground(hwnd, fallback_hwnd=None):
+    """
+    클릭 전 MES 창이 포그라운드인지 검증.
+    검증 실패 시 False 반환 → 클릭 중단.
+    """
+    mes_hwnds = set()
+    if hwnd:
+        mes_hwnds.add(hwnd)
+    if fallback_hwnd:
+        mes_hwnds.add(fallback_hwnd)
+
+    if not mes_hwnds:
+        log("  MES 창 HWND 확인 불가 — 클릭 중단")
+        return False
+
+    fg_hwnd = ctypes.windll.user32.GetForegroundWindow()
+    if fg_hwnd not in mes_hwnds:
+        log(f"  MES가 포그라운드 아님 (fg={fg_hwnd}) — 클릭 중단")
+        return False
+    return True
+
+
+def _force_foreground(hwnd):
+    """UAC 환경에서도 창 강제 활성화 (AttachThreadInput 방식)"""
+    import win32con, win32gui, win32process
+    try:
+        fg_tid  = ctypes.windll.user32.GetWindowThreadProcessId(
+            ctypes.windll.user32.GetForegroundWindow(), None)
+        my_tid  = ctypes.windll.kernel32.GetCurrentThreadId()
+        if fg_tid != my_tid:
+            ctypes.windll.user32.AttachThreadInput(fg_tid, my_tid, True)
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+        ctypes.windll.user32.BringWindowToTop(hwnd)
+        if fg_tid != my_tid:
+            ctypes.windll.user32.AttachThreadInput(fg_tid, my_tid, False)
+    except Exception as e:
+        log(f"  _force_foreground 실패: {e}")
+
+
 def _find_login_dialog(timeout=20):
     """
-    sMES 프로세스의 모든 창을 순회해
-    'WindowsForms10.EDIT.*' 컨트롤이 2개 이상인 창을 로그인 다이얼로그로 반환.
-    타이틀바 없는 borderless form 도 탐지 가능.
+    로그인 창 감지 — 권장: pnl_login 패널 가시성 우선, 폴백: Edit 컨트롤 수 방식.
+    제목이 버전마다 달라도 pnl_login 방식은 안정적으로 작동.
     """
     from pywinauto import Application
 
@@ -157,92 +222,222 @@ def _find_login_dialog(timeout=20):
     deadline = time.time() + timeout
     while time.time() < deadline:
         for w in app.windows():
+            # ── 권장: pnl_login 패널 가시성으로 판단 ──
+            try:
+                pnl = w.child_window(auto_id="pnl_login")
+                if pnl.exists(timeout=0.3) and pnl.is_visible():
+                    log(f"  ✅ 로그인 창 감지 (pnl_login 방식): '{w.window_text()}'")
+                    return app, w
+            except Exception:
+                pass
+
+            # ── 폴백: Edit 컨트롤 2개 이상인 창 ──
             try:
                 edits = w.children(class_name_re="WindowsForms10.EDIT.*")
                 if len(edits) >= 2:
-                    log(f"  로그인 폼 발견: title='{w.window_text()}' "
-                        f"/ Edit {len(edits)}개")
+                    log(f"  ✅ 로그인 창 감지 (Edit 방식): '{w.window_text()}' / Edit {len(edits)}개")
                     return app, w
             except Exception:
                 pass
         time.sleep(0.5)
 
-    # 마지막 수단: 가장 작은 창 (로그인 다이얼로그는 메인보다 작음)
+    # 최후 수단: 가장 작은 창
     wins = app.windows()
     if wins:
-        smallest = min(wins,
-                       key=lambda w: w.rectangle().width() * w.rectangle().height())
-        log(f"  폼 자동 탐지 실패 → 가장 작은 창 사용: '{smallest.window_text()}'")
+        smallest = min(wins, key=lambda w: w.rectangle().width() * w.rectangle().height())
+        log(f"  ⚠️  자동 탐지 실패 → 가장 작은 창 사용: '{smallest.window_text()}'")
         return app, smallest
 
     raise RuntimeError("로그인 폼을 찾을 수 없습니다.")
 
 
+def _login_by_autoid(dlg, hwnd):
+    """1순위: pywinauto auto_id 방식 (txt_id / txt_pw / btn_login)"""
+    import pyautogui
+    log("  [1순위] auto_id 방식 시도...")
+
+    try:
+        id_field = dlg.child_window(auto_id="txt_id")
+        pw_field = dlg.child_window(auto_id="txt_pw")
+        if not id_field.exists(timeout=2) or not pw_field.exists(timeout=2):
+            raise RuntimeError("auto_id 컨트롤 없음")
+
+        # ID 입력
+        id_field.click_input()
+        time.sleep(0.2)
+        pyautogui.hotkey("ctrl", "a")
+        import pyperclip; pyperclip.copy(SMES_ID)
+        pyautogui.hotkey("ctrl", "v")
+        log(f"  ① ID 입력: {SMES_ID}")
+        time.sleep(0.3)
+
+        # Caps Lock 확인
+        _check_caps_lock()
+
+        # PW 입력 (typewrite 1순위, 클립보드 폴백)
+        pw_field.click_input()
+        time.sleep(0.2)
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.press("delete")
+        _type_password(SMES_PW)
+        log("  ② PW 입력 완료")
+        time.sleep(0.3)
+
+        # 로그인 버튼
+        try:
+            login_btn = dlg.child_window(auto_id="btn_login")
+            if login_btn.exists(timeout=1):
+                if not _verify_foreground(hwnd):
+                    return False
+                login_btn.click_input()
+                log("  ③ 로그인 버튼 클릭 (auto_id)")
+                return True
+        except Exception:
+            pass
+
+        # 버튼 없으면 Enter
+        pw_field.type_keys("{ENTER}")
+        log("  ③ Enter 로 로그인 시도")
+        return True
+
+    except Exception as e:
+        log(f"  [1순위] 실패: {e}")
+        return False
+
+
+def _login_by_coords(dlg, hwnd):
+    """2순위: 창 기준 상대 좌표 방식 (비율 계산)"""
+    import pyautogui, pyperclip
+    log("  [2순위] 창 기준 상대 좌표 방식 시도...")
+
+    try:
+        import pygetwindow as gw
+
+        # 창 객체 확보 (pygetwindow)
+        title = dlg.window_text()
+        wins = gw.getWindowsWithTitle(title) if title else []
+        login_win = wins[0] if wins else None
+
+        if not login_win:
+            # pywinauto rectangle로 직접 계산
+            rect = dlg.rectangle()
+            left, top = rect.left, rect.top
+            width = rect.width()
+            height = rect.height()
+        else:
+            if login_win.isMinimized:
+                login_win.restore()
+            login_win.activate()
+            time.sleep(0.5)
+            left   = login_win.left
+            top    = login_win.top
+            width  = login_win.width
+            height = login_win.height
+
+        cx      = left + int(width * 0.509)
+        id_pos  = (cx, top + int(height * 0.544))
+        pwd_pos = (cx, top + int(height * 0.649))
+        btn_pos = (left + int(width * 0.318), top + int(height * 0.765))
+
+        log(f"  창 위치: left={left} top={top} w={width} h={height}")
+        log(f"  ID 좌표: {id_pos} / PW 좌표: {pwd_pos} / 버튼 좌표: {btn_pos}")
+
+        if not _verify_foreground(hwnd):
+            return False
+
+        # ID 입력
+        pyperclip.copy(SMES_ID)
+        pyautogui.click(*id_pos)
+        time.sleep(0.4)
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.hotkey("ctrl", "v")
+        log(f"  ① ID 입력: {SMES_ID}")
+
+        # Caps Lock 확인
+        _check_caps_lock()
+
+        # PW 입력 (Tab 이동 후 typewrite)
+        pyautogui.press("tab")
+        time.sleep(0.3)
+        pyautogui.hotkey("ctrl", "a")
+        pyautogui.press("delete")
+        _type_password(SMES_PW)
+        log("  ② PW 입력 완료")
+
+        # 로그인 버튼 클릭
+        if not _verify_foreground(hwnd):
+            return False
+        pyautogui.click(*btn_pos)
+        log("  ③ 로그인 버튼 클릭 (좌표)")
+        return True
+
+    except Exception as e:
+        log(f"  [2순위] 실패: {e}")
+        return False
+
+
 def login_smes(_unused_win=None):
     """
-    ① PID 로 sMES 연결
-    ② Edit 컨트롤 2개 있는 창 = 로그인 폼
-    ③ Y좌표 정렬 → 위=ID, 아래=PW
-    ④ set_edit_text() 로 입력 (키보드 우회 → 특수문자 안전)
-    ⑤ Login 버튼 클릭
+    MES 자동 로그인 — PDF 3단계 우선순위
+      1순위: pywinauto auto_id (txt_id / txt_pw / btn_login)
+      2순위: 창 기준 상대 좌표 (비율 방식)
+      3순위: 수동 로그인 요청
     """
-    log("  로그인 폼 탐색 중 (PID 방식)...")
+    import pyautogui
+
+    log("  로그인 폼 탐색 중...")
     app, dlg = _find_login_dialog(timeout=20)
 
-    dlg.set_focus()
-    time.sleep(0.3)
+    # 창 활성화
+    try:
+        dlg.set_focus()
+    except Exception:
+        pass
+    try:
+        hwnd = dlg.handle
+        _force_foreground(hwnd)
+    except Exception:
+        hwnd = None
+    time.sleep(0.5)
 
-    # ── Edit 컨트롤 수집 & Y좌표 정렬 ──────────────────────────────────────
-    edits = dlg.children(class_name_re="WindowsForms10.EDIT.*")
-    edits = sorted(edits, key=lambda c: c.rectangle().top)
-    log(f"  Edit 컨트롤 {len(edits)}개  (위→아래 순)")
+    # ── 1순위: auto_id ──────────────────────────────────────────────────────
+    if _login_by_autoid(dlg, hwnd):
+        pass
+    # ── 2순위: 창 기준 상대 좌표 ────────────────────────────────────────────
+    elif _login_by_coords(dlg, hwnd):
+        pass
+    # ── 3순위: 수동 로그인 ──────────────────────────────────────────────────
+    else:
+        log("  ⚠️  자동 로그인 실패 → 수동으로 로그인해주세요.")
+        input("  로그인 완료 후 Enter → ")
+        time.sleep(LOAD_DELAY)
+        return
 
-    if len(edits) < 2:
-        raise RuntimeError(f"Edit 컨트롤 {len(edits)}개 — 2개 필요")
-
-    id_field = edits[0]   # 첫 번째(위) = ID 입력란
-    pw_field = edits[1]   # 두 번째(아래) = PW 입력란
-
-    # ── ID 필드 : 클릭 → 전체 삭제 → 타이핑 ───────────────────────────────
-    id_field.set_focus()
-    id_field.click_input()
-    time.sleep(0.3)
-    id_field.type_keys("^a{BACKSPACE}", with_spaces=True)
-    time.sleep(0.2)
-    id_field.type_keys(SMES_ID, with_spaces=True)
-    log(f"  ① ID 입력 완료: {SMES_ID}")
-    time.sleep(0.3)
-
-    # ── PW 필드 : 클릭 → 전체 삭제 → 클립보드 붙여넣기 → Enter ────────────
-    pw_field.set_focus()
-    pw_field.click_input()
-    time.sleep(0.3)
-    pw_field.type_keys("^a{BACKSPACE}", with_spaces=True)
-    time.sleep(0.2)
-    _paste_text(SMES_PW)
-    log(f"  ② PW 입력 완료")
-    time.sleep(0.5)   # 붙여넣기 후 시스템이 인식할 시간 확보
-    pw_field.type_keys("{ENTER}")
-
-    # ── 로그인 성공 여부 검증 ────────────────────────────────────────────────
-    # 로그인 폼(Edit 2개 있는 창)이 사라지면 성공, 남아있으면 실패
+    # ── 로그인 성공 여부 확인 ────────────────────────────────────────────────
     log("  로그인 결과 확인 중...")
-    deadline = time.time() + 10
+    deadline = time.time() + 12
     while time.time() < deadline:
         time.sleep(0.5)
+        # pnl_login 패널이 사라졌는지 확인 (권장)
         try:
-            # 창이 사라졌는지 확인
-            if not dlg.exists(timeout=0.5):
+            pnl = dlg.child_window(auto_id="pnl_login")
+            if not pnl.exists(timeout=0.3) or not pnl.is_visible():
+                log("  ✅ 로그인 성공 (pnl_login 비가시)")
+                time.sleep(LOAD_DELAY)
+                return
+        except Exception:
+            pass
+        # 창 자체가 사라졌는지 확인 (폴백)
+        try:
+            if not dlg.exists(timeout=0.3):
                 log("  ✅ 로그인 성공 (로그인 창 닫힘)")
                 time.sleep(LOAD_DELAY)
                 return
         except Exception:
-            # exists() 자체가 예외 → 창 없어진 것
             log("  ✅ 로그인 성공 (로그인 창 닫힘)")
             time.sleep(LOAD_DELAY)
             return
-
-        # 창이 아직 있으면 에러 메시지 확인
+        # 에러 메시지 출력
         try:
             for child in dlg.children():
                 txt = child.window_text().strip()
@@ -251,10 +446,9 @@ def login_smes(_unused_win=None):
         except Exception:
             pass
 
-    # 10초 후에도 창이 남아있으면 실패
     raise RuntimeError(
         "로그인 실패: 로그인 창이 닫히지 않았습니다.\n"
-        "  → ID/PW 를 확인하거나 수동으로 로그인 후 Enter를 눌러주세요."
+        "  → ID/PW를 확인하거나 수동으로 로그인 후 Enter를 눌러주세요."
     )
 
 # ──────────────────────────────────────────────────────────────────────────────

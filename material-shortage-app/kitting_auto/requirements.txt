@@ -1,5 +1,7 @@
 pywinauto
 pyautogui
+pyperclip
+pygetwindow
 pillow
 playwright
 psutil
