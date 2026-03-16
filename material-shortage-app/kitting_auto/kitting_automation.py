@@ -206,10 +206,15 @@ def _force_foreground(hwnd):
 
 def _find_login_dialog(timeout=20):
     """
-    로그인 창 감지 — 권장: pnl_login 패널 가시성 우선, 폴백: Edit 컨트롤 수 방식.
-    제목이 버전마다 달라도 pnl_login 방식은 안정적으로 작동.
+    로그인 창 감지 — 3단계 탐지:
+      1) 창 제목에 'Shinsung' 또는 'IMMES' 포함 (실제 창 확인됨)
+      2) pnl_login 패널 가시성 (버전 무관 안정적)
+      3) descendants 포함 Edit 2개 이상 (가장 넓은 폴백)
     """
     from pywinauto import Application
+
+    # 창 제목 키워드 (이미지에서 확인된 실제 제목)
+    TITLE_KEYWORDS = ["Shinsung", "IMMES", "sMES", "MES", "LOGIN", "로그인"]
 
     pid = _get_smes_pid()
     if not pid:
@@ -221,31 +226,38 @@ def _find_login_dialog(timeout=20):
     deadline = time.time() + timeout
     while time.time() < deadline:
         for w in app.windows():
-            # ── 권장: pnl_login 패널 가시성으로 판단 ──
+            title = w.window_text()
+
+            # ── 1) 창 제목 키워드 매칭 ──
+            if any(kw in title for kw in TITLE_KEYWORDS):
+                log(f"  ✅ 로그인 창 감지 (제목 키워드): '{title}'")
+                return app, w
+
+            # ── 2) pnl_login 패널 가시성 ──
             try:
                 pnl = w.child_window(auto_id="pnl_login")
                 if pnl.exists(timeout=0.3) and pnl.is_visible():
-                    log(f"  ✅ 로그인 창 감지 (pnl_login 방식): '{w.window_text()}'")
+                    log(f"  ✅ 로그인 창 감지 (pnl_login): '{title}'")
                     return app, w
             except Exception:
                 pass
 
-            # ── 폴백: Edit 컨트롤 2개 이상인 창 ──
+            # ── 3) 하위 포함 Edit 2개 이상 ──
             try:
-                edits = w.children(class_name_re="WindowsForms10.EDIT.*")
+                edits = w.descendants(class_name_re="WindowsForms10.EDIT.*")
                 if len(edits) >= 2:
-                    log(f"  ✅ 로그인 창 감지 (Edit 방식): '{w.window_text()}' / Edit {len(edits)}개")
+                    log(f"  ✅ 로그인 창 감지 (Edit {len(edits)}개): '{title}'")
                     return app, w
             except Exception:
                 pass
         time.sleep(0.5)
 
-    # 최후 수단: 가장 작은 창
+    # 최후 수단: 가장 큰 창 (메인 창에 로그인 패널이 내장된 구조)
     wins = app.windows()
     if wins:
-        smallest = min(wins, key=lambda w: w.rectangle().width() * w.rectangle().height())
-        log(f"  ⚠️  자동 탐지 실패 → 가장 작은 창 사용: '{smallest.window_text()}'")
-        return app, smallest
+        biggest = max(wins, key=lambda w: w.rectangle().width() * w.rectangle().height())
+        log(f"  ⚠️  자동 탐지 실패 → 메인 창 사용: '{biggest.window_text()}'")
+        return app, biggest
 
     raise RuntimeError("로그인 폼을 찾을 수 없습니다.")
 
@@ -261,16 +273,20 @@ def _login_by_autoid(dlg, hwnd):
         if not id_field.exists(timeout=2) or not pw_field.exists(timeout=2):
             raise RuntimeError("auto_id 컨트롤 없음")
 
-        # ① ID 입력 — 클릭 전 포그라운드 검증
-        if not _verify_foreground(hwnd):
-            return False
-        id_field.click_input()
-        time.sleep(0.2)
-        pyautogui.hotkey("ctrl", "a")
-        pyperclip.copy(SMES_ID)
-        pyautogui.hotkey("ctrl", "v")
-        log(f"  ① ID 입력: {SMES_ID}")
-        time.sleep(0.3)
+        # ① ID 필드 — 기존 값 있으면 스킵, 없으면 입력
+        existing_id = id_field.window_text().strip()
+        if existing_id:
+            log(f"  ① ID 필드에 '{existing_id}' 있음 → 스킵, 패스워드로 이동")
+        else:
+            if not _verify_foreground(hwnd):
+                return False
+            id_field.click_input()
+            time.sleep(0.2)
+            pyautogui.hotkey("ctrl", "a")
+            pyperclip.copy(SMES_ID)
+            pyautogui.hotkey("ctrl", "v")
+            log(f"  ① ID 입력: {SMES_ID}")
+            time.sleep(0.3)
 
         # Caps Lock 확인
         _check_caps_lock()
@@ -345,23 +361,42 @@ def _login_by_coords(dlg, hwnd):
         log(f"  창 위치: left={left} top={top} w={width} h={height}")
         log(f"  ID 좌표: {id_pos} / PW 좌표: {pwd_pos} / 버튼 좌표: {btn_pos}")
 
-        # ① ID 입력 — 클릭 전 포그라운드 검증
-        if not _verify_foreground(hwnd):
-            return False
-        pyperclip.copy(SMES_ID)
-        pyautogui.click(*id_pos)
-        time.sleep(0.4)
-        pyautogui.hotkey("ctrl", "a")
-        pyautogui.hotkey("ctrl", "v")
-        log(f"  ① ID 입력: {SMES_ID}")
+        # ① ID 필드 — Edit 컨트롤 값 읽어 기존 값 있으면 스킵
+        try:
+            edits = sorted(
+                dlg.descendants(class_name_re="WindowsForms10.EDIT.*"),
+                key=lambda c: c.rectangle().top
+            )
+            existing_id = edits[0].window_text().strip() if edits else ""
+        except Exception:
+            existing_id = ""
+
+        if existing_id:
+            log(f"  ① ID 필드에 '{existing_id}' 있음 → 스킵, 패스워드로 이동")
+            if not _verify_foreground(hwnd):
+                return False
+            pyautogui.click(*pwd_pos)
+            time.sleep(0.3)
+        else:
+            if not _verify_foreground(hwnd):
+                return False
+            pyperclip.copy(SMES_ID)
+            pyautogui.click(*id_pos)
+            time.sleep(0.4)
+            pyautogui.hotkey("ctrl", "a")
+            pyautogui.hotkey("ctrl", "v")
+            log(f"  ① ID 입력: {SMES_ID}")
 
         # Caps Lock 확인
         _check_caps_lock()
 
-        # ② PW 입력 — 클릭 전 포그라운드 재검증
-        if not _verify_foreground(hwnd):
-            return False
-        pyautogui.press("tab")
+        # ② PW 입력 — 클릭 전 포그라운드 재검증 (ID 스킵 시 이미 pwd_pos 클릭됨)
+        if existing_id:
+            pass  # 이미 pwd_pos로 이동됨
+        else:
+            if not _verify_foreground(hwnd):
+                return False
+            pyautogui.press("tab")
         time.sleep(0.3)
         pyautogui.hotkey("ctrl", "a")
         pyautogui.press("delete")

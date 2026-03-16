@@ -109,7 +109,7 @@ def test_dump_controls(app, wins):
         except Exception:
             pass
         try:
-            edits = w.children(class_name_re="WindowsForms10.EDIT.*")
+            edits = w.descendants(class_name_re="WindowsForms10.EDIT.*")
             if len(edits) >= 2:
                 login_win = w
                 log(f"  Edit 방식으로 로그인 창 선택: '{w.window_text()}' (Edit {len(edits)}개)")
@@ -118,8 +118,8 @@ def test_dump_controls(app, wins):
             pass
 
     if not login_win and wins:
-        login_win = min(wins, key=lambda w: w.rectangle().width() * w.rectangle().height())
-        log(f"  ⚠️  자동 선택 실패 → 가장 작은 창: '{login_win.window_text()}'")
+        login_win = max(wins, key=lambda w: w.rectangle().width() * w.rectangle().height())
+        log(f"  ⚠️  자동 선택 실패 → 가장 큰 창(메인): '{login_win.window_text()}'")
 
     if not login_win:
         log("  ❌ 로그인 창 후보 없음")
@@ -232,11 +232,20 @@ def test_do_login(login_win, hwnd):
         id_f = login_win.child_window(auto_id="txt_id")
         pw_f = login_win.child_window(auto_id="txt_pw")
         if id_f.exists(timeout=2) and pw_f.exists(timeout=2):
-            if not verify_fg(hwnd): return
-            id_f.click_input(); time.sleep(0.2)
-            pyautogui.hotkey("ctrl", "a"); pyperclip.copy(SMES_ID); pyautogui.hotkey("ctrl", "v")
-            log(f"  ① ID 입력: {SMES_ID}")
-            time.sleep(0.3)
+            # ID 필드 사전 입력 확인
+            existing_id = ""
+            try:
+                existing_id = id_f.window_text().strip()
+            except Exception:
+                pass
+            if existing_id:
+                log(f"  ① ID 필드에 '{existing_id}' 있음 → 스킵, 패스워드로 이동")
+            else:
+                if not verify_fg(hwnd): return
+                id_f.click_input(); time.sleep(0.2)
+                pyautogui.hotkey("ctrl", "a"); pyperclip.copy(SMES_ID); pyautogui.hotkey("ctrl", "v")
+                log(f"  ① ID 입력: {SMES_ID}")
+                time.sleep(0.3)
             if not verify_fg(hwnd): return
             pw_f.click_input(); time.sleep(0.2)
             pyautogui.hotkey("ctrl", "a"); pyautogui.press("delete")
