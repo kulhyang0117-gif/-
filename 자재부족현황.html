@@ -748,6 +748,10 @@ function _processFile(type, file) {
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
       checkReady();
+      // 생산계획·BOM·재고 중 하나가 새로 올라오면 자동으로 전체 분석 재실행
+      if (['bom','plan','inv'].includes(type) && state.bom && state.plan && state.inv) {
+        runAnalysis();
+      }
     } catch(err) {
       document.getElementById('drop-' + type).classList.add('error');
       document.getElementById('status-' + type).textContent = '❌ 오류: ' + err.message;
@@ -2939,8 +2943,11 @@ async function syncFilesFromSupabase() {
       document.getElementById('status-' + type).textContent = '✅ ' + fname;
       await dbPut(type, { data: arr, name: fname });
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
+      if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
     } catch(e) {}
   }
+  // Supabase에서 파일이 갱신된 뒤 분석에 필요한 파일이 모두 있으면 자동 재분석
+  if (state.bom && state.plan && state.inv) { runAnalysis(); }
 
   // 키팅 파일: 서버 목록과 로컬 목록이 다르면 전체 갱신
   const serverKitTs = Number(logs['kit']?.uploaded_at || 0);
