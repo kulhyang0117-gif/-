@@ -49,21 +49,6 @@
   .upload-time { font-size: 10px; color: #999; margin-top: 4px; }
   .upload-item.drag-over { border-color: #1e3a5f !important; border-style: solid !important; background: #dbeafe !important; transform: scale(1.03); box-shadow: 0 0 0 3px rgba(30,58,95,0.25); }
   .kit-section.drag-over { border-color: #6c3483 !important; background: #ede9fe !important; box-shadow: 0 0 0 3px rgba(108,52,131,0.25); }
-  .incoming-section { border: 2px dashed #1a8c5b; border-radius: 8px; padding: 14px 16px; background: #f0faf6; margin-top: 12px; }
-  .incoming-section.drag-over { border-color: #155f3e !important; background: #d4eddf !important; box-shadow: 0 0 0 3px rgba(26,140,91,0.25); }
-  .incoming-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
-  .incoming-title { font-weight: 700; color: #1a8c5b; font-size: 13px; }
-  .incoming-actions { display: flex; gap: 8px; align-items: center; }
-  .btn-incoming-add { display: inline-block; padding: 5px 14px; background: #1a8c5b; color: white; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; user-select: none; }
-  .btn-incoming-add:hover { background: #155f3e; }
-  .btn-incoming-clear { padding: 5px 12px; background: #e74c3c; color: white; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; }
-  .btn-incoming-clear:hover { background: #c0392b; }
-  .incoming-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 26px; align-items: center; }
-  .incoming-chip { display: inline-flex; align-items: center; gap: 5px; background: #c8eedd; color: #155f3e; padding: 3px 10px; border-radius: 14px; font-size: 11px; font-weight: 600; }
-  .incoming-chip .rm { cursor: pointer; color: #1a8c5b; font-size: 13px; font-weight: 700; }
-  .incoming-chip .rm:hover { color: #c0392b; }
-  .incoming-empty { font-size: 11px; color: #6aab8a; }
-
   /* ── 키팅 ── */
   .kit-section { border: 2px dashed #8e44ad; border-radius: 8px; padding: 14px 16px; background: #faf5ff; }
   .kit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
@@ -388,23 +373,6 @@
       <div class="upload-time" id="uptime-kit"></div>
     </div>
 
-    <!-- 당일 입고자재 복수 업로드 -->
-    <div class="incoming-section" id="incoming-section">
-      <div class="incoming-header">
-        <span class="incoming-title">📥 당일 입고자재 <span class="optional-badge" style="background:#d4eddf;color:#1a8c5b;">선택 · 복수등록</span></span>
-        <div class="incoming-actions">
-          <label class="btn-incoming-add">
-            ＋ 파일 추가
-            <input type="file" accept=".xlsx,.xls" multiple id="file-incoming" onchange="handleIncomingFiles(this)" style="display:none">
-          </label>
-          <button class="btn-incoming-clear" onclick="clearIncomingFiles()">🗑️ 초기화</button>
-        </div>
-      </div>
-      <div class="incoming-chips" id="incoming-chips">
-        <span class="incoming-empty">등록된 입고 파일 없음 (선택사항)</span>
-      </div>
-      <div class="upload-time" id="uptime-incoming"></div>
-    </div>
   </div>
 
   <!-- 설정 & 실행 -->
@@ -619,7 +587,7 @@
 
 <script>
 // ── 전역 상태 ──────────────────────────────────────
-const state = { bom: null, plan: null, inv: null, pkg: null, kitFiles: [], incomingFiles: [] };
+const state = { bom: null, plan: null, inv: null, pkg: null, kitFiles: [] };
 // kitFiles: [{ wb, name, rawData: ArrayBuffer }]
 
 let analysisResult = [];
@@ -727,18 +695,7 @@ window.addEventListener('load', async () => {
     }
     if (state.kitFiles.length > 0) renderKitChips();
   }
-  const incomingList = await dbGet('incoming_list');
-  if (Array.isArray(incomingList) && incomingList.length > 0) {
-    for (const item of incomingList) {
-      try {
-        const wb = XLSX.read(item.data, { type: 'array' });
-        state.incomingFiles.push({ wb, name: item.name, rawData: item.data });
-        restored++;
-      } catch(e) { console.warn('입고 복원 실패:', item.name); }
-    }
-    if (state.incomingFiles.length > 0) renderIncomingChips();
-  }
-  if (restored > 0) document.getElementById('restore-notice').style.display = 'block';
+if (restored > 0) document.getElementById('restore-notice').style.display = 'block';
   // 업로드 타임스탬프 복원
   ['bom', 'plan', 'inv', 'pkg'].forEach(type => {
     const ts = localStorage.getItem('ms_uptime_' + type);
@@ -748,9 +705,6 @@ window.addEventListener('load', async () => {
   const tsKit = localStorage.getItem('ms_uptime_kit');
   const nameKit = localStorage.getItem('ms_uploader_kit') || '';
   if (tsKit) document.getElementById('uptime-kit').textContent = fmtUpTime(tsKit, nameKit);
-  const tsIncoming = localStorage.getItem('ms_uptime_incoming');
-  const nameIncoming = localStorage.getItem('ms_uploader_incoming') || '';
-  if (tsIncoming) document.getElementById('uptime-incoming').textContent = fmtUpTime(tsIncoming, nameIncoming);
   checkReady();
   initDragDrop();
   syncFilesFromSupabase();
@@ -824,62 +778,6 @@ function _processKitFiles(files) {
 }
 function handleKitFiles(input) { _processKitFiles(Array.from(input.files)); input.value = ''; }
 
-// ── 당일 입고자재 복수 파일 (공통 처리) ──────────────
-function _processIncomingFiles(files) {
-  if (!files.length) return;
-  let remaining = files.length;
-  files.forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      try {
-        const ab = e.target.result;
-        const wb = XLSX.read(ab, { type: 'array' });
-        state.incomingFiles.push({ wb, name: file.name, rawData: ab });
-      } catch(err) { console.warn('입고 파일 오류:', file.name); }
-      remaining--;
-      if (remaining === 0) {
-        saveIncomingList(); renderIncomingChips(); checkReady();
-        const ts = Date.now();
-        const uname = currentUser ? currentUser.displayName : '';
-        localStorage.setItem('ms_uptime_incoming', ts);
-        if (uname) localStorage.setItem('ms_uploader_incoming', uname);
-        document.getElementById('uptime-incoming').textContent = fmtUpTime(ts, uname);
-        syncUploadLog('incoming', ts, uname);
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  });
-}
-function handleIncomingFiles(input) { _processIncomingFiles(Array.from(input.files)); input.value = ''; }
-
-function removeIncomingFile(idx) {
-  state.incomingFiles.splice(idx, 1);
-  saveIncomingList(); renderIncomingChips(); checkReady();
-}
-
-function clearIncomingFiles() {
-  state.incomingFiles = [];
-  dbPut('incoming_list', []); renderIncomingChips(); checkReady();
-  localStorage.removeItem('ms_uptime_incoming');
-  localStorage.removeItem('ms_uploader_incoming');
-  document.getElementById('uptime-incoming').textContent = '';
-}
-
-function saveIncomingList() {
-  dbPut('incoming_list', state.incomingFiles.map(f => ({ data: f.rawData, name: f.name })));
-}
-
-function renderIncomingChips() {
-  const el = document.getElementById('incoming-chips');
-  if (state.incomingFiles.length === 0) {
-    el.innerHTML = '<span class="incoming-empty">등록된 입고 파일 없음 (선택사항)</span>';
-    return;
-  }
-  el.innerHTML = state.incomingFiles.map((f, i) =>
-    `<span class="incoming-chip">📥 ${f.name} <span class="rm" onclick="removeIncomingFile(${i})" title="제거">✕</span></span>`
-  ).join('');
-}
-
 // ── 드래그앤드롭 초기화 ──────────────────────────────
 function initDragDrop() {
   // BOM · 생산계획 · 재고현황 · 포장재 — 단일 파일 드래그앤드롭
@@ -919,22 +817,6 @@ function initDragDrop() {
     if (files.length) _processKitFiles(files);
   });
 
-  // 당일 입고자재 — 복수 파일 드래그앤드롭
-  const incomingEl = document.getElementById('incoming-section');
-  incomingEl.addEventListener('dragover', e => {
-    e.preventDefault(); e.stopPropagation();
-    incomingEl.classList.add('drag-over');
-  });
-  incomingEl.addEventListener('dragleave', e => {
-    if (!incomingEl.contains(e.relatedTarget)) incomingEl.classList.remove('drag-over');
-  });
-  incomingEl.addEventListener('drop', e => {
-    e.preventDefault(); e.stopPropagation();
-    incomingEl.classList.remove('drag-over');
-    const files = Array.from(e.dataTransfer.files)
-                       .filter(f => /\.xlsx?$/i.test(f.name));
-    if (files.length) _processIncomingFiles(files);
-  });
 }
 
 function removeKitFile(idx) {
@@ -972,8 +854,7 @@ function checkReady() {
   document.getElementById('btn-run').disabled = !ready || permDenied;
   if (ready) {
     const kitMsg = state.kitFiles.length > 0 ? ` | 🟣 키팅 ${state.kitFiles.length}개` : '';
-    const incomingMsg = state.incomingFiles.length > 0 ? ` | 📥 입고 ${state.incomingFiles.length}개` : '';
-    document.getElementById('run-info').textContent = '✅ 필수 3개 로드됨' + kitMsg + incomingMsg;
+    document.getElementById('run-info').textContent = '✅ 필수 3개 로드됨' + kitMsg;
   }
 }
 
@@ -1181,32 +1062,6 @@ function parseKitting(kitFiles) {
   return km;
 }
 
-// ── 당일 입고자재 파싱 (복수 합산) ─────────────────
-function parseIncoming(incomingFiles) {
-  const im={};
-  if (!incomingFiles||incomingFiles.length===0) return im;
-  const codeKW=['자재코드','품번','부품코드','자품번','품목코드','PART','CODE','코드'];
-  const qtyKW=['입고수량','수량','QTY','QUANTITY','입고','수입수량'];
-  for (const fi of incomingFiles) {
-    for (const sn of fi.wb.SheetNames) {
-      const rows=XLSX.utils.sheet_to_json(fi.wb.Sheets[sn],{header:1,defval:''});
-      if (rows.length<2) continue;
-      const h=rows[0].map(v=>String(v).trim());
-      let cc=h.findIndex(v=>codeKW.some(k=>v.toUpperCase().includes(k.toUpperCase())));
-      let cq=h.findIndex(v=>qtyKW.some(k=>v.toUpperCase().includes(k.toUpperCase())));
-      if (cc<0) cc=1; if (cq<0) cq=h.length-1;
-      for (let i=1; i<rows.length; i++) {
-        const r=rows[i];
-        const code=String(r[cc]||'').trim();
-        const qty=parseFloat(r[cq])||0;
-        if (!code||qty<=0) continue;
-        im[code]=(im[code]||0)+qty;
-      }
-    }
-  }
-  return im;
-}
-
 // ── 메인 분석 ──────────────────────────────────────
 function runAnalysis() {
   document.getElementById('result-body').innerHTML='<div class="loading"><div class="spinner"></div><br>분석 중...</div>';
@@ -1233,7 +1088,6 @@ function runAnalysis() {
       const planRows=parsePlan(state.plan,fromSerial);
       const invMap=parseInventory(state.inv);
       const kitMap=parseKitting(state.kitFiles);
-      const incomingMap=parseIncoming(state.incomingFiles);
       const hasKit=Object.keys(kitMap).length>0;
       globalHasKit=hasKit;
 
@@ -1261,8 +1115,7 @@ function runAnalysis() {
         const stock=inv?inv.stock:null;
         const kit=kitMap[item.자품번];
         const kitTotal=kit?kit.totalKitted:0;
-        const incomingTotal=incomingMap[item.자품번]||0;
-        const available=(stock!==null||kitTotal>0||incomingTotal>0)?(stock||0)+kitTotal+incomingTotal:null;
+        const available=(stock!==null||kitTotal>0)?(stock||0)+kitTotal:null;
         const shortage=available!==null?available-item.totalReq:null;
         const ratio=(available!==null&&item.totalReq>0)?available/item.totalReq:null;
         let status='na';
@@ -1278,7 +1131,7 @@ function runAnalysis() {
         const urgency=(status==='danger'||status==='warning')
           ?(has1?'urgent1':has3?'urgent3':'later')
           :'ok';
-        return { ...item, stock, kitTotal, kitByModel:kit?kit.byModel:{}, incomingTotal,
+        return { ...item, stock, kitTotal, kitByModel:kit?kit.byModel:{},
           available, shortage, ratio, status, urgency, unit:inv?inv.unit:item.단위 };
       });
 
@@ -2761,7 +2614,7 @@ function applyPermissions(perm){
     el.parentElement.style.pointerEvents=canUpload?'':'none';
     el.parentElement.title=canUpload?'':'파일 업로드 권한이 없습니다';
   });
-  document.querySelectorAll('.btn-kit-add,.btn-kit-clear,.btn-incoming-add,.btn-incoming-clear').forEach(el=>{
+  document.querySelectorAll('.btn-kit-add,.btn-kit-clear').forEach(el=>{
     el.style.opacity=canUpload?'1':'0.5';
     el.style.pointerEvents=canUpload?'':'none';
   });
