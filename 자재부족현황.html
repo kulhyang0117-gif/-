@@ -572,15 +572,24 @@
       </div>
       <!-- 서브탭 -->
       <div id="pkg-subtab-row" style="display:none;margin-bottom:12px;">
-        <div class="tab-row" style="margin-bottom:0;">
-          <div class="tab active" id="pkg-stab-summary" onclick="switchPkgTab('summary')" style="font-size:12px;padding:5px 16px;">📦 포장재별 집계</div>
-          <div class="tab" id="pkg-stab-date" onclick="switchPkgTab('date')" style="font-size:12px;padding:5px 16px;">📅 일자별 소요량</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <div class="tab-row" style="margin-bottom:0;">
+            <div class="tab active" id="pkg-stab-summary" onclick="switchPkgTab('summary')" style="font-size:12px;padding:5px 16px;">📦 포장재별 집계</div>
+            <div class="tab" id="pkg-stab-date" onclick="switchPkgTab('date')" style="font-size:12px;padding:5px 16px;">📅 일자별 소요량</div>
+            <div class="tab" id="pkg-stab-output" onclick="switchPkgTab('output')" style="font-size:12px;padding:5px 16px;">📋 유형별 소요량</div>
+          </div>
+          <div>
+            <button id="pkg-print-summary" onclick="printPkgSummary()" style="padding:6px 15px;background:#2c3e50;color:white;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;">🖨️ 집계 인쇄</button>
+            <button id="pkg-print-date" onclick="printPkgDateTable()" style="display:none;padding:6px 15px;background:#2c3e50;color:white;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;">🖨️ 일자별 인쇄</button>
+            <button id="pkg-print-output" onclick="printPkgOutput()" style="display:none;padding:6px 15px;background:#2c3e50;color:white;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;">🖨️ 유형별 인쇄</button>
+          </div>
         </div>
       </div>
       <div id="pkg-body">
         <div class="empty"><div class="icon">📦</div><div>포장재 소요량 파일을 업로드하면 표시됩니다.</div></div>
       </div>
       <div id="pkg-date-body" style="display:none;"></div>
+      <div id="pkg-output-body" style="display:none;"></div>
     </div>
   </div>
 </div>
@@ -2034,14 +2043,18 @@ function buildPkgData() {
         계획수량:      qty,
         매핑:          !!spec,
         박스유형:      spec?.박스유형      || '',
-        박스소요량:    spec ? Math.ceil(qty * spec.박스소요량_개)   : 0,
-        포장지:        spec?.포장지        || '',
-        포장지색상:    spec?.포장지색상    || '',
-        포장지소요량:  spec ? Math.ceil(qty * spec.포장지소요량_개) : 0,
-        발포지:        spec?.발포지        || '',
-        발포지소요량:  spec ? Math.ceil(qty * spec.발포지소요량_개) : 0,
-        패드:          spec?.패드          || '',
-        패드소요량:    spec ? Math.ceil(qty * spec.패드소요량_개)   : 0,
+        박스소요량:        spec ? Math.ceil(qty * spec.박스소요량_개)   : 0,
+        박스소요량_raw:    spec ? qty * spec.박스소요량_개             : 0,
+        포장지:            spec?.포장지        || '',
+        포장지색상:        spec?.포장지색상    || '',
+        포장지소요량:      spec ? Math.ceil(qty * spec.포장지소요량_개) : 0,
+        포장지소요량_raw:  spec ? qty * spec.포장지소요량_개           : 0,
+        발포지:            spec?.발포지        || '',
+        발포지소요량:      spec ? Math.ceil(qty * spec.발포지소요량_개) : 0,
+        발포지소요량_raw:  spec ? qty * spec.발포지소요량_개           : 0,
+        패드:              spec?.패드          || '',
+        패드소요량:        spec ? Math.ceil(qty * spec.패드소요량_개)   : 0,
+        패드소요량_raw:    spec ? qty * spec.패드소요량_개             : 0,
       });
     });
   });
@@ -2252,18 +2265,24 @@ function filterPkgTable() {
 
 // ── 포장재 서브탭 전환 ──────────────────────────────
 function switchPkgTab(tab) {
-  document.getElementById('pkg-stab-summary').classList.toggle('active', tab === 'summary');
-  document.getElementById('pkg-stab-date').classList.toggle('active', tab === 'date');
-  document.getElementById('pkg-body').style.display      = tab === 'summary' ? '' : 'none';
-  document.getElementById('pkg-date-body').style.display = tab === 'date'    ? '' : 'none';
-  // 구분 필터는 포장재별 집계에서만 의미 있음
+  ['summary','date','output'].forEach(t => {
+    document.getElementById('pkg-stab-' + t).classList.toggle('active', t === tab);
+  });
+  document.getElementById('pkg-body').style.display        = tab === 'summary' ? '' : 'none';
+  document.getElementById('pkg-date-body').style.display   = tab === 'date'    ? '' : 'none';
+  document.getElementById('pkg-output-body').style.display = tab === 'output'  ? '' : 'none';
+  // 구분/검색 필터는 포장재별 집계에서만 표시
   document.getElementById('pkg-filter-gubn').style.visibility = tab === 'summary' ? '' : 'hidden';
   document.getElementById('pkg-search').style.visibility      = tab === 'summary' ? '' : 'hidden';
-  // date 탭 전환 시 테이블이 visible 상태이므로 리사이즈 핸들 적용
+  // 인쇄 버튼 전환
+  document.getElementById('pkg-print-summary').style.display = tab === 'summary' ? '' : 'none';
+  document.getElementById('pkg-print-date').style.display    = tab === 'date'    ? '' : 'none';
+  document.getElementById('pkg-print-output').style.display  = tab === 'output'  ? '' : 'none';
   if (tab === 'date') {
     const t = document.querySelector('#pkg-date-body table');
     if (t && !t.querySelector('.col-resize')) makeTableResizable(t);
   }
+  if (tab === 'output') renderPkgOutputView(pkgResult);
 }
 
 // ── 일자별 포장재 소요량 집계 ────────────────────────
@@ -2403,6 +2422,321 @@ function renderPkgDateTable(rawData) {
   el.innerHTML = html;
   // 리사이즈는 탭이 visible 상태일 때 적용 (switchPkgTab 에서 호출)
   if (el.offsetParent !== null) makeTableResizable(el.querySelector('table'));
+}
+
+// ── 유형별 소요량 출력용 뷰 ─────────────────────────
+function buildPkgOutputData(rows, maxDays) {
+  const isValid = v => v && v !== 'X' && String(v).trim() !== '' && String(v).trim() !== '0';
+
+  // 기준일자 다음날부터 첫 maxDays개 날짜 추출
+  const fromDateStr = document.getElementById('fromDate')?.value || '';
+  const fromSerial  = fromDateStr ? dateToSerial(fromDateStr) : 0;
+  const dateEntries = [...new Map(rows.map(r => [r.일자시리얼, r.일자])).entries()]
+    .filter(([serial]) => serial > fromSerial)
+    .sort((a, b) => a[0] - b[0]);
+  const dates = dateEntries.slice(0, maxDays).map(e => e[1]);
+  if (!dates.length) return null;
+
+  // 피벗: { 박스: { 이름: { 날짜: qty } }, ... }
+  const pivot = { '박스': {}, '포장지/트레이': {}, '발포지': {}, '패드': {} };
+  const colorMap = {};  // 포장지 이름 → 색상
+
+  rows.filter(r => r.매핑 && dates.includes(r.일자)).forEach(r => {
+    const add = (type, name, color, qty) => {
+      if (!isValid(name)) return;
+      if (!pivot[type][name]) pivot[type][name] = {};
+      pivot[type][name][r.일자] = (pivot[type][name][r.일자] || 0) + qty;
+      if (type === '포장지/트레이') colorMap[name] = color || '';
+    };
+    add('박스',          r.박스유형,  '',           r.박스소요량_raw);
+    add('포장지/트레이', r.포장지,    r.포장지색상, r.포장지소요량_raw);
+    add('발포지',        r.발포지,    '',           r.발포지소요량_raw);
+    add('패드',          r.패드,      '',           r.패드소요량_raw);
+  });
+
+  return { dates, pivot, colorMap };
+}
+
+function fmtPkgQty(n) {
+  if (!n || n <= 0) return '-';
+  // 소수점 1자리 표시 (정수라도 .0 유지)
+  return n.toFixed(1);
+}
+
+function buildPkgOutputTableHtml(type, names, dates, pivot, colorMap, styles) {
+  const s = styles || {};
+  const thBg   = s.thBg   || '#1e3a5f';
+  const thBdr  = s.thBdr  || '#2952a3';
+  const nameBg = s.nameBg || '#f0f4fa';
+  const hasColor = type === '포장지/트레이';
+
+  let html = `<table style="border-collapse:collapse;font-size:11px;width:100%;">
+    <thead>
+      <tr>
+        <th rowspan="2" style="background:${thBg};color:white;border:1px solid ${thBdr};padding:5px 8px;text-align:center;">${type === '포장지/트레이' ? '포장지/트레이' : type === '박스' ? '박스사양' : type}</th>
+        ${hasColor ? `<th rowspan="2" style="background:${thBg};color:white;border:1px solid ${thBdr};padding:5px 8px;text-align:center;">색상</th>` : ''}
+        <th colspan="${dates.length}" style="background:${thBg};color:white;border:1px solid ${thBdr};padding:5px 8px;text-align:center;">소요량</th>
+      </tr>
+      <tr>
+        ${dates.map(d => `<th style="background:${thBg};color:white;border:1px solid ${thBdr};padding:4px 10px;text-align:center;min-width:55px;">${d}</th>`).join('')}
+      </tr>
+    </thead>
+    <tbody>`;
+
+  names.forEach(name => {
+    const hasAny = dates.some(d => (pivot[type][name]?.[d] || 0) > 0);
+    html += `<tr>
+      <td style="background:${nameBg};border:1px solid #ccc;padding:4px 8px;font-weight:600;white-space:nowrap;">${name}</td>
+      ${hasColor ? `<td style="background:${nameBg};border:1px solid #ccc;padding:4px 8px;text-align:center;color:#555;">${colorMap[name] || '-'}</td>` : ''}
+      ${dates.map(d => {
+        const v = pivot[type][name]?.[d] || 0;
+        return `<td style="border:1px solid #ccc;padding:4px 10px;text-align:right;${v > 0 ? 'font-weight:600;' : 'color:#aaa;'}">${fmtPkgQty(v)}</td>`;
+      }).join('')}
+    </tr>`;
+  });
+
+  html += `</tbody></table>`;
+  return html;
+}
+
+function renderPkgOutputView(rows) {
+  const el = document.getElementById('pkg-output-body');
+  const data = buildPkgOutputData(rows, 3);
+  if (!data) {
+    el.innerHTML = '<div class="empty"><div class="icon">📋</div><div>데이터가 없습니다.</div></div>';
+    return;
+  }
+  const { dates, pivot, colorMap } = data;
+
+  const getNames = type => Object.keys(pivot[type]).sort((a, b) => a.localeCompare(b));
+  const boxNames  = getNames('박스');
+  const packNames = getNames('포장지/트레이');
+  const foamNames = getNames('발포지');
+  const padNames  = getNames('패드');
+
+  const themeBox  = { thBg:'#1a5276', thBdr:'#154360', nameBg:'#eaf4fb' };
+  const themePack = { thBg:'#1e8449', thBdr:'#196f3d', nameBg:'#e9f7ef' };
+  const themeFoam = { thBg:'#d35400', thBdr:'#b94600', nameBg:'#fef0e7' };
+  const themePad  = { thBg:'#6c3483', thBdr:'#5b2c6f', nameBg:'#f5eef8' };
+
+  const leftHtml = `
+    ${boxNames.length  ? `<div style="margin-bottom:14px;">${buildPkgOutputTableHtml('박스',          boxNames,  dates, pivot, colorMap, themeBox)}</div>` : ''}
+    ${foamNames.length ? `<div style="margin-bottom:14px;">${buildPkgOutputTableHtml('발포지',        foamNames, dates, pivot, colorMap, themeFoam)}</div>` : ''}
+    ${padNames.length  ? `<div style="margin-bottom:14px;">${buildPkgOutputTableHtml('패드',          padNames,  dates, pivot, colorMap, themePad)}</div>` : ''}`;
+
+  const rightHtml = packNames.length
+    ? buildPkgOutputTableHtml('포장지/트레이', packNames, dates, pivot, colorMap, themePack)
+    : '';
+
+  el.innerHTML = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;">${leftHtml}<div>${rightHtml}</div></div>`;
+}
+
+function printPkgOutput() {
+  const rows = pkgResult;
+  if (!rows.length) { alert('인쇄할 데이터가 없습니다.'); return; }
+  const data = buildPkgOutputData(rows, 3);
+  if (!data) { alert('출력할 데이터가 없습니다.'); return; }
+
+  const { dates, pivot, colorMap } = data;
+  const fromDate = document.getElementById('fromDate')?.value || '';
+  const getNames = type => Object.keys(pivot[type]).sort((a, b) => a.localeCompare(b));
+
+  const makeTable = (type, names, thBg, thBdr, nameBg) => {
+    if (!names.length) return '';
+    const hasColor = type === '포장지/트레이';
+    let t = `<table style="border-collapse:collapse;font-size:11px;width:100%;margin-bottom:14px;">
+      <thead>
+        <tr>
+          <th rowspan="2" style="background:${thBg};color:white;border:1px solid ${thBdr};padding:5px 8px;">${type === '박스' ? '박스사양' : type}</th>
+          ${hasColor ? `<th rowspan="2" style="background:${thBg};color:white;border:1px solid ${thBdr};padding:5px 8px;">색상</th>` : ''}
+          <th colspan="${dates.length}" style="background:${thBg};color:white;border:1px solid ${thBdr};padding:5px 8px;text-align:center;">소요량</th>
+        </tr>
+        <tr>${dates.map(d => `<th style="background:${thBg};color:white;border:1px solid ${thBdr};padding:4px 10px;text-align:center;">${d}</th>`).join('')}</tr>
+      </thead><tbody>`;
+    names.forEach(name => {
+      t += `<tr>
+        <td style="background:${nameBg};border:1px solid #ccc;padding:4px 8px;font-weight:600;">${name}</td>
+        ${hasColor ? `<td style="background:${nameBg};border:1px solid #ccc;padding:4px 8px;text-align:center;color:#555;">${colorMap[name] || '-'}</td>` : ''}
+        ${dates.map(d => {
+          const v = pivot[type][name]?.[d] || 0;
+          return `<td style="border:1px solid #ccc;padding:4px 10px;text-align:right;${v > 0 ? 'font-weight:600;' : 'color:#aaa;'}">${fmtPkgQty(v)}</td>`;
+        }).join('')}
+      </tr>`;
+    });
+    t += `</tbody></table>`;
+    return t;
+  };
+
+  const leftHtml  = makeTable('박스',          getNames('박스'),          '#1a5276','#154360','#eaf4fb')
+                  + makeTable('발포지',         getNames('발포지'),        '#d35400','#b94600','#fef0e7')
+                  + makeTable('패드',           getNames('패드'),          '#6c3483','#5b2c6f','#f5eef8');
+  const rightHtml = makeTable('포장지/트레이',  getNames('포장지/트레이'), '#1e8449','#196f3d','#e9f7ef');
+
+  const w = window.open('', '_blank', 'width=1100,height=800');
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+  <title>포장재 유형별 소요량</title>
+  <style>
+    body { font-family: 'Malgun Gothic', Arial, sans-serif; font-size: 12px; padding: 20px; color: #222; }
+    h2 { font-size: 17px; margin-bottom: 4px; color: #1e3a5f; }
+    .meta { font-size: 11px; color: #888; margin-bottom: 14px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; }
+    @media print { .no-print { display: none; } }
+  </style></head><body>
+  <h2>📋 포장재 유형별 소요량</h2>
+  <div class="meta">기준일: ${fromDate} | 기준일 이후 3일 집계 | 출력일시: ${new Date().toLocaleString()}</div>
+  <button class="no-print" onclick="window.print()" style="margin-bottom:14px;padding:7px 18px;background:#2c3e50;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;">🖨️ 인쇄</button>
+  <div class="grid">
+    <div>${leftHtml}</div>
+    <div>${rightHtml}</div>
+  </div>
+  </body></html>`);
+  w.document.close();
+}
+
+// ── 인쇄: 포장재별 집계 ────────────────────────────
+function printPkgSummary() {
+  const data = filteredPkgResult.length ? filteredPkgResult : pkgResult;
+  if (!data.length) { alert('인쇄할 데이터가 없습니다.'); return; }
+  const summary = buildPkgSummary(data);
+  if (!summary.length) { alert('인쇄할 포장재 집계 데이터가 없습니다.'); return; }
+
+  const fromDate = document.getElementById('fromDate')?.value || '';
+  const lineVal  = document.getElementById('pkg-filter-line')?.value || 'all';
+  const dateVal  = document.getElementById('pkg-filter-sheet')?.value || 'all';
+  const filterInfo = [
+    lineVal !== 'all' ? `라인: ${lineVal}` : '',
+    dateVal !== 'all' ? `일자: ${dateVal}` : ''
+  ].filter(Boolean).join(' | ') || '전체';
+
+  let rows = '';
+  summary.forEach((item, i) => {
+    const col = PKG_GUBN_COLOR[item.구분] || { bg: '#555' };
+    rows += `<tr>
+      <td style="text-align:center;color:#888;border:1px solid #ddd;padding:5px 8px;">${i+1}</td>
+      <td style="border:1px solid #ddd;padding:5px 8px;text-align:center;">
+        <span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:700;background:${col.bg};color:white;">${item.구분}</span>
+      </td>
+      <td style="border:1px solid #ddd;padding:5px 8px;font-weight:700;">${item.품목명}</td>
+      <td style="border:1px solid #ddd;padding:5px 8px;text-align:center;color:#555;">${item.색상||'-'}</td>
+      <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;color:#1e3a5f;font-weight:700;">${Math.round(item.계획수량합).toLocaleString()}</td>
+      <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;color:#c0392b;font-weight:700;font-size:13px;">${Math.ceil(item.필요수량합).toLocaleString()}</td>
+      <td style="border:1px solid #ddd;padding:5px 8px;text-align:center;color:#666;">${item.detail.length}건</td>
+    </tr>`;
+  });
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+  <title>포장재별 소요량 집계</title>
+  <style>
+    body { font-family: 'Malgun Gothic', Arial, sans-serif; font-size: 12px; padding: 20px; color: #222; }
+    h2 { font-size: 17px; margin-bottom: 4px; color: #1e3a5f; }
+    .meta { font-size: 11px; color: #888; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: #1e3a5f; color: white; padding: 7px 10px; text-align: center; border: 1px solid #2952a3; white-space: nowrap; }
+    tbody tr:nth-child(even) td { background: #f8fafc; }
+    .total-row td { background: #eaf0fb !important; font-weight: 700; }
+    @media print { .no-print { display: none; } }
+  </style></head><body>
+  <h2>📦 포장재별 소요량 집계</h2>
+  <div class="meta">기준일: ${fromDate} | 필터: ${filterInfo} | 출력일시: ${new Date().toLocaleString()}</div>
+  <button class="no-print" onclick="window.print()" style="margin-bottom:14px;padding:7px 18px;background:#2c3e50;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;">🖨️ 인쇄</button>
+  <table>
+    <thead><tr>
+      <th>#</th><th>구분</th><th>포장재명</th><th>색상</th>
+      <th>관련 계획수량 합계</th><th>총 필요수량</th><th>관련 항목수</th>
+    </tr></thead>
+    <tbody>${rows}
+    <tr class="total-row">
+      <td colspan="4" style="border:1px solid #ddd;padding:5px 8px;text-align:center;">합 계</td>
+      <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;">${Math.round(summary.reduce((a,b)=>a+b.계획수량합,0)).toLocaleString()}</td>
+      <td style="border:1px solid #ddd;padding:5px 8px;text-align:right;color:#c0392b;">${Math.ceil(summary.reduce((a,b)=>a+b.필요수량합,0)).toLocaleString()}</td>
+      <td style="border:1px solid #ddd;padding:5px 8px;"></td>
+    </tr></tbody>
+  </table>
+  </body></html>`);
+  w.document.close();
+}
+
+// ── 인쇄: 일자별 포장재 소요량 ──────────────────────
+function printPkgDateTable() {
+  const data = filteredPkgResult.length ? filteredPkgResult : pkgResult;
+  if (!data.length) { alert('인쇄할 데이터가 없습니다.'); return; }
+  const dateData = buildPkgDateSummary(data);
+  if (!dateData.length) { alert('인쇄할 일자별 데이터가 없습니다.'); return; }
+
+  const fromDate = document.getElementById('fromDate')?.value || '';
+  const lineVal  = document.getElementById('pkg-filter-line')?.value || 'all';
+  const dateVal  = document.getElementById('pkg-filter-sheet')?.value || 'all';
+  const filterInfo = [
+    lineVal !== 'all' ? `라인: ${lineVal}` : '',
+    dateVal !== 'all' ? `일자: ${dateVal}` : ''
+  ].filter(Boolean).join(' | ') || '전체';
+
+  let rows = '';
+  dateData.forEach((d, i) => {
+    const badges = d.items.map(item => {
+      const col = PKG_GUBN_COLOR[item.구분] || { bg: '#555' };
+      return `<span style="font-size:11px;padding:2px 8px;border-radius:8px;background:${col.bg};color:white;display:inline-block;margin:1px 2px;">${item.품목명}: ${Math.ceil(item.필요수량).toLocaleString()}</span>`;
+    }).join('');
+
+    // 일자별 포장재 상세 행
+    let detailRows = '';
+    d.items.forEach(item => {
+      const col = PKG_GUBN_COLOR[item.구분] || { bg: '#555' };
+      detailRows += `<tr style="background:#fafafa;">
+        <td style="border:1px solid #ddd;padding:4px 8px;text-align:center;">
+          <span style="display:inline-block;padding:1px 7px;border-radius:8px;font-size:10px;font-weight:700;background:${col.bg};color:white;">${item.구분}</span>
+        </td>
+        <td style="border:1px solid #ddd;padding:4px 8px;font-weight:700;">${item.품목명}${item.색상 ? ' / '+item.색상 : ''}</td>
+        <td style="border:1px solid #ddd;padding:4px 8px;text-align:right;font-weight:700;color:#c0392b;">${Math.ceil(item.필요수량).toLocaleString()}</td>
+      </tr>`;
+    });
+
+    rows += `<tr>
+      <td style="border:1px solid #ddd;padding:6px 8px;text-align:center;color:#888;">${i+1}</td>
+      <td style="border:1px solid #ddd;padding:6px 8px;font-weight:700;font-size:14px;color:#1e3a5f;text-align:center;">${d.일자}</td>
+      <td style="border:1px solid #ddd;padding:6px 8px;text-align:right;font-weight:700;color:#1e3a5f;">${Math.round(d.계획수량합).toLocaleString()}</td>
+      <td style="border:1px solid #ddd;padding:6px 8px;">${badges}</td>
+    </tr>
+    <tr>
+      <td colspan="4" style="border:1px solid #ddd;padding:0;">
+        <table style="width:100%;border-collapse:collapse;font-size:11px;">
+          <thead><tr>
+            <th style="background:#34495e;color:white;padding:4px 8px;border:1px solid #2c3e50;width:80px;">구분</th>
+            <th style="background:#34495e;color:white;padding:4px 8px;border:1px solid #2c3e50;">포장재명</th>
+            <th style="background:#1a5276;color:white;padding:4px 8px;border:1px solid #154360;width:100px;">필요수량</th>
+          </tr></thead>
+          <tbody>${detailRows}</tbody>
+        </table>
+      </td>
+    </tr>`;
+  });
+
+  const w = window.open('', '_blank', 'width=1000,height=750');
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+  <title>일자별 포장재 소요량</title>
+  <style>
+    body { font-family: 'Malgun Gothic', Arial, sans-serif; font-size: 12px; padding: 20px; color: #222; }
+    h2 { font-size: 17px; margin-bottom: 4px; color: #1e3a5f; }
+    .meta { font-size: 11px; color: #888; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: #1e3a5f; color: white; padding: 7px 10px; text-align: center; border: 1px solid #2952a3; white-space: nowrap; }
+    @media print { .no-print { display: none; } tr { page-break-inside: avoid; } }
+  </style></head><body>
+  <h2>📅 일자별 포장재 소요량</h2>
+  <div class="meta">기준일: ${fromDate} | 필터: ${filterInfo} | 출력일시: ${new Date().toLocaleString()}</div>
+  <button class="no-print" onclick="window.print()" style="margin-bottom:14px;padding:7px 18px;background:#2c3e50;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;">🖨️ 인쇄</button>
+  <table>
+    <thead><tr>
+      <th style="width:40px;">#</th>
+      <th style="width:60px;">일자</th>
+      <th style="width:120px;">계획수량 합계</th>
+      <th>포장재 종류 및 필요수량</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  </body></html>`);
+  w.document.close();
 }
 
 // ═══════════════════════════════════════════════════
