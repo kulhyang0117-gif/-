@@ -878,6 +878,16 @@ function switchTab(tab) {
 // ── 날짜 유틸 ──────────────────────────────────────
 function excelDateToJs(s) { return new Date((s-25569)*86400*1000); }
 function dateToSerial(str) { const d=new Date(str); return Math.round((d-new Date('1899-12-30'))/86400000); }
+// 조립_D처럼 "3월 14일 (토)" 형태 텍스트 날짜도 처리
+function parseFlexDateSerial(v) {
+  const n = Number(v);
+  if (!isNaN(n) && n > 40000) return n; // Excel 시리얼 (2009년 이후 값)
+  const m = String(v).match(/(\d{1,2})월\s*(\d{1,2})일/);
+  if (!m) return 0;
+  const year = new Date().getFullYear();
+  const d = new Date(year, Number(m[1]) - 1, Number(m[2]));
+  return Math.round((d.getTime() / 86400000) + 25569);
+}
 function formatDate(s) {
   if (!s||isNaN(s)) return '';
   const d=excelDateToJs(s);
@@ -1006,12 +1016,12 @@ function parsePlan(wb, fromSerial) {
     const ln=sn.replace(/\(.*\)/,'').trim().replace(/\s+/g,'_');
     for (let i=ds; i<rows.length; i++) {
       const r=rows[i];
-      const ds2=r[cD]; if (!ds2||isNaN(Number(ds2))) continue;
-      if (Number(ds2)<fromSerial) continue;
+      const ds2=parseFlexDateSerial(r[cD]); if (!ds2) continue;
+      if (ds2<fromSerial) continue;
       const pn=String(r[cP]||'').trim();
       const qty=parseFloat(r[cQ])||0;
       if (!pn||qty<=0) continue;
-      result.push({ sheet:ln, dateSerial:Number(ds2), dateStr:formatDate(Number(ds2)),
+      result.push({ sheet:ln, dateSerial:ds2, dateStr:formatDate(ds2),
         pn, qty, model:String(r[cM]||'').trim(), spec:String(r[cS]||'').trim() });
     }
   }
@@ -2052,10 +2062,10 @@ function buildPkgData() {
 
     for (let i = dataStart; i < rows.length; i++) {
       const r = rows[i];
-      const dateSerial = Number(r[cD]);
+      const dateSerial = parseFlexDateSerial(r[cD]);
       const pn  = String(r[cP] || '').trim();
       const qty = parseFloat(r[cQ]) || 0;
-      if (!pn || qty <= 0 || !dateSerial || isNaN(dateSerial)) continue;
+      if (!pn || qty <= 0 || !dateSerial) continue;
       if (fromSerial && dateSerial < fromSerial) continue;
 
       const d       = excelDateToJs(dateSerial);
