@@ -969,8 +969,9 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
 
 // ── 생산계획 파싱 ──────────────────────────────────
 function parsePlan(wb, fromSerial) {
-  // 조립_A / 조립_B / 조립_C / 조립_D 정식 시트만 사용 (괄호 포함 계획중 시트 제외)
-  const sheets = wb.SheetNames.filter(n => /^조립_[A-Za-z]\s*$/.test(n));
+  // 조립_A(0318) / 조립_B(0318) 등 날짜 괄호 포함 시트 포함
+  // 조립_A(계획중 N) 같은 텍스트 괄호는 제외 → 괄호 안이 숫자만일 때만 허용
+  const sheets = wb.SheetNames.filter(n => /^조립_[A-Za-z](\s*\(\d+\))?\s*$/.test(n));
   const result = [];
   for (const sn of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
@@ -2018,8 +2019,8 @@ function buildPkgData() {
   const fromDateStr = document.getElementById('fromDate')?.value || '';
   const fromSerial  = fromDateStr ? dateToSerial(fromDateStr) : 0;
 
-  // 조립_영문자 한 글자로 끝나는 시트만 (괄호 없는 정식 시트)
-  const targetSheets = state.plan.SheetNames.filter(n => /^조립_[A-Za-z]\s*$/.test(n));
+  // 조립_A(0318) 등 날짜 괄호 포함 시트 허용, 텍스트 괄호(계획중 등)는 제외
+  const targetSheets = state.plan.SheetNames.filter(n => /^조립_[A-Za-z](\s*\(\d+\))?\s*$/.test(n));
 
   targetSheets.forEach(sn => {
     const ws   = state.plan.Sheets[sn];
@@ -2062,7 +2063,7 @@ function buildPkgData() {
       const spec    = specMap[pn];
 
       pkgResult.push({
-        라인:          sn,
+        라인:          sn.replace(/\(.*\)/, '').trim(),
         일자:          dateStr,
         일자시리얼:    dateSerial,
         시스템PN:      pn,
