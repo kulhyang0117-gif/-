@@ -742,10 +742,10 @@ if (restored > 0) document.getElementById('restore-notice').style.display = 'blo
   if (tsKit) document.getElementById('uptime-kit').textContent = fmtUpTime(tsKit, nameKit);
   checkReady();
   initDragDrop();
-  // 생산계획은 항상 서버 최신 파일 강제 다운로드 후 분석 (await으로 완료 보장)
-  await syncFilesFromSupabase(false, false, true);
-  // 3분마다 Supabase에서 최신 파일 확인 (다른 사용자가 올린 파일 자동 반영)
-  setInterval(() => syncFilesFromSupabase(false, false, true), 3 * 60 * 1000);
+  // 타임스탬프 비교 후 Supabase가 더 최신일 때만 다운로드 (로컬 최신 파일 보호)
+  await syncFilesFromSupabase(false, false, false);
+  // 3분마다 Supabase에서 최신 파일 확인 (다른 사용자가 올린 파일 자동 반영, 로컬 덮어쓰기 방지)
+  setInterval(() => syncFilesFromSupabase(false, false, false), 3 * 60 * 1000);
 });
 
 function fmtUpTime(ts, name) {
