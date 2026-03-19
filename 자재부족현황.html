@@ -1023,8 +1023,14 @@ function buildDobnMapFromPlan(wb) {
     let cPN = -1, cDbn = -1, hRow = -1;
     for (let i = 0; i < Math.min(20, rows.length); i++) {
       const r = rows[i].map(v => String(v).trim());
-      const ip = r.findIndex(v => v.includes('P/N') || v.includes('시스템') || v.includes('품번'));
-      const id = r.findIndex(v => v === '도번' || (v.includes('도번') && !v.includes('P/N')));
+      // 시스템 P/N: 품목코드 > 시스템 포함 > 일반 P/N 순으로 우선순위
+      let ip = r.findIndex(v => v === '품목코드');
+      if (ip < 0) ip = r.findIndex(v => v.includes('시스템'));
+      if (ip < 0) ip = r.findIndex(v => v.includes('P/N') || v.includes('품번'));
+      // 도번: 명시적 도번 컬럼 우선, 없으면 P/N 컬럼(품목코드가 이미 잡혔을 때만)
+      let id = r.findIndex(v => v === '도번' || (v.includes('도번') && !v.includes('P/N')));
+      if (id < 0 && ip >= 0 && r[ip] === '품목코드')
+        id = r.findIndex((v, j) => j !== ip && (v === 'P/N' || v === 'PN'));
       if (ip >= 0 && id >= 0) {
         cPN = ip; cDbn = id; hRow = i + 1;
         break;
@@ -1044,7 +1050,7 @@ function buildDobnMapFromPlan(wb) {
 // ── 생산계획 컬럼 자동감지 키워드 정의 ─────────────────
 const PLAN_COL_KW = {
   date:  ['일자','날짜','DATE','일','생산일'],
-  pn:    ['P/N','시스템','품번','제품번호','제품코드','PART','PN'],
+  pn:    ['품목코드','시스템','제품번호','제품코드','품번','PART','PN','P/N'],
   qty:   ['계획수량','조립수량','계획Qty','Qty','QTY','QUANTITY','수량'],
   model: ['MODEL','모델','모델명','MODELNO','MODEL NO'],
   spec:  ['사양','SPEC','규격','제품사양','차종사양','사양명','형식','타입','TYPE'],
