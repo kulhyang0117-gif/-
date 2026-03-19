@@ -376,17 +376,16 @@
 
   </div>
 
-  <!-- 생산계획 컬럼 매핑 감지 결과 -->
-  <div id="plan-col-map-panel" style="display:none;margin:8px 0;padding:10px 14px;background:#f0f4ff;border:1px solid #c5d0f0;border-radius:8px;font-size:11.5px;color:#333;">
-    <div style="font-weight:700;color:#1e3a5f;margin-bottom:6px;">📋 생산계획 컬럼 자동감지 결과</div>
-    <div id="plan-col-map-body" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+  <!-- 생산계획 컬럼 매핑 감지 결과 (비표시) -->
+  <div id="plan-col-map-panel" style="display:none;">
+    <div id="plan-col-map-body"></div>
   </div>
 
   <!-- 설정 & 실행 -->
   <div class="settings-section">
     <div class="setting-item">
       <label>📅 기준일자 이후</label>
-      <input type="date" id="fromDate">
+      <input type="date" id="fromDate" onchange="onFromDateChange()">
     </div>
     <div class="setting-item">
       <label>BOM 레벨</label>
@@ -405,7 +404,7 @@
         <option value="도장">도장</option>
       </select>
     </div>
-    <button class="btn btn-primary" id="btn-run" onclick="runAnalysis()" disabled>🔍 분석 실행</button>
+    <button class="btn btn-primary" id="btn-run" onclick="syncThenAnalyze()" disabled>🔍 분석 실행</button>
     <button class="btn btn-export" id="btn-export" onclick="exportExcel()" disabled>📥 Excel 내보내기</button>
     <span id="run-info" style="font-size:11px;color:#777;"></span>
   </div>
@@ -607,6 +606,7 @@
 <script>
 // ── 전역 상태 ──────────────────────────────────────
 const state = { bom: null, plan: null, inv: null, pkg: null, kitFiles: [] };
+let _analysisRanOnce = false; // 첫 로드 후 분석 1회 여부 추적
 // kitFiles: [{ wb, name, rawData: ArrayBuffer }]
 
 let analysisResult = [];
@@ -744,7 +744,10 @@ if (restored > 0) document.getElementById('restore-notice').style.display = 'blo
   if (tsKit) document.getElementById('uptime-kit').textContent = fmtUpTime(tsKit, nameKit);
   checkReady();
   initDragDrop();
-  syncFilesFromSupabase();
+  // 생산계획은 항상 서버 최신 파일 강제 다운로드 후 분석 (await으로 완료 보장)
+  await syncFilesFromSupabase(false, false, true);
+  // 3분마다 Supabase에서 최신 파일 확인 (다른 사용자가 올린 파일 자동 반영)
+  setInterval(() => syncFilesFromSupabase(false, false, true), 3 * 60 * 1000);
 });
 
 function fmtUpTime(ts, name) {
@@ -791,7 +794,7 @@ function _processFile(type, file) {
   };
   reader.readAsArrayBuffer(file);
 }
-function handleFile(type, input) { _processFile(type, input.files[0]); }
+function handleFile(type, input) { _processFile(type, input.files[0]); input.value = ''; }
 
 // ── 키팅 복수 파일 (공통 처리) ─────────────────────
 function _processKitFiles(files) {
@@ -903,6 +906,14 @@ function checkReady() {
   }
 }
 
+function onFromDateChange() {
+  // 기준일자 변경 시 부족현황 재분석
+  if (state.bom && state.plan && state.inv) runAnalysis();
+  // 라인별 소요량 탭이 활성화 상태이면 즉시 갱신
+  if (pkgResult.length && document.getElementById('pkg-stab-line')?.classList.contains('active'))
+    renderPkgLineView(pkgResult);
+}
+
 // ── 탭 ────────────────────────────────────────────
 function switchTab(tab) {
   ['parts','model','date','inv','modinv','pkg'].forEach(t => {
@@ -972,7 +983,8 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
   let hRow=-1, c={};
   for (let i=0; i<Math.min(5,rows.length); i++) {
     const r=rows[i].map(v=>String(v).trim());
-    const ip=r.findIndex(v=>v==='제품번호');
+    // 제품코드 / 제품번호 / 품목코드 컬럼 인식 (BOM의 시스템 P/N 키)
+    const ip=r.findIndex(v=>v==='제품코드'||v==='제품번호'||v==='품목코드');
     if (ip>=0) {
       hRow=i;
       c={ 제품번호:ip,
@@ -980,13 +992,18 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
         레벨:r.findIndex(v=>v==='레벨'), 모품번:r.findIndex(v=>v==='모품번'),
         자품번:r.findIndex(v=>v==='자품번'), 자품명:r.findIndex(v=>v.includes('자품명')),
         규격:r.findIndex(v=>v==='규격'), 부품유형:r.findIndex(v=>v.includes('부품유형')),
-        단위:r.findIndex(v=>v==='단위'), 소요량:r.findIndex(v=>v==='소요량') };
+        단위:r.findIndex(v=>v==='단위'), 소요량:r.findIndex(v=>v==='소요량'),
+        // 고객사 PART NO 컬럼 (조립_D의 P/N 컬럼값과 매칭)
+        고객사PARTNO:r.findIndex(v=>v==='고객사 PART NO'||v==='고객사PARTNO'||
+          v==='고객사P/N'||v==='고객사PN'||
+          (v.includes('고객사')&&(v.includes('PART')||v.includes('P/N')||v.includes('부품')))) };
       break;
     }
   }
-  if (hRow<0) { c={제품번호:2,제품명:6,레벨:8,모품번:9,자품번:10,자품명:12,규격:13,부품유형:14,단위:15,소요량:16}; hRow=0; }
+  if (hRow<0) { c={제품번호:2,제품명:6,레벨:8,모품번:9,자품번:10,자품명:12,규격:13,부품유형:14,단위:15,소요량:16,고객사PARTNO:-1}; hRow=0; }
   const bomMap={};
   const productNameMap={}; // pn → 제품명
+  const custPartMap={};    // 고객사 PART NO → 품목코드(시스템 P/N)
   let cur='';
   const al = levelFilter==='all'?null:levelFilter.split(',').map(Number);
   for (let i=hRow+1; i<rows.length; i++) {
@@ -997,6 +1014,11 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
     if (cur && c.제품명>=0 && !productNameMap[cur]) {
       const nm=String(r[c.제품명]||'').trim();
       if (nm) productNameMap[cur]=nm;
+    }
+    // 고객사 PART NO → 품목코드 역방향 맵 수집
+    if (c.고객사PARTNO>=0) {
+      const custPn=String(r[c.고객사PARTNO]||'').trim();
+      if (custPn && !custPartMap[custPn]) custPartMap[custPn]=cur;
     }
     const lv=Number(r[c.레벨]);
     const jp=String(r[c.자품번]||'').trim();
@@ -1010,7 +1032,7 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
       규격:String(r[c.규격]||'').trim(), 부품유형:bt,
       단위:String(r[c.단위]||'').trim(), 소요량:qty });
   }
-  return { bomMap, productNameMap };
+  return { bomMap, productNameMap, custPartMap };
 }
 
 // ── 도번 → 시스템 P/N 맵: 모든 조립_* 생산계획 시트에서 추출 ─
@@ -1027,9 +1049,9 @@ function buildDobnMapFromPlan(wb) {
       let ip = r.findIndex(v => v === '품목코드');
       if (ip < 0) ip = r.findIndex(v => v.includes('시스템'));
       if (ip < 0) ip = r.findIndex(v => v.includes('P/N') || v.includes('품번'));
-      // 도번: 명시적 도번 컬럼 우선, 없으면 P/N 컬럼(품목코드가 이미 잡혔을 때만)
+      // 도번: 명시적 도번 컬럼 우선, 없으면 P/N 컬럼(시스템P/N 계열 컬럼이 이미 잡혔을 때)
       let id = r.findIndex(v => v === '도번' || (v.includes('도번') && !v.includes('P/N')));
-      if (id < 0 && ip >= 0 && r[ip] === '품목코드')
+      if (id < 0 && ip >= 0 && (r[ip] === '품목코드' || r[ip].includes('시스템')))
         id = r.findIndex((v, j) => j !== ip && (v === 'P/N' || v === 'PN'));
       if (ip >= 0 && id >= 0) {
         cPN = ip; cDbn = id; hRow = i + 1;
@@ -1061,14 +1083,16 @@ const PLAN_COL_KW = {
 function detectPlanColIdx(headerRow) {
   const r = headerRow.map(v => String(v).trim());
   const find = (kws) => {
-    // 1순위: 완전 일치 (대소문자 무시)
+    // 키워드 순서 우선: 각 키워드별로 완전일치 → 포함일치 순으로 시도
+    // (기존 방식의 문제: 모든 키워드 완전일치 후 포함일치 시도 → 낮은 우선순위 키워드 P/N이
+    //  높은 우선순위 키워드 시스템의 포함일치보다 먼저 걸리는 버그 수정)
     for (const kw of kws) {
-      const i = r.findIndex(v => v.toUpperCase() === kw.toUpperCase());
+      const ku = kw.toUpperCase();
+      // 1) 완전 일치
+      let i = r.findIndex(v => v.toUpperCase() === ku);
       if (i >= 0) return { idx: i, matched: r[i] };
-    }
-    // 2순위: 포함 일치
-    for (const kw of kws) {
-      const i = r.findIndex(v => v.toUpperCase().includes(kw.toUpperCase()));
+      // 2) 포함 일치
+      i = r.findIndex(v => v.toUpperCase().includes(ku));
       if (i >= 0) return { idx: i, matched: r[i] };
     }
     return { idx: -1, matched: null };
@@ -1097,6 +1121,7 @@ function detectPlanColIdx(headerRow) {
 
 // 생산계획 업로드 후 시트별 컬럼 매핑 감지 결과를 UI에 표시
 function showPlanColMap(wb) {
+  return; // 컬럼 자동감지 결과 패널 비표시
   const panel = document.getElementById('plan-col-map-panel');
   const body  = document.getElementById('plan-col-map-body');
   if (!panel || !body) return;
@@ -1144,7 +1169,7 @@ function parsePlan(wb, fromSerial) {
   const result = [];
   for (const sn of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
-    let ds=-1, cD=0, cP=1, cQ=5, cM=3, cS=4, cLR=-1;
+    let ds=-1, cD=0, cP=1, cQ=5, cM=3, cS=4, cLR=-1, cP2=-1;
 
     for (let i=0; i<Math.min(20,rows.length); i++) {
       const r = rows[i].map(v => String(v).trim());
@@ -1160,6 +1185,16 @@ function parsePlan(wb, fromSerial) {
         if (m.model.idx >= 0) cM  = m.model.idx;
         if (m.spec.idx  >= 0) cS  = m.spec.idx;
         if (m.lhrh.idx  >= 0) cLR = m.lhrh.idx;
+        // 1차 P/N이 품목코드(시스템 P/N)인 경우 → 고객사 PART NO(P/N) 컬럼을 보조로 탐색
+        // 품목코드가 비어있는 행에서 fallback으로 사용
+        if (m.pn.idx >= 0) {
+          const matched = m.pn.matched || '';
+          const primaryIsInternal = matched === '품목코드' || matched.includes('시스템');
+          if (primaryIsInternal) {
+            const secIdx = r.findIndex((v, j) => j !== cP && (v === 'P/N' || v === 'PN'));
+            if (secIdx >= 0) cP2 = secIdx;
+          }
+        }
         break;
       }
     }
@@ -1170,7 +1205,8 @@ function parsePlan(wb, fromSerial) {
       const r = rows[i];
       const ds2 = parseFlexDateSerial(r[cD]); if (!ds2) continue;
       if (ds2 < fromSerial) continue;
-      const pn  = String(r[cP]||'').trim();
+      // 시스템 P/N(품목코드) 우선, 비어있으면 고객사 P/N(도번) fallback
+      const pn  = String(r[cP]||'').trim() || (cP2>=0 ? String(r[cP2]||'').trim() : '');
       const qty = parseFloat(r[cQ])||0;
       if (!pn || qty <= 0) continue;
       result.push({ sheet:ln, dateSerial:ds2, dateStr:formatDate(ds2),
@@ -1236,6 +1272,11 @@ function parseKitting(kitFiles) {
 }
 
 // ── 메인 분석 ──────────────────────────────────────
+// 분석 실행 버튼: Supabase에서 항상 최신 파일 강제 다운로드 후 실행
+async function syncThenAnalyze() {
+  await syncFilesFromSupabase(true, true); // forceAnalysis=true, forceDownload=true
+}
+
 function runAnalysis() {
   document.getElementById('result-body').innerHTML='<div class="loading"><div class="spinner"></div><br>분석 중...</div>';
   document.getElementById('model-body').innerHTML='<div class="loading"><div class="spinner"></div><br>분석 중...</div>';
@@ -1257,13 +1298,18 @@ function runAnalysis() {
         `기준일 ${fmtShort(fromDateObj)} | 🚨 1일이내: ~${fmtShort(cutoff1DateObj)} | 🔴 3일이내: ~${fmtShort(cutoffDateObj)}`;
       document.getElementById('cutoff-info').style.display='flex';
 
-      const { bomMap, productNameMap }=parseBOM(state.bom,bomLevel,partType);
+      const { bomMap, productNameMap, custPartMap }=parseBOM(state.bom,bomLevel,partType);
       const planRows=parsePlan(state.plan,fromSerial);
       const invMap=parseInventory(state.inv);
       const kitMap=parseKitting(state.kitFiles);
 
-      // 조립_D 대응: 조립_A에서 도번 → 시스템 P/N 맵 추출 후 bomMap에 별칭 등록
-      // 조립_D의 P/N = 도번 = 조립_A의 도번 이므로 bomMap[도번] 조회가 가능해짐
+      // BOM의 고객사 PART NO → 품목코드 별칭 등록 (조립_D P/N 컬럼 매칭)
+      Object.entries(custPartMap).forEach(([custPn, internalPn]) => {
+        if (bomMap[internalPn] && !bomMap[custPn]) bomMap[custPn] = bomMap[internalPn];
+        if (productNameMap[internalPn] && !productNameMap[custPn]) productNameMap[custPn] = productNameMap[internalPn];
+      });
+
+      // 생산계획 도번 → 시스템 P/N 맵 (플랜 시트 기반 보완)
       const dobnMap = buildDobnMapFromPlan(state.plan);
       Object.entries(dobnMap).forEach(([dbn, pn]) => {
         if (bomMap[pn] && !bomMap[dbn]) bomMap[dbn] = bomMap[pn];
@@ -1333,7 +1379,7 @@ function runAnalysis() {
         const key=`${row.sheet}||${row.pn}||${row.model}`;
         if (!modelMap[key]) {
           modelMap[key]={ model:row.model||row.pn, pn:row.pn,
-            품목명:productNameMap[row.pn]||row.spec||'', spec:row.spec,
+            품목명:productNameMap[row.pn]||row.lhrh||row.spec||'', spec:row.spec,
             sheet:row.sheet, totalQty:0, byDate:{}, byDateSerials:new Set(),
             hasBOM:!!bomMap[row.pn], dangerParts:[], warningParts:[] };
         }
@@ -1531,7 +1577,7 @@ function runAnalysis() {
         day.entries.forEach(row=>{
           const key=`${row.sheet}||${row.pn}||${row.model}`;
           if(!mdMap[key]) mdMap[key]={pn:row.pn, model:row.model||row.pn,
-            품목명:productNameMap[row.pn]||row.spec||'',
+            품목명:productNameMap[row.pn]||row.lhrh||row.spec||'',
             sheet:row.sheet, qty:0, hasBOM:!!bomMap[row.pn]};
           mdMap[key].qty+=row.qty;
         });
@@ -2185,94 +2231,49 @@ function buildPkgData() {
     };
   });
 
-  // 도번 별칭 추가 + 시스템P/N → 도번 역방향 맵 구축
+  // 시스템P/N → 고객사 PART NO(도번) 역방향 맵
   const dobnMap = buildDobnMapFromPlan(state.plan);
-  const pnToDobn = {}; // 시스템 P/N → 고객사 PART NO(도번)
+  const pnToDobn = {};
   Object.entries(dobnMap).forEach(([dbn, pn]) => {
     if (specMap[pn] && !specMap[dbn]) specMap[dbn] = specMap[pn];
     if (!pnToDobn[pn]) pnToDobn[pn] = dbn;
   });
 
-  // 2. 생산계획 파싱 — 조립_A / 조립_B / 조립_C / 조립_D 시트만
-  //    "(계획중 N)" 등 괄호 포함 시트는 제외, 동적 헤더 감지
+  // 2. 생산계획 파싱 — parsePlan() 동일 로직 사용 (컬럼 자동감지 + fallback 포함)
   const fromDateStr = document.getElementById('fromDate')?.value || '';
   const fromSerial  = fromDateStr ? dateToSerial(fromDateStr) : 0;
+  const planRows    = parsePlan(state.plan, fromSerial);
 
-  // 조립_A(0318) 등 날짜 괄호 포함 시트 허용, 텍스트 괄호(계획중 등)는 제외
-  const targetSheets = state.plan.SheetNames.filter(n => /^조립[_ ][A-Za-z](\s*\(\d+\))?\s*$/.test(n));
+  for (const row of planRows) {
+    const spec   = specMap[row.pn];
+    const partno = pnToDobn[row.pn] || '';
+    const qty    = row.qty;
 
-  targetSheets.forEach(sn => {
-    const ws   = state.plan.Sheets[sn];
-    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-
-    // parsePlan 과 동일한 동적 헤더 탐색
-    let dataStart = 1, cD = 0, cP = 1, cQ = 5, cM = 3, cS = 4;
-    for (let i = 0; i < Math.min(20, rows.length); i++) {
-      const r = rows[i].map(v => String(v).trim());
-      if (r.some(v => v.includes('일자') || v.includes('날짜')) ||
-          r.some(v => v.includes('P/N') || v.includes('품번') || v.includes('시스템')) ||
-          r.some(v => v.includes('수량'))) {
-        dataStart = i + 1;
-        const a  = r.findIndex(v => v.includes('일자') || v.includes('날짜'));
-        const b  = r.findIndex(v => v.includes('P/N') || v.includes('품번') || v.includes('시스템'));
-        let   c2 = r.findIndex(v => v.includes('계획') && v.includes('수량'));
-        if (c2 < 0) c2 = r.findIndex(v => v.includes('조립') && v.includes('수량'));
-        if (c2 < 0) c2 = r.findIndex(v => v.includes('수량') && !v.includes('누계') && !v.includes('실적'));
-        const d  = r.findIndex(v => v.toUpperCase().includes('MODEL') || v.includes('모델'));
-        const e  = r.findIndex(v => v.includes('사양') || v.toUpperCase().includes('SPEC'));
-        if (a  >= 0) cD = a;
-        if (b  >= 0) cP = b;
-        if (c2 >= 0) cQ = c2;
-        if (d  >= 0) cM = d;
-        if (e  >= 0) cS = e;
-        break;
-      }
-    }
-
-    for (let i = dataStart; i < rows.length; i++) {
-      const r = rows[i];
-      const dateSerial = parseFlexDateSerial(r[cD]);
-      const pn  = String(r[cP] || '').trim();
-      const qty = parseFloat(r[cQ]) || 0;
-      if (!pn || qty <= 0 || !dateSerial) continue;
-      if (fromSerial && dateSerial < fromSerial) continue;
-
-      const d       = excelDateToJs(dateSerial);
-      const dateStr = (d.getMonth()+1) + '/' + d.getDate();
-
-      // 조립_D: pn = 도번 → 시스템 P/N으로 변환, 고객사PARTNO = 도번
-      // 조립_A/B/C: pn = 시스템 P/N, 고객사PARTNO = dobnMap 역방향
-      const isDbn    = !!dobnMap[pn];
-      const realPN   = isDbn ? dobnMap[pn] : pn;
-      const partno   = isDbn ? pn : (pnToDobn[pn] || '');
-      const spec     = specMap[realPN] || specMap[pn];
-
-      pkgResult.push({
-        라인:          sn.replace(/\(.*\)/, '').trim(),
-        일자:          dateStr,
-        일자시리얼:    dateSerial,
-        시스템PN:      realPN,
-        고객사PARTNO:  partno,
-        MODEL:         String(r[cM] || ''),
-        사양:          String(r[cS] || ''),
-        계획수량:      qty,
-        매핑:          !!spec,
-        박스유형:      spec?.박스유형      || '',
-        박스소요량:        spec ? Math.ceil(qty * spec.박스소요량_개)   : 0,
-        박스소요량_raw:    spec ? qty * spec.박스소요량_개             : 0,
-        포장지:            spec?.포장지        || '',
-        포장지색상:        spec?.포장지색상    || '',
-        포장지소요량:      spec ? Math.ceil(qty * spec.포장지소요량_개) : 0,
-        포장지소요량_raw:  spec ? qty * spec.포장지소요량_개           : 0,
-        발포지:            spec?.발포지        || '',
-        발포지소요량:      spec ? Math.ceil(qty * spec.발포지소요량_개) : 0,
-        발포지소요량_raw:  spec ? qty * spec.발포지소요량_개           : 0,
-        패드:              spec?.패드          || '',
-        패드소요량:        spec ? Math.ceil(qty * spec.패드소요량_개)   : 0,
-        패드소요량_raw:    spec ? qty * spec.패드소요량_개             : 0,
-      });
-    }
-  });
+    pkgResult.push({
+      라인:              row.sheet,
+      일자:              row.dateStr,
+      일자시리얼:        row.dateSerial,
+      시스템PN:          row.pn,
+      고객사PARTNO:      partno,
+      MODEL:             row.model,
+      사양:              row.lhrh || row.spec,
+      계획수량:          qty,
+      매핑:              !!spec,
+      박스유형:          spec?.박스유형      || '',
+      박스소요량:        spec ? Math.ceil(qty * spec.박스소요량_개)   : 0,
+      박스소요량_raw:    spec ? qty * spec.박스소요량_개             : 0,
+      포장지:            spec?.포장지        || '',
+      포장지색상:        spec?.포장지색상    || '',
+      포장지소요량:      spec ? Math.ceil(qty * spec.포장지소요량_개) : 0,
+      포장지소요량_raw:  spec ? qty * spec.포장지소요량_개           : 0,
+      발포지:            spec?.발포지        || '',
+      발포지소요량:      spec ? Math.ceil(qty * spec.발포지소요량_개) : 0,
+      발포지소요량_raw:  spec ? qty * spec.발포지소요량_개           : 0,
+      패드:              spec?.패드          || '',
+      패드소요량:        spec ? Math.ceil(qty * spec.패드소요량_개)   : 0,
+      패드소요량_raw:    spec ? qty * spec.패드소요량_개             : 0,
+    });
+  }
   filteredPkgResult = [...pkgResult];
 }
 
@@ -2819,12 +2820,12 @@ function renderPkgLineView(rows) {
   const fromDateStr = document.getElementById('fromDate')?.value || '';
   const fromSerial  = fromDateStr ? dateToSerial(fromDateStr) : 0;
 
-  // 기준일자부터 4일 날짜 추출
+  // 기준일자부터 3일 날짜 추출
   const dateEntries = [...new Map(rows.map(r => [r.일자시리얼, r.일자])).entries()]
     .filter(([serial]) => serial >= fromSerial)
     .sort((a, b) => a[0] - b[0]);
-  const dates = dateEntries.slice(0, 4).map(e => e[1]);
-  const dateSerials = dateEntries.slice(0, 4).map(e => e[0]);
+  const dates = dateEntries.slice(0, 3).map(e => e[1]);
+  const dateSerials = dateEntries.slice(0, 3).map(e => e[0]);
 
   const filtered = rows.filter(r => dateSerials.includes(r.일자시리얼));
 
@@ -3262,7 +3263,7 @@ async function downloadFileFromStorage(path) {
   } catch(e) { return null; }
 }
 
-async function syncFilesFromSupabase() {
+async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = false, forcePlan = false) {
   // upload_logs에서 파일명·이력 전체 조회
   let logs = {};
   try {
@@ -3271,11 +3272,13 @@ async function syncFilesFromSupabase() {
   } catch(e) {}
 
   // BOM · 생산계획 · 재고현황 · 포장사양: 서버 업로드 시각이 더 최신이면 덮어쓰기
+  let filesUpdated = false;
   for (const type of ['bom', 'plan', 'inv', 'pkg']) {
     const serverTs = Number(logs[type]?.uploaded_at || 0);
     const localTs  = Number(localStorage.getItem('ms_uptime_' + type) || 0);
-    // 로컬에 없거나 서버 파일이 더 최신인 경우 다운로드
-    if (state[type] && localTs >= serverTs) continue;
+    // 생산계획은 항상 강제 다운로드, 그 외는 타임스탬프 비교
+    const mustDownload = forceDownload || (forcePlan && type === 'plan');
+    if (!mustDownload && state[type] && localTs >= serverTs) continue;
     const ab = await downloadFileFromStorage(type + '.xlsx');
     if (!ab) continue;
     try {
@@ -3285,12 +3288,20 @@ async function syncFilesFromSupabase() {
       const fname = logs[type]?.file_name || (type + '.xlsx');
       document.getElementById('status-' + type).textContent = '✅ ' + fname;
       await dbPut(type, { data: arr, name: fname });
+      // 다운로드 후 로컬 타임스탬프 갱신 (중복 다운로드 방지)
+      if (serverTs > 0) localStorage.setItem('ms_uptime_' + type, String(serverTs));
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
+      filesUpdated = true;
     } catch(e) {}
   }
-  // Supabase에서 파일이 갱신된 뒤 분석에 필요한 파일이 모두 있으면 자동 재분석
-  if (state.bom && state.plan && state.inv) { runAnalysis(); }
+  // 파일이 실제로 갱신됐거나, 강제 실행이거나, 첫 로드 시 분석 실행
+  if (state.bom && state.plan && state.inv) {
+    if (filesUpdated || forceAnalysis || !_analysisRanOnce) {
+      _analysisRanOnce = true;
+      runAnalysis();
+    }
+  }
 
   // 키팅 파일: 서버 목록과 로컬 목록이 다르면 전체 갱신
   const serverKitTs = Number(logs['kit']?.uploaded_at || 0);
