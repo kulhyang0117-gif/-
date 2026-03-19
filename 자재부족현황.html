@@ -1112,21 +1112,21 @@ function showPlanColMap(wb) {
     }
     if (!map) continue;
 
-    // 감지 성공 시 정규화된 이름으로 표시 (실제 컬럼명 대신)
-    const label = (icon, canonical, col) => {
+    // label명 → 정규화된 이름 표시 (실제 컬럼명 대신 canonical 사용)
+    const label = (name, col, icon, canonical) => {
       const ok = col.matched !== null;
       return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;background:${bgOf(ok)};color:${colorOf(ok)};font-size:11px;">
-        ${icon} <span style="color:#2952a3;font-weight:700;">${ok ? canonical : '<span style=\'color:#aaa;\'>미감지</span>'}</span>
+        ${icon} <b>${name}</b> → ${ok ? `<span style="color:#2952a3;">${canonical}</span>` : '<span style="color:#aaa;">미감지</span>'}
       </span>`;
     };
     const sheetName = sn.replace(/\(.*\)/,'').trim();
     body.innerHTML += `<div style="width:100%;margin-top:4px;font-weight:700;color:#2c3e50;font-size:11px;">${sheetName}</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
-        ${label('📅', '일자',    map.date)}
-        ${label('🏷️', 'MODEL',   map.model)}
-        ${label('📦', '계획수량', map.qty)}
-        ${label('📝', '사양',    map.spec)}
-        ${label('↔️', 'LH/RH',  map.lhrh)}
+        ${label('일자/날짜',    map.date,  '📅', '일자')}
+        ${label('모델/MODEL',   map.model, '🏷️', 'MODEL')}
+        ${label('계획수량/Qty', map.qty,   '📦', '계획수량')}
+        ${label('사양/SPEC',    map.spec,  '📝', '사양')}
+        ${label('LH/RH',       map.lhrh,  '↔️', 'LH/RH')}
       </div>`;
   }
   panel.style.display = body.innerHTML ? 'block' : 'none';
