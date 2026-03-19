@@ -336,6 +336,7 @@
         <div class="desc">조립_A/B/C/D 시트 포함</div>
         <div class="status" id="status-plan">클릭하여 파일 선택</div>
         <div class="upload-time" id="uptime-plan"></div>
+        <button id="btn-save-plan" onclick="savePlanFile(event)" style="display:none;margin-top:4px;padding:3px 10px;font-size:11px;background:#27ae60;color:white;border:none;border-radius:4px;cursor:pointer;" title="현재 생산계획 파일을 로컬에 저장">💾 저장</button>
       </div>
       <div class="upload-item" id="drop-inv">
         <input type="file" accept=".xlsx,.xls" id="file-inv" onchange="handleFile('inv',this)">
@@ -654,6 +655,36 @@ async function dbGet(key) {
   } catch(e) { return null; }
 }
 
+// ── 생산계획 파일 로컬 저장 ────────────────────────────
+async function savePlanFile(e) {
+  e.stopPropagation();
+  const stored = await dbGet('plan');
+  if (!stored) { alert('저장된 생산계획 파일이 없습니다.'); return; }
+  const data = stored.data instanceof Uint8Array ? stored.data : new Uint8Array(stored.data);
+  const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  // File System Access API 지원 시 저장 위치 직접 선택
+  if (window.showSaveFilePicker) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: stored.name || 'plan.xlsx',
+        types: [{ description: 'Excel 파일', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch(err) {
+      if (err.name === 'AbortError') return; // 사용자가 취소
+    }
+  }
+  // 폴백: 일반 다운로드
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = stored.name || 'plan.xlsx';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
 // ── 날짜 유틸: 오늘 / 영업일 계산 ────────────────────
 function getTodayStr() {
   const d = new Date();
@@ -693,6 +724,7 @@ window.addEventListener('load', async () => {
       document.getElementById('drop-' + type).classList.add('loaded');
       document.getElementById('status-' + type).textContent = '✅ ' + stored.name + ' (저장됨)';
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
+      if (type === 'plan') { const b = document.getElementById('btn-save-plan'); if (b) b.style.display = 'inline-block'; }
       restored++;
     } catch(e) { console.warn('복원 실패:', type); }
   }
@@ -750,6 +782,7 @@ function _processFile(type, file) {
       syncUploadLog(type, ts, uname, undefined, file.name);
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
+      if (type === 'plan') { const b = document.getElementById('btn-save-plan'); if (b) b.style.display = 'inline-block'; }
       checkReady();
       // 생산계획·BOM·재고 중 하나가 새로 올라오면 자동으로 전체 분석 재실행
       if (['bom','plan','inv'].includes(type) && state.bom && state.plan && state.inv) {
