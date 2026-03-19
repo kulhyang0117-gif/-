@@ -1048,6 +1048,7 @@ const PLAN_COL_KW = {
   qty:   ['계획수량','조립수량','계획Qty','Qty','QTY','QUANTITY','수량'],
   model: ['MODEL','모델','모델명','MODELNO','MODEL NO'],
   spec:  ['사양','SPEC','규격'],
+  lhrh:  ['LH/RH','LH_RH','LHRH','LH','RH','좌우'],
 };
 
 // 헤더 행에서 컬럼 인덱스 매핑을 반환
@@ -1084,6 +1085,7 @@ function detectPlanColIdx(headerRow) {
     qty:   qtyFind(),
     model: find(PLAN_COL_KW.model),
     spec:  find(PLAN_COL_KW.spec),
+    lhrh:  find(PLAN_COL_KW.lhrh),
   };
 }
 
@@ -1123,6 +1125,7 @@ function showPlanColMap(wb) {
         ${label('모델/MODEL',map.model, '🏷️')}
         ${label('계획수량/Qty', map.qty,'📦')}
         ${label('사양/SPEC', map.spec,  '📝')}
+        ${label('LH/RH',    map.lhrh,  '↔️')}
       </div>`;
   }
   panel.style.display = body.innerHTML ? 'block' : 'none';
@@ -1134,7 +1137,7 @@ function parsePlan(wb, fromSerial) {
   const result = [];
   for (const sn of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
-    let ds=-1, cD=0, cP=1, cQ=5, cM=3, cS=4;
+    let ds=-1, cD=0, cP=1, cQ=5, cM=3, cS=4, cLR=-1;
 
     for (let i=0; i<Math.min(20,rows.length); i++) {
       const r = rows[i].map(v => String(v).trim());
@@ -1144,11 +1147,12 @@ function parsePlan(wb, fromSerial) {
       if (hasDt || hasPn || hasQt) {
         ds = i + 1;
         const m = detectPlanColIdx(rows[i]);
-        if (m.date.idx  >= 0) cD = m.date.idx;
-        if (m.pn.idx    >= 0) cP = m.pn.idx;
-        if (m.qty.idx   >= 0) cQ = m.qty.idx;
-        if (m.model.idx >= 0) cM = m.model.idx;
-        if (m.spec.idx  >= 0) cS = m.spec.idx;
+        if (m.date.idx  >= 0) cD  = m.date.idx;
+        if (m.pn.idx    >= 0) cP  = m.pn.idx;
+        if (m.qty.idx   >= 0) cQ  = m.qty.idx;
+        if (m.model.idx >= 0) cM  = m.model.idx;
+        if (m.spec.idx  >= 0) cS  = m.spec.idx;
+        if (m.lhrh.idx  >= 0) cLR = m.lhrh.idx;
         break;
       }
     }
@@ -1163,7 +1167,8 @@ function parsePlan(wb, fromSerial) {
       const qty = parseFloat(r[cQ])||0;
       if (!pn || qty <= 0) continue;
       result.push({ sheet:ln, dateSerial:ds2, dateStr:formatDate(ds2),
-        pn, qty, model:String(r[cM]||'').trim(), spec:String(r[cS]||'').trim() });
+        pn, qty, model:String(r[cM]||'').trim(), spec:String(r[cS]||'').trim(),
+        lhrh: cLR >= 0 ? String(r[cLR]||'').trim() : '' });
     }
   }
   return result;
