@@ -662,22 +662,6 @@ async function savePlanFile(e) {
   if (!stored) { alert('저장된 생산계획 파일이 없습니다.'); return; }
   const data = stored.data instanceof Uint8Array ? stored.data : new Uint8Array(stored.data);
   const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-  // File System Access API 지원 시 저장 위치 직접 선택
-  if (window.showSaveFilePicker) {
-    try {
-      const handle = await window.showSaveFilePicker({
-        suggestedName: stored.name || 'plan.xlsx',
-        types: [{ description: 'Excel 파일', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } }]
-      });
-      const writable = await handle.createWritable();
-      await writable.write(blob);
-      await writable.close();
-      return;
-    } catch(err) {
-      if (err.name === 'AbortError') return; // 사용자가 취소
-    }
-  }
-  // 폴백: 일반 다운로드
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = stored.name || 'plan.xlsx';
