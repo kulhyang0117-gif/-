@@ -336,7 +336,6 @@
         <div class="desc">조립_A/B/C/D 시트 포함</div>
         <div class="status" id="status-plan">클릭하여 파일 선택</div>
         <div class="upload-time" id="uptime-plan"></div>
-        <button id="btn-save-plan" onclick="savePlanFile(event)" style="display:none;margin-top:4px;padding:3px 10px;font-size:11px;background:#27ae60;color:white;border:none;border-radius:4px;cursor:pointer;" title="현재 생산계획 파일을 로컬에 저장">💾 저장</button>
       </div>
       <div class="upload-item" id="drop-inv">
         <input type="file" accept=".xlsx,.xls" id="file-inv" onchange="handleFile('inv',this)">
@@ -715,7 +714,6 @@ window.addEventListener('load', async () => {
       document.getElementById('status-' + type).textContent = '✅ ' + stored.name + ' (저장됨)';
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan') {
-        const b = document.getElementById('btn-save-plan'); if (b) b.style.display = 'inline-block';
         showPlanColMap(state.plan);
       }
       restored++;
@@ -779,7 +777,6 @@ function _processFile(type, file) {
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan') {
-        const b = document.getElementById('btn-save-plan'); if (b) b.style.display = 'inline-block';
         showPlanColMap(state.plan);
       }
       checkReady();
@@ -931,9 +928,16 @@ function parseFlexDateSerial(v) {
   if (!isNaN(n) && n > 40000) return n; // Excel 시리얼 (2009년 이후 값)
   const m = String(v).match(/(\d{1,2})월\s*(\d{1,2})일/);
   if (!m) return 0;
-  const year = new Date().getFullYear();
-  const d = new Date(year, Number(m[1]) - 1, Number(m[2]));
-  return Math.round((d.getTime() / 86400000) + 25569);
+  const mo = Number(m[1]), da = Number(m[2]);
+  const now = new Date();
+  let year = now.getFullYear();
+  // 연말/연초 경계 처리: 오늘 기준 6개월 이상 과거면 내년, 6개월 이상 미래면 작년으로 조정
+  let d = new Date(year, mo - 1, da);
+  if (now - d > 180 * 86400 * 1000)      d = new Date(++year, mo - 1, da);
+  else if (d - now > 180 * 86400 * 1000) d = new Date(--year, mo - 1, da);
+  // dateToSerial 재사용으로 타임존 오차 방지
+  const pad = x => String(x).padStart(2, '0');
+  return dateToSerial(`${year}-${pad(mo)}-${pad(da)}`);
 }
 function formatDate(s) {
   if (!s||isNaN(s)) return '';
