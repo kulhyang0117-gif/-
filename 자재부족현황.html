@@ -376,6 +376,12 @@
 
   </div>
 
+  <!-- 생산계획 컬럼 매핑 감지 결과 -->
+  <div id="plan-col-map-panel" style="display:none;margin:8px 0;padding:10px 14px;background:#f0f4ff;border:1px solid #c5d0f0;border-radius:8px;font-size:11.5px;color:#333;">
+    <div style="font-weight:700;color:#1e3a5f;margin-bottom:6px;">📋 생산계획 컬럼 자동감지 결과</div>
+    <div id="plan-col-map-body" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+  </div>
+
   <!-- 설정 & 실행 -->
   <div class="settings-section">
     <div class="setting-item">
@@ -708,7 +714,10 @@ window.addEventListener('load', async () => {
       document.getElementById('drop-' + type).classList.add('loaded');
       document.getElementById('status-' + type).textContent = '✅ ' + stored.name + ' (저장됨)';
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
-      if (type === 'plan') { const b = document.getElementById('btn-save-plan'); if (b) b.style.display = 'inline-block'; }
+      if (type === 'plan') {
+        const b = document.getElementById('btn-save-plan'); if (b) b.style.display = 'inline-block';
+        showPlanColMap(state.plan);
+      }
       restored++;
     } catch(e) { console.warn('복원 실패:', type); }
   }
@@ -766,7 +775,10 @@ function _processFile(type, file) {
       syncUploadLog(type, ts, uname, undefined, file.name);
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
-      if (type === 'plan') { const b = document.getElementById('btn-save-plan'); if (b) b.style.display = 'inline-block'; }
+      if (type === 'plan') {
+        const b = document.getElementById('btn-save-plan'); if (b) b.style.display = 'inline-block';
+        showPlanColMap(state.plan);
+      }
       checkReady();
       // 생산계획·BOM·재고 중 하나가 새로 올라오면 자동으로 전체 분석 재실행
       if (['bom','plan','inv'].includes(type) && state.bom && state.plan && state.inv) {
@@ -1029,50 +1041,128 @@ function buildDobnMapFromPlan(wb) {
   return dobnMap;
 }
 
+// ── 생산계획 컬럼 자동감지 키워드 정의 ─────────────────
+const PLAN_COL_KW = {
+  date:  ['일자','날짜','DATE','일','생산일'],
+  pn:    ['P/N','시스템','품번','제품번호','제품코드','PART','PN'],
+  qty:   ['계획수량','조립수량','계획Qty','Qty','QTY','QUANTITY','수량'],
+  model: ['MODEL','모델','모델명','MODELNO','MODEL NO'],
+  spec:  ['사양','SPEC','규격'],
+};
+
+// 헤더 행에서 컬럼 인덱스 매핑을 반환
+function detectPlanColIdx(headerRow) {
+  const r = headerRow.map(v => String(v).trim());
+  const find = (kws) => {
+    // 1순위: 완전 일치 (대소문자 무시)
+    for (const kw of kws) {
+      const i = r.findIndex(v => v.toUpperCase() === kw.toUpperCase());
+      if (i >= 0) return { idx: i, matched: r[i] };
+    }
+    // 2순위: 포함 일치
+    for (const kw of kws) {
+      const i = r.findIndex(v => v.toUpperCase().includes(kw.toUpperCase()));
+      if (i >= 0) return { idx: i, matched: r[i] };
+    }
+    return { idx: -1, matched: null };
+  };
+  // 수량 컬럼: 누계/실적/키팅 제외
+  const qtyExclude = ['누계','실적','키팅','출고','재고'];
+  const qtyFind = () => {
+    for (const kw of PLAN_COL_KW.qty) {
+      const i = r.findIndex(v => {
+        const u = v.toUpperCase(), k = kw.toUpperCase();
+        return (u === k || u.includes(k)) && !qtyExclude.some(ex => u.includes(ex));
+      });
+      if (i >= 0) return { idx: i, matched: r[i] };
+    }
+    return { idx: -1, matched: null };
+  };
+  return {
+    date:  find(PLAN_COL_KW.date),
+    pn:    find(PLAN_COL_KW.pn),
+    qty:   qtyFind(),
+    model: find(PLAN_COL_KW.model),
+    spec:  find(PLAN_COL_KW.spec),
+  };
+}
+
+// 생산계획 업로드 후 시트별 컬럼 매핑 감지 결과를 UI에 표시
+function showPlanColMap(wb) {
+  const panel = document.getElementById('plan-col-map-panel');
+  const body  = document.getElementById('plan-col-map-body');
+  if (!panel || !body) return;
+  const sheets = wb.SheetNames.filter(n => /^조립_[A-Za-z](\s*\(\d+\))?\s*$/.test(n));
+  if (sheets.length === 0) { panel.style.display = 'none'; return; }
+
+  const colorOf = matched => matched ? '#1e3a5f' : '#aaa';
+  const bgOf    = matched => matched ? '#dce8ff' : '#f5f5f5';
+
+  body.innerHTML = '';
+  for (const sn of sheets) {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
+    let map = null, hRow = -1;
+    for (let i = 0; i < Math.min(20, rows.length); i++) {
+      const r = rows[i].map(v => String(v).trim());
+      const hasDt = PLAN_COL_KW.date.some(k => r.some(v => v.toUpperCase().includes(k.toUpperCase())));
+      const hasPn = PLAN_COL_KW.pn.some(k => r.some(v => v.toUpperCase().includes(k.toUpperCase())));
+      if (hasDt || hasPn) { map = detectPlanColIdx(rows[i]); hRow = i; break; }
+    }
+    if (!map) continue;
+
+    const label = (name, col, icon) => {
+      const ok = col.matched !== null;
+      return `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:4px;background:${bgOf(ok)};color:${colorOf(ok)};font-size:11px;">
+        ${icon} <b>${name}</b> → ${ok ? `<span style="color:#2952a3;">${col.matched}</span>` : '<span style="color:#aaa;">미감지</span>'}
+      </span>`;
+    };
+    const sheetName = sn.replace(/\(.*\)/,'').trim();
+    body.innerHTML += `<div style="width:100%;margin-top:4px;font-weight:700;color:#2c3e50;font-size:11px;">${sheetName}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:4px;">
+        ${label('일자/날짜', map.date,  '📅')}
+        ${label('P/N',       map.pn,    '🔖')}
+        ${label('모델/MODEL',map.model, '🏷️')}
+        ${label('계획수량/Qty', map.qty,'📦')}
+        ${label('사양/SPEC', map.spec,  '📝')}
+      </div>`;
+  }
+  panel.style.display = body.innerHTML ? 'block' : 'none';
+}
+
 // ── 생산계획 파싱 ──────────────────────────────────
 function parsePlan(wb, fromSerial) {
-  // 조립_A(0318) / 조립_B(0318) 등 날짜 괄호 포함 시트 포함
-  // 조립_A(계획중 N) 같은 텍스트 괄호는 제외 → 괄호 안이 숫자만일 때만 허용
   const sheets = wb.SheetNames.filter(n => /^조립_[A-Za-z](\s*\(\d+\))?\s*$/.test(n));
   const result = [];
   for (const sn of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
     let ds=-1, cD=0, cP=1, cQ=5, cM=3, cS=4;
 
-    // 헤더 탐색: 최대 20행, 더 넓은 키워드 매칭
     for (let i=0; i<Math.min(20,rows.length); i++) {
-      const r=rows[i].map(v=>String(v).trim());
-      const hasDateKW  = r.some(v=>v.includes('일자')||v.includes('날짜'));
-      const hasPNkw    = r.some(v=>v.includes('P/N')||v.includes('품번')||v.includes('제품번호')||v.includes('시스템'));
-      const hasQtyKW   = r.some(v=>v.includes('수량'));
-      if (hasDateKW||hasPNkw||hasQtyKW) {
-        ds=i+1;
-        const a=r.findIndex(v=>v.includes('일자')||v.includes('날짜'));
-        const b=r.findIndex(v=>v.includes('P/N')||v.includes('품번')||v.includes('제품번호')||v.includes('시스템'));
-        // 계획수량 → 조립수량 → 수량(한글) → Qty(영문) 순
-        let c2=r.findIndex(v=>v.includes('계획')&&v.includes('수량'));
-        if (c2<0) c2=r.findIndex(v=>v.includes('조립')&&v.includes('수량'));
-        if (c2<0) c2=r.findIndex(v=>v==='수량'||v==='계획수량'||v==='조립수량');
-        if (c2<0) c2=r.findIndex(v=>v.includes('수량')&&!v.includes('누계')&&!v.includes('실적'));
-        if (c2<0) c2=r.findIndex(v=>v.toUpperCase()==='QTY');
-        const d=r.findIndex(v=>v.toUpperCase().includes('MODEL')||v.includes('모델'));
-        const e=r.findIndex(v=>v.includes('사양')||v.toUpperCase().includes('SPEC'));
-        if (a>=0) cD=a; if (b>=0) cP=b; if (c2>=0) cQ=c2;
-        if (d>=0) cM=d; if (e>=0) cS=e;
+      const r = rows[i].map(v => String(v).trim());
+      const hasDt = PLAN_COL_KW.date.some(k => r.some(v => v.toUpperCase().includes(k.toUpperCase())));
+      const hasPn = PLAN_COL_KW.pn.some(k => r.some(v => v.toUpperCase().includes(k.toUpperCase())));
+      const hasQt = PLAN_COL_KW.qty.some(k => r.some(v => v.toUpperCase().includes(k.toUpperCase())));
+      if (hasDt || hasPn || hasQt) {
+        ds = i + 1;
+        const m = detectPlanColIdx(rows[i]);
+        if (m.date.idx  >= 0) cD = m.date.idx;
+        if (m.pn.idx    >= 0) cP = m.pn.idx;
+        if (m.qty.idx   >= 0) cQ = m.qty.idx;
+        if (m.model.idx >= 0) cM = m.model.idx;
+        if (m.spec.idx  >= 0) cS = m.spec.idx;
         break;
       }
     }
-    // 헤더를 못 찾았으면 1행부터 시도
-    if (ds<0) ds=1;
+    if (ds < 0) ds = 1;
 
-    const ln=sn.replace(/\(.*\)/,'').trim().replace(/\s+/g,'_');
+    const ln = sn.replace(/\(.*\)/,'').trim().replace(/\s+/g,'_');
     for (let i=ds; i<rows.length; i++) {
-      const r=rows[i];
-      const ds2=parseFlexDateSerial(r[cD]); if (!ds2) continue;
-      if (ds2<fromSerial) continue;
-      const pn=String(r[cP]||'').trim();
-      const qty=parseFloat(r[cQ])||0;
-      if (!pn||qty<=0) continue;
+      const r = rows[i];
+      const ds2 = parseFlexDateSerial(r[cD]); if (!ds2) continue;
+      if (ds2 < fromSerial) continue;
+      const pn  = String(r[cP]||'').trim();
+      const qty = parseFloat(r[cQ])||0;
+      if (!pn || qty <= 0) continue;
       result.push({ sheet:ln, dateSerial:ds2, dateStr:formatDate(ds2),
         pn, qty, model:String(r[cM]||'').trim(), spec:String(r[cS]||'').trim() });
     }
