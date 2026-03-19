@@ -1017,7 +1017,7 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
 // 조립_A/B/C/D 등 각 시트에 "시스템 P/N"과 "도번" 컬럼이 있으면 수집
 function buildDobnMapFromPlan(wb) {
   const dobnMap = {}; // 도번 → 시스템 P/N
-  const assemblySheets = wb.SheetNames.filter(n => /^조립_[A-Za-z](\s*\(\d+\))?\s*$/.test(n));
+  const assemblySheets = wb.SheetNames.filter(n => /^조립[_ ][A-Za-z](\s*\(\d+\))?\s*$/.test(n));
   for (const sn of assemblySheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
     let cPN = -1, cDbn = -1, hRow = -1;
@@ -1092,7 +1092,7 @@ function showPlanColMap(wb) {
   const panel = document.getElementById('plan-col-map-panel');
   const body  = document.getElementById('plan-col-map-body');
   if (!panel || !body) return;
-  const sheets = wb.SheetNames.filter(n => /^조립_[A-Za-z](\s*\(\d+\))?\s*$/.test(n));
+  const sheets = wb.SheetNames.filter(n => /^조립[_ ][A-Za-z](\s*\(\d+\))?\s*$/.test(n));
   if (sheets.length === 0) { panel.style.display = 'none'; return; }
 
   const colorOf = matched => matched ? '#1e3a5f' : '#aaa';
@@ -1130,7 +1130,7 @@ function showPlanColMap(wb) {
 
 // ── 생산계획 파싱 ──────────────────────────────────
 function parsePlan(wb, fromSerial) {
-  const sheets = wb.SheetNames.filter(n => /^조립_[A-Za-z](\s*\(\d+\))?\s*$/.test(n));
+  const sheets = wb.SheetNames.filter(n => /^조립[_ ][A-Za-z](\s*\(\d+\))?\s*$/.test(n));
   const result = [];
   for (const sn of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
@@ -2187,7 +2187,7 @@ function buildPkgData() {
   const fromSerial  = fromDateStr ? dateToSerial(fromDateStr) : 0;
 
   // 조립_A(0318) 등 날짜 괄호 포함 시트 허용, 텍스트 괄호(계획중 등)는 제외
-  const targetSheets = state.plan.SheetNames.filter(n => /^조립_[A-Za-z](\s*\(\d+\))?\s*$/.test(n));
+  const targetSheets = state.plan.SheetNames.filter(n => /^조립[_ ][A-Za-z](\s*\(\d+\))?\s*$/.test(n));
 
   targetSheets.forEach(sn => {
     const ws   = state.plan.Sheets[sn];
