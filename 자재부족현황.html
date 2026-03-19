@@ -1951,24 +1951,17 @@ function buildDateDetailHtml(day) {
     <div style="font-size:11px;color:#555;font-weight:700;margin-bottom:8px;">
       📅 ${day.dateStr} 계획 모델 (${models.length}건)
     </div>`;
-  models.forEach(m=>{
+  models.forEach((m,mi)=>{
     const mbg=m.status==='danger'?'background:#fff0f0;border:1px solid #f5c6c6;'
       :'background:#f0faf4;border:1px solid #a9dfbf;';
     const mBadge=m.status==='danger'?'<span class="shortage-badge danger">🚨 부족있음</span>'
       :m.status==='na'?'<span class="shortage-badge na">📋 BOM없음</span>'
       :'<span class="shortage-badge ok">✅ 정상</span>';
     const allParts=[...m.dangerParts,...m.okParts];
-    html+=`<div style="margin-bottom:8px;padding:10px 14px;border-radius:6px;${mbg}">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
-        <span style="font-weight:700;font-size:12px;">${m.model||m.pn}</span>
-        <code style="font-size:10px;color:#666;">${m.pn}</code>
-        <span class="detail-tag">${m.sheet}</span>
-        <span style="font-size:11px;color:#555;">계획: <b>${Math.round(m.qty).toLocaleString()}</b>대</span>
-        ${m.품목명?`<span style="font-size:11px;color:#777;">${m.품목명}</span>`:''}
-        ${mBadge}
-      </div>`;
+    const subId=`${day.dateStr.replace('/','_')}_m${mi}`;
+    let partsHtml='';
     if(allParts.length>0){
-      html+=`<table style="width:100%;font-size:11px;border-collapse:collapse;">
+      partsHtml=`<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:8px;">
         <thead><tr>
           <th style="padding:3px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;text-align:left;">품목코드</th>
           <th style="padding:3px 8px;background:#2c3e50;color:white;border:1px solid #1a252f;">품목명</th>
@@ -1987,7 +1980,7 @@ function buildDateDetailHtml(day) {
           ?'<span style="color:#c0392b;font-weight:700;">🚨 부족</span>'
           :'<span style="color:#27ae60;font-weight:700;">✅ 정상</span>';
         const remainStyle=isDanger?'color:#c0392b;font-weight:700;':'color:#1e8449;font-weight:700;';
-        html+=`<tr style="${rowBg}">
+        partsHtml+=`<tr style="${rowBg}">
           <td style="padding:3px 8px;border:1px solid #ddd;"><code>${p.자품번}</code></td>
           <td style="padding:3px 8px;border:1px solid #ddd;">${p.자품명}</td>
           <td style="padding:3px 8px;border:1px solid #ddd;text-align:center;">${p.단위||''}</td>
@@ -1998,11 +1991,23 @@ function buildDateDetailHtml(day) {
           <td style="padding:3px 8px;border:1px solid #ddd;text-align:center;">${stCell}</td>
         </tr>`;
       });
-      html+='</tbody></table>';
+      partsHtml+='</tbody></table>';
     } else if(m.hasBOM){
-      html+='<div style="font-size:11px;color:#27ae60;">✅ 구성 부품 정보 없음</div>';
+      partsHtml='<div style="font-size:11px;color:#27ae60;margin-top:6px;">✅ 구성 부품 정보 없음</div>';
     }
-    html+='</div>';
+    const hasDetail = allParts.length > 0 || m.hasBOM;
+    html+=`<div style="margin-bottom:6px;padding:8px 14px;border-radius:6px;${mbg}">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-weight:700;font-size:12px;">${m.model||m.pn}</span>
+        <code style="font-size:10px;color:#666;">${m.pn}</code>
+        <span class="detail-tag">${m.sheet}</span>
+        <span style="font-size:11px;color:#555;">계획: <b>${Math.round(m.qty).toLocaleString()}</b>대</span>
+        ${m.품목명?`<span style="font-size:11px;color:#777;">${m.품목명}</span>`:''}
+        ${mBadge}
+        ${hasDetail?`<button class="expand-btn" onclick="toggleDetail('${subId}',this)" style="margin-left:auto;">▶ 상세</button>`:''}
+      </div>
+      <div class="detail-inner" id="${subId}" style="padding:0;">${partsHtml}</div>
+    </div>`;
   });
   html+='</div>';
   return html;
