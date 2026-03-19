@@ -1047,8 +1047,8 @@ const PLAN_COL_KW = {
   pn:    ['P/N','시스템','품번','제품번호','제품코드','PART','PN'],
   qty:   ['계획수량','조립수량','계획Qty','Qty','QTY','QUANTITY','수량'],
   model: ['MODEL','모델','모델명','MODELNO','MODEL NO'],
-  spec:  ['사양','SPEC','규격'],
-  lhrh:  ['LH/RH','LH_RH','LHRH','LH','RH','좌우'],
+  spec:  ['사양','SPEC','규격','제품사양','차종사양','사양명','형식','타입','TYPE'],
+  lhrh:  ['LH/RH','LH-RH','LH_RH','LHRH','L/R','LH','RH','좌우','좌/우','Left/Right'],
 };
 
 // 헤더 행에서 컬럼 인덱스 매핑을 반환
@@ -1126,7 +1126,7 @@ function showPlanColMap(wb) {
         ${label('모델/MODEL',   map.model, '🏷️', 'MODEL')}
         ${label('계획수량/Qty', map.qty,   '📦', '계획수량')}
         ${label('사양',         map.spec,  '📝', '사양')}
-        ${label('LH/RH',       map.lhrh,  '↔️', 'LH/RH')}
+        ${label('LH/RH',       map.lhrh,  '↔️', '사양')}
       </div>`;
   }
   panel.style.display = body.innerHTML ? 'block' : 'none';
