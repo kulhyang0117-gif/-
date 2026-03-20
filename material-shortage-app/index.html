@@ -206,6 +206,18 @@
   .pack-date-table tr.total-row td { background: #eaf0fb; font-weight: 700; }
   .btn-print { padding: 6px 14px; background: #2c3e50; color: white; border: none; border-radius: 5px; font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
   .btn-print:hover { background: #1a252f; }
+  /* ── 유형별/라인별 소요량 테이블 ── */
+  .pack-detail-wrap { overflow-x: auto; }
+  .pack-detail-table { border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+  .pack-detail-table th { background: #1e3a5f; color: white; padding: 5px 8px; text-align: center; border: 1px solid #2952a3; }
+  .pack-detail-table th.type-col { background: #1a5276; border-color: #1f618d; }
+  .pack-detail-table td { padding: 4px 8px; border: 1px solid #ddd; }
+  .pack-detail-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .pack-detail-table td.center { text-align: center; }
+  .pack-detail-table tbody tr:nth-child(even) { background: #f8fafc; }
+  .pack-detail-table tr.line-group td { background: #e8eef5; font-weight: 700; }
+  .pack-detail-table tr.subtotal-row td { background: #d6e4f0; font-weight: 700; }
+  .pack-detail-table tr.total-row td { background: #eaf0fb; font-weight: 700; }
 
   /* ── 인증 오버레이 ── */
   .auth-overlay { position:fixed; inset:0; background:rgba(10,20,40,0.97); z-index:1000; display:flex; align-items:center; justify-content:center; }
@@ -618,6 +630,7 @@ let dateResult = [];
 let filteredDateResult = [];
 let packResult = [];
 let packDateResult = [];
+let packDetailRows = [];
 
 // ── IndexedDB ──────────────────────────────────────
 const DB_NAME = 'MaterialShortageDB';
@@ -673,6 +686,12 @@ function addBusinessDays(dateStr, n) {
     if (d.getDay() !== 0) count++; // 0=일요일 제외
   }
   return d;
+}
+
+function addCalendarDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return dateObjToStr(d);
 }
 
 function dateObjToStr(d) {
@@ -1054,12 +1073,17 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
 
 // ── 생산계획 파싱 ──────────────────────────────────
 function parsePlan(wb, fromSerial) {
-  // 조립 시트 탐색 (A, B, C, D 등 모두 포함)
-  const sheets = wb.SheetNames.filter(n => /조립/i.test(n));
+  // 조립 시트 탐색 (A, B, C, D 라인 모두 포함 — 시트명 패턴 무관)
+  const sheets = wb.SheetNames.filter(n =>
+    /조립/i.test(n) ||
+    /^[A-D]\s*라인/i.test(n) ||
+    /라인\s*[A-D]/i.test(n) ||
+    /^[A-D]_라인/i.test(n)
+  );
   const result = [];
   for (const sn of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
-    let ds=-1, cD=0, cP=1, cQ=5, cM=3, cS=4;
+    let ds=-1, cD=0, cP=1, cQ=5, cM=3, cS=4, cF=-1;
 
     // 헤더 탐색: 최대 20행, 더 넓은 키워드 매칭
     for (let i=0; i<Math.min(20,rows.length); i++) {
@@ -1072,31 +1096,41 @@ function parsePlan(wb, fromSerial) {
         const a=r.findIndex(v=>v.includes('일자')||v.includes('날짜'));
         const b=r.findIndex(v=>v.includes('P/N')||v.includes('품번')||v.includes('제품번호')||v.includes('시스템'));
         // 계획수량 → 조립수량 → 수량(한글) → Qty(영문) 순
-        let c2=r.findIndex(v=>v.includes('계획')&&v.includes('수량'));
+        let c2=r.findIndex(v=>v.includes('계획')&&(v.includes('수량')||v.includes('수')));
         if (c2<0) c2=r.findIndex(v=>v.includes('조립')&&v.includes('수량'));
-        if (c2<0) c2=r.findIndex(v=>v==='수량'||v==='계획수량'||v==='조립수량');
-        if (c2<0) c2=r.findIndex(v=>v.includes('수량')&&!v.includes('누계')&&!v.includes('실적'));
+        if (c2<0) c2=r.findIndex(v=>v==='수량'||v==='계획수량'||v==='조립수량'||v==='계획수');
+        if (c2<0) c2=r.findIndex(v=>v.includes('수량')&&!v.includes('실적'));
         if (c2<0) c2=r.findIndex(v=>v.toUpperCase()==='QTY');
         const d=r.findIndex(v=>v.toUpperCase().includes('MODEL')||v.includes('모델'));
         const e=r.findIndex(v=>v.includes('사양')||v.toUpperCase().includes('SPEC'));
+        const f=r.findIndex(v=>v.includes('도번'));
         if (a>=0) cD=a; if (b>=0) cP=b; if (c2>=0) cQ=c2;
-        if (d>=0) cM=d; if (e>=0) cS=e;
+        if (d>=0) cM=d; if (e>=0) cS=e; if (f>=0) cF=f;
         break;
       }
     }
     // 헤더를 못 찾았으면 1행부터 시도
     if (ds<0) ds=1;
 
-    const ln=sn.replace(/\(.*\)/,'').trim().replace(/\s+/g,'_');
+    // 시트명 → 라인명: 괄호·날짜 제거 후 공백→언더스코어
+    // 예) "조립 D(0318)" → "조립_D" / "D 라인(0318)" → "D_라인"
+    const ln=sn.replace(/\(.*?\)/g,'').trim().replace(/\s+/g,'_');
+    let lastDateSerial=null;
     for (let i=ds; i<rows.length; i++) {
       const r=rows[i];
-      const ds2=r[cD]; if (!ds2||isNaN(Number(ds2))) continue;
-      if (Number(ds2)<fromSerial) continue;
+      const rawDate=r[cD];
+      // 병합 셀 대응: 날짜가 있으면 갱신, 없으면 이전 날짜 재사용
+      if (rawDate && !isNaN(Number(rawDate))) {
+        lastDateSerial=Number(rawDate);
+      }
+      if (!lastDateSerial) continue;
+      if (lastDateSerial<fromSerial) continue;
       const pn=String(r[cP]||'').trim();
       const qty=parseFloat(r[cQ])||0;
       if (!pn||qty<=0) continue;
-      result.push({ sheet:ln, dateSerial:Number(ds2), dateStr:formatDate(Number(ds2)),
-        pn, qty, model:String(r[cM]||'').trim(), spec:String(r[cS]||'').trim() });
+      result.push({ sheet:ln, dateSerial:lastDateSerial, dateStr:formatDate(lastDateSerial),
+        pn, drawingNum:cF>=0?String(r[cF]||'').trim():'',
+        qty, model:String(r[cM]||'').trim(), spec:String(r[cS]||'').trim() });
     }
   }
   return result;
@@ -1540,6 +1574,23 @@ function runAnalysis() {
 
       const allPackDates = [...new Set(planRows.map(r => r.dateStr))].sort();
       packDateResult = allPackDates;
+
+      // ── 4일 필터: 유형별/라인별 소요량 ──
+      const pack4EndStr = addCalendarDays(fromDateStr, 4);
+      const pack4EndSerial = dateToSerial(pack4EndStr);
+      packDetailRows = [];
+      for (const row of planRows) {
+        if (row.dateSerial > pack4EndSerial) continue;
+        const comps = packBomMap[row.pn];
+        if (!comps || !comps.length) continue;
+        const byType = {};
+        comps.forEach(c => { byType[c.자품번] = { req: (byType[c.자품번]?.req || 0) + row.qty * c.소요량, name: c.자품명 }; });
+        packDetailRows.push({
+          sheet: row.sheet, dateStr: row.dateStr, pn: row.pn,
+          drawingNum: row.drawingNum || '', model: row.model, spec: row.spec,
+          qty: row.qty, byType
+        });
+      }
       renderPackagingTab();
 
     } catch(err) {
@@ -2170,7 +2221,116 @@ function renderPackagingTab() {
   });
   html += `</tr></tbody></table></div></div>`;
 
+  // ── 유형별/라인별 소요량 (기준일 이후 4일) ──
+  if (packDetailRows.length > 0) {
+    // 집계용: 고유 포장재 타입 목록 추출
+    const typeMap = new Map(); // 자품번 -> 자품명
+    packDetailRows.forEach(row => {
+      Object.entries(row.byType).forEach(([pn, info]) => {
+        if (!typeMap.has(pn)) typeMap.set(pn, info.name);
+      });
+    });
+    const typeKeys = [...typeMap.keys()];
+
+    // ── 유형별 소요량 테이블 (날짜순) ──
+    html += buildPackDetailSection(
+      '📦 유형별 소요량 (기준일 이후 4일)',
+      packDetailRows.slice().sort((a, b) => a.dateStr.localeCompare(b.dateStr) || a.sheet.localeCompare(b.sheet)),
+      typeMap, typeKeys, false
+    );
+
+    // ── 라인별 소요량 테이블 (라인순) ──
+    html += buildPackDetailSection(
+      '🏭 라인별 소요량 (기준일 이후 4일)',
+      packDetailRows.slice().sort((a, b) => a.sheet.localeCompare(b.sheet) || a.dateStr.localeCompare(b.dateStr)),
+      typeMap, typeKeys, true
+    );
+  }
+
   el.innerHTML = html;
+}
+
+function buildPackDetailSection(title, rows, typeMap, typeKeys, groupByLine) {
+  let html = `<div class="pack-section">
+    <div class="pack-section-header">
+      <h3>${title}</h3>
+    </div>
+    <div class="pack-detail-wrap">
+    <table class="pack-detail-table">
+      <thead><tr>
+        <th>라인</th><th>일자</th><th>시스템 P/N</th><th>도번</th>
+        <th>MODEL</th><th>사양</th><th style="text-align:right;">계획 수량</th>
+        ${typeKeys.map(pn => {
+          const nm = typeMap.get(pn);
+          return `<th class="type-col">${nm||pn}<br><span style="font-size:10px;font-weight:400;">${pn}</span><br><span style="font-size:10px;font-weight:400;">소요량</span></th>`;
+        }).join('')}
+        <th>비고</th>
+      </tr></thead><tbody>`;
+
+  const grandTotal = {}; typeKeys.forEach(k => grandTotal[k] = 0);
+  let prevLine = null;
+  const lineTotal = {}; typeKeys.forEach(k => lineTotal[k] = 0);
+  let lineQtyTotal = 0;
+
+  rows.forEach((row, idx) => {
+    const isNewLine = groupByLine && row.sheet !== prevLine;
+    if (groupByLine && isNewLine && prevLine !== null) {
+      // 이전 라인 소계 행
+      html += `<tr class="subtotal-row">
+        <td class="center" colspan="6">[ ${prevLine} ] 소 계</td>
+        <td class="num">${fmt(lineQtyTotal)}</td>
+        ${typeKeys.map(k => `<td class="num">${lineTotal[k]>0?fmt(lineTotal[k]):'-'}</td>`).join('')}
+        <td></td>
+      </tr>`;
+      typeKeys.forEach(k => lineTotal[k] = 0);
+      lineQtyTotal = 0;
+    }
+    typeKeys.forEach(k => {
+      const v = row.byType[k]?.req || 0;
+      grandTotal[k] += v;
+      if (groupByLine) lineTotal[k] += v;
+    });
+    lineQtyTotal += row.qty;
+    prevLine = row.sheet;
+
+    const lineDisplay = groupByLine && !isNewLine && rows[idx-1]?.sheet === row.sheet ? '' : row.sheet;
+    html += `<tr>
+      <td class="center">${lineDisplay}</td>
+      <td class="center">${row.dateStr}</td>
+      <td><code style="font-size:10px;">${row.pn}</code></td>
+      <td style="color:#777;font-size:11px;">${row.drawingNum||''}</td>
+      <td>${row.model||''}</td>
+      <td style="color:#777;font-size:11px;">${row.spec||''}</td>
+      <td class="num">${fmt(row.qty)}</td>
+      ${typeKeys.map(k => {
+        const v = row.byType[k]?.req || 0;
+        return `<td class="num" style="${v>0?'':'color:#ccc;'}">${v>0?fmt(v):'-'}</td>`;
+      }).join('')}
+      <td></td>
+    </tr>`;
+  });
+
+  // 마지막 라인 소계
+  if (groupByLine && prevLine !== null) {
+    html += `<tr class="subtotal-row">
+      <td class="center" colspan="6">[ ${prevLine} ] 소 계</td>
+      <td class="num">${fmt(lineQtyTotal)}</td>
+      ${typeKeys.map(k => `<td class="num">${lineTotal[k]>0?fmt(lineTotal[k]):'-'}</td>`).join('')}
+      <td></td>
+    </tr>`;
+  }
+
+  // 합계 행
+  const grandQty = rows.reduce((s, r) => s + r.qty, 0);
+  html += `<tr class="total-row">
+    <td class="center" colspan="6">합 계</td>
+    <td class="num">${fmt(grandQty)}</td>
+    ${typeKeys.map(k => `<td class="num">${grandTotal[k]>0?fmt(grandTotal[k]):'-'}</td>`).join('')}
+    <td></td>
+  </tr>`;
+
+  html += `</tbody></table></div></div>`;
+  return html;
 }
 
 // ── 인쇄: 포장재별 집계 ────────────────────────────

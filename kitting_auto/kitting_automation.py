@@ -288,11 +288,12 @@ def navigate_and_download(app):
         input("  완료 후 Enter → ")
     time.sleep(STEP_DELAY)
 
-    # ── 조립 자재 kitting 클릭 ─────────────────────────────────────────────
-    log("  조립 자재 kitting 클릭...")
-    if not _try_click(main_win, ["조립 자재 kitting", "kitting", "Kitting", "키팅", "자재 kitting"]):
-        log("  ⚠️  수동으로 '조립 자재 kitting'을 클릭해주세요.")
-        input("  완료 후 Enter → ")
+    # ── 방향키 ↓ 8번 → Enter (조립 자재 kitting 진입) ────────────────────
+    log("  방향키 ↓ 8번 → Enter (조립 자재 kitting 진입)...")
+    for _ in range(8):
+        pyautogui.press('down')
+        time.sleep(0.15)
+    pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
 
     # ── 생산일자 설정 ──────────────────────────────────────────────────────
