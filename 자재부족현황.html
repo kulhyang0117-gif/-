@@ -3339,7 +3339,12 @@ async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = fals
       const fname = logs[type]?.file_name || (type + '.xlsx');
       document.getElementById('status-' + type).textContent = '✅ ' + fname;
       await dbPut(type, { data: arr, name: fname });
-      if (serverTs > 0) localStorage.setItem('ms_uptime_' + type, String(serverTs));
+      if (serverTs > 0) {
+        const uploaderName = logs[type]?.uploader_name || '';
+        localStorage.setItem('ms_uptime_' + type, String(serverTs));
+        if (uploaderName) localStorage.setItem('ms_uploader_' + type, uploaderName);
+        document.getElementById('uptime-' + type).textContent = fmtUpTime(String(serverTs), uploaderName);
+      }
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
       filesUpdated = true;
@@ -3376,12 +3381,10 @@ async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = fals
     }
   }
 
-  // 업로드 시각 표시 (Supabase 기준)
+  // 업로드 시각·업로더 표시 — 항상 서버(Supabase) 기준으로 갱신
   Object.values(logs).forEach(row => {
     const el = document.getElementById('uptime-' + row.file_type);
     if (!el) return;
-    const localTs = localStorage.getItem('ms_uptime_' + row.file_type);
-    if (localTs && Number(localTs) >= Number(row.uploaded_at)) return;
     el.textContent = fmtUpTime(row.uploaded_at, row.uploader_name);
     localStorage.setItem('ms_uptime_' + row.file_type, row.uploaded_at);
     if (row.uploader_name) localStorage.setItem('ms_uploader_' + row.file_type, row.uploader_name);
