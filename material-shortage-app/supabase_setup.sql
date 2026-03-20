@@ -78,6 +78,17 @@ CREATE POLICY "storage_update_authenticated" ON storage.objects
   FOR UPDATE
   USING (bucket_id = 'ms-files' AND auth.role() = 'authenticated');
 
+-- ★ upsert(덮어쓰기) 시 기존 파일 삭제 권한 필요 — 없으면 업로드 실패
+CREATE POLICY "storage_delete_authenticated" ON storage.objects
+  FOR DELETE
+  USING (bucket_id = 'ms-files' AND auth.role() = 'authenticated');
+
+-- ── 이미 정책이 존재하면 아래를 먼저 실행 후 위 CREATE POLICY 재실행 ──
+-- DROP POLICY IF EXISTS "storage_read_authenticated"   ON storage.objects;
+-- DROP POLICY IF EXISTS "storage_insert_authenticated" ON storage.objects;
+-- DROP POLICY IF EXISTS "storage_update_authenticated" ON storage.objects;
+-- DROP POLICY IF EXISTS "storage_delete_authenticated" ON storage.objects;
+
 -- ── 8. Supabase Auth 설정 권장사항 ──────────────────────────────
 -- Authentication → Settings 에서:
 --   - "Enable email confirmations" → OFF (내부 앱이므로 이메일 확인 불필요)

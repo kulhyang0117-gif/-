@@ -627,6 +627,20 @@ let filteredPkgResult = [];
 const DB_NAME = 'MaterialShortageDB';
 const DB_STORE = 'uploadedFiles';
 
+// ── Base64 변환 유틸 (Storage 대신 DB에 파일 저장용) ──
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+function base64ToUint8Array(b64) {
+  const binary = atob(b64);
+  const arr = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) arr[i] = binary.charCodeAt(i);
+  return arr;
+}
+
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, 1);
@@ -759,28 +773,36 @@ function fmtUpTime(ts, name) {
 function _processFile(type, file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     try {
       const ab = e.target.result;
       state[type] = XLSX.read(ab, { type: 'array' });
       document.getElementById('drop-' + type).classList.remove('error');
       document.getElementById('drop-' + type).classList.add('loaded');
-      document.getElementById('status-' + type).textContent = '✅ ' + file.name;
+      document.getElementById('status-' + type).textContent = '⏳ ' + file.name + ' (서버 저장 중...)';
       dbPut(type, { data: ab, name: file.name });
-      uploadFileToStorage(type + '.xlsx', ab);
+      // Storage 대신 upload_logs 테이블에 파일 데이터를 직접 저장
       const ts = Date.now();
       const uname = currentUser ? currentUser.displayName : '';
-      localStorage.setItem('ms_uptime_' + type, ts);
-      if (uname) localStorage.setItem('ms_uploader_' + type, uname);
-      document.getElementById('uptime-' + type).textContent = fmtUpTime(ts, uname);
-      syncUploadLog(type, ts, uname, undefined, file.name);
+      const b64 = arrayBufferToBase64(ab);
+      const { error } = await sb.from('upload_logs').upsert(
+        { file_type: type, uploaded_at: String(ts), uploader_name: uname || '',
+          file_name: file.name, file_data: b64 },
+        { onConflict: 'file_type' }
+      );
+      if (error) {
+        document.getElementById('drop-' + type).classList.add('error');
+        document.getElementById('status-' + type).textContent = '⚠️ ' + file.name + ' (서버 저장 실패: ' + error.message + ')';
+      } else {
+        localStorage.setItem('ms_uptime_' + type, ts);
+        if (uname) localStorage.setItem('ms_uploader_' + type, uname);
+        document.getElementById('uptime-' + type).textContent = fmtUpTime(ts, uname);
+        document.getElementById('status-' + type).textContent = '✅ ' + file.name;
+      }
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
-      if (type === 'plan') {
-        showPlanColMap(state.plan);
-      }
+      if (type === 'plan') { showPlanColMap(state.plan); }
       checkReady();
-      // 생산계획·BOM·재고 중 하나가 새로 올라오면 자동으로 전체 분석 재실행
       if (['bom','plan','inv'].includes(type) && state.bom && state.plan && state.inv) {
         runAnalysis();
       }
@@ -3269,8 +3291,10 @@ const STORAGE_BUCKET = 'ms-files';
 async function uploadFileToStorage(path, arrayBuffer) {
   try {
     const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
-    await sb.storage.from(STORAGE_BUCKET).upload(path, blob, { upsert: true });
-  } catch(e) {}
+    const { error } = await sb.storage.from(STORAGE_BUCKET).upload(path, blob, { upsert: true });
+    if (error) { console.warn('Storage 업로드 실패:', path, error.message); return { ok: false, msg: error.message }; }
+    return { ok: true };
+  } catch(e) { console.warn('Storage 업로드 오류:', path, e); return { ok: false, msg: String(e) }; }
 }
 
 async function downloadFileFromStorage(path) {
@@ -3282,10 +3306,10 @@ async function downloadFileFromStorage(path) {
 }
 
 async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = false, forcePlan = false) {
-  // upload_logs에서 파일명·이력 전체 조회
+  // upload_logs에서 메타데이터만 먼저 조회 (파일 데이터 제외 — 필요 시 개별 조회)
   let logs = {};
   try {
-    const { data } = await sb.from('upload_logs').select('*');
+    const { data } = await sb.from('upload_logs').select('file_type, uploaded_at, uploader_name, file_name, file_names');
     if (data) data.forEach(row => { logs[row.file_type] = row; });
   } catch(e) {}
 
@@ -3294,19 +3318,26 @@ async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = fals
   for (const type of ['bom', 'plan', 'inv', 'pkg']) {
     const serverTs = Number(logs[type]?.uploaded_at || 0);
     const localTs  = Number(localStorage.getItem('ms_uptime_' + type) || 0);
-    // 생산계획은 항상 강제 다운로드, 그 외는 타임스탬프 비교
     const mustDownload = forceDownload || (forcePlan && type === 'plan');
     if (!mustDownload && state[type] && localTs >= serverTs) continue;
-    const ab = await downloadFileFromStorage(type + '.xlsx');
-    if (!ab) continue;
+    // upload_logs.file_data (DB) 에서 파일 데이터 조회 (Storage 미사용)
+    let arr = null;
     try {
-      const arr = new Uint8Array(ab);
+      const { data: row } = await sb.from('upload_logs').select('file_data').eq('file_type', type).single();
+      if (row?.file_data) arr = base64ToUint8Array(row.file_data);
+    } catch(e) {}
+    // DB에 없으면 Storage 폴백
+    if (!arr) {
+      const ab = await downloadFileFromStorage(type + '.xlsx');
+      if (ab) arr = new Uint8Array(ab);
+    }
+    if (!arr) continue;
+    try {
       state[type] = XLSX.read(arr, { type: 'array' });
       document.getElementById('drop-' + type).classList.add('loaded');
       const fname = logs[type]?.file_name || (type + '.xlsx');
       document.getElementById('status-' + type).textContent = '✅ ' + fname;
       await dbPut(type, { data: arr, name: fname });
-      // 다운로드 후 로컬 타임스탬프 갱신 (중복 다운로드 방지)
       if (serverTs > 0) localStorage.setItem('ms_uptime_' + type, String(serverTs));
       if (type === 'pkg') { buildPkgData(); renderPkgTable(pkgResult); }
       if (type === 'plan' && state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
