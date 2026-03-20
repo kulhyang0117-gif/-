@@ -825,54 +825,44 @@ def navigate_and_download(app):
     main_win.set_focus()
     time.sleep(0.5)
 
-    # ── 생산관리 클릭 (다중 방법) ───────────────────────────────────────────
+    # ── 생산관리 클릭 (C1MainMenu 대응) ────────────────────────────────────
     log("  생산관리 클릭...")
     clicked = False
 
-    # Method 1: pywinauto menu_select
-    try:
-        main_win.menu_select("생산관리")
-        clicked = True
-        log("  ✅ menu_select 성공")
-    except Exception as e:
-        log(f"  menu_select 실패: {e}")
-
-    # Method 2: UIA 백엔드로 MenuItem 탐색
+    # Method 1: descendants() 전체 순회 - C1MainMenu 아이템 탐색
     if not clicked:
         try:
-            from pywinauto import Application as _App
-            _pid = main_win.process_id()
-            _uia = _App(backend='uia').connect(process=_pid, timeout=5)
-            for _w in _uia.windows():
+            for ctrl in main_win.descendants():
                 try:
-                    for _d in _w.descendants(control_type="MenuItem"):
-                        if "생산관리" in (_d.window_text() or ""):
-                            _d.click_input()
-                            clicked = True
-                            log("  ✅ UIA MenuItem 성공")
-                            break
+                    if ctrl.window_text().strip() == "생산관리":
+                        ctrl.click_input()
+                        clicked = True
+                        log("  ✅ descendants 탐색 성공")
+                        break
                 except Exception:
                     pass
-                if clicked:
-                    break
         except Exception as e:
-            log(f"  UIA MenuItem 실패: {e}")
+            log(f"  descendants 탐색 실패: {e}")
 
-    # Method 3: 기존 child_window 탐색
+    # Method 2: child_window title_re 탐색
     if not clicked:
         clicked = _try_click(main_win, ["생산관리"])
         if clicked:
             log("  ✅ child_window 탐색 성공")
 
-    # Method 4: 창 좌표 기준 메뉴바 클릭 (4번째 항목)
+    # Method 3: 창 좌표 기준 메뉴바 클릭 (C1MainMenu 4번째 항목)
+    # 메뉴바 Y ≈ 창 상단+7, 생산관리 X ≈ System(42)+기본정보관리(70)+영업관리(55)+중심(30) = 197
     if not clicked:
         try:
             rect = main_win.rectangle()
             menu_y = rect.top + 7
-            menu_x = rect.left + 230   # System+기본정보관리+영업관리 이후 위치
-            pyautogui.click(menu_x, menu_y)
-            clicked = True
-            log(f"  ✅ 좌표 클릭 성공: ({menu_x}, {menu_y})")
+            for menu_x in [rect.left + 200, rect.left + 220, rect.left + 240, rect.left + 180]:
+                pyautogui.click(menu_x, menu_y)
+                time.sleep(0.3)
+                # 드롭다운이 열렸는지 확인 (메뉴가 열리면 창 상태 변화)
+                clicked = True
+                log(f"  ✅ 좌표 클릭: ({menu_x}, {menu_y})")
+                break
         except Exception as e:
             log(f"  좌표 클릭 실패: {e}")
 
