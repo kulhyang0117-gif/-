@@ -851,15 +851,17 @@ def navigate_and_download(app):
             log("  ✅ child_window 탐색 성공")
 
     # Method 3: 창 좌표 기준 메뉴바 클릭 (C1MainMenu 4번째 항목)
-    # 메뉴바 Y ≈ 창 상단+7, 생산관리 X ≈ System(42)+기본정보관리(70)+영업관리(55)+중심(30) = 197
+    # 최대화 창은 rect.top/left 가 음수 → max()로 화면 내 좌표 보정
     if not clicked:
         try:
             rect = main_win.rectangle()
-            menu_y = rect.top + 7
-            for menu_x in [rect.left + 200, rect.left + 220, rect.left + 240, rect.left + 180]:
+            # 최대화 창: rect.top이 -8~-12 → 실제 메뉴바는 화면 Y=7 근처
+            menu_y = max(rect.top + 7, 7)
+            visible_left = max(rect.left, 0)
+            for x_offset in [200, 220, 240, 180, 260]:
+                menu_x = visible_left + x_offset
                 pyautogui.click(menu_x, menu_y)
-                time.sleep(0.3)
-                # 드롭다운이 열렸는지 확인 (메뉴가 열리면 창 상태 변화)
+                time.sleep(0.5)
                 clicked = True
                 log(f"  ✅ 좌표 클릭: ({menu_x}, {menu_y})")
                 break
