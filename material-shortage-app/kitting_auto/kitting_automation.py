@@ -825,18 +825,69 @@ def navigate_and_download(app):
     main_win.set_focus()
     time.sleep(0.5)
 
-    # ── 생산관리 클릭 ───────────────────────────────────────────────────────
+    # ── 생산관리 클릭 (다중 방법) ───────────────────────────────────────────
     log("  생산관리 클릭...")
-    if not _try_click(main_win, ["생산관리"]):
+    clicked = False
+
+    # Method 1: pywinauto menu_select
+    try:
+        main_win.menu_select("생산관리")
+        clicked = True
+        log("  ✅ menu_select 성공")
+    except Exception as e:
+        log(f"  menu_select 실패: {e}")
+
+    # Method 2: UIA 백엔드로 MenuItem 탐색
+    if not clicked:
+        try:
+            from pywinauto import Application as _App
+            _pid = main_win.process_id()
+            _uia = _App(backend='uia').connect(process=_pid, timeout=5)
+            for _w in _uia.windows():
+                try:
+                    for _d in _w.descendants(control_type="MenuItem"):
+                        if "생산관리" in (_d.window_text() or ""):
+                            _d.click_input()
+                            clicked = True
+                            log("  ✅ UIA MenuItem 성공")
+                            break
+                except Exception:
+                    pass
+                if clicked:
+                    break
+        except Exception as e:
+            log(f"  UIA MenuItem 실패: {e}")
+
+    # Method 3: 기존 child_window 탐색
+    if not clicked:
+        clicked = _try_click(main_win, ["생산관리"])
+        if clicked:
+            log("  ✅ child_window 탐색 성공")
+
+    # Method 4: 창 좌표 기준 메뉴바 클릭 (4번째 항목)
+    if not clicked:
+        try:
+            rect = main_win.rectangle()
+            menu_y = rect.top + 7
+            menu_x = rect.left + 230   # System+기본정보관리+영업관리 이후 위치
+            pyautogui.click(menu_x, menu_y)
+            clicked = True
+            log(f"  ✅ 좌표 클릭 성공: ({menu_x}, {menu_y})")
+        except Exception as e:
+            log(f"  좌표 클릭 실패: {e}")
+
+    if not clicked:
         log("  ⚠️  수동으로 '생산관리'를 클릭해주세요.")
         input("  완료 후 Enter → ")
-    time.sleep(STEP_DELAY)
 
-    # ── 조립 자재 kitting 클릭 ─────────────────────────────────────────────
-    log("  조립 자재 kitting 클릭...")
-    if not _try_click(main_win, ["조립 자재 kitting", "kitting", "Kitting", "키팅", "자재 kitting"]):
-        log("  ⚠️  수동으로 '조립 자재 kitting'을 클릭해주세요.")
-        input("  완료 후 Enter → ")
+    time.sleep(STEP_DELAY)  # 드롭다운 열릴 때까지 대기
+
+    # ── 방향키 ↓ 8번 → Enter (조립 자재 kitting 진입) ────────────────────
+    log("  방향키 ↓ 8번 → Enter (조립 자재 kitting 진입)...")
+    for _ in range(8):
+        pyautogui.press('down')
+        time.sleep(0.15)
+    pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
 
     # ── 생산일자 설정 ──────────────────────────────────────────────────────
@@ -1123,7 +1174,7 @@ def automate_upload(downloaded_files):
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--step', default='login',
+    parser.add_argument('--step', default='all',
                         help='실행 단계: login | navigate | all')
     # mes-kit:// 프로토콜에서 전달되는 URL 인자 무시
     parser.add_argument('url', nargs='?', default='')
