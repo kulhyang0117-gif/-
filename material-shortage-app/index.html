@@ -80,6 +80,14 @@
   .kit-empty { font-size: 11px; color: #a78bbb; }
   .optional-badge { display: inline-block; font-size: 10px; background: #f3e5ff; color: #8e44ad; padding: 1px 6px; border-radius: 8px; margin-left: 4px; font-weight: 600; }
 
+  /* ── 키팅 공지 ── */
+  .kit-notice { margin-top: 10px; }
+  .kit-notice summary { cursor: pointer; font-size: 11px; color: #8e44ad; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 4px; user-select: none; }
+  .kit-notice summary::before { content: '▶'; font-size: 9px; transition: transform 0.2s; }
+  .kit-notice[open] summary::before { transform: rotate(90deg); }
+  .kit-notice summary::-webkit-details-marker { display: none; }
+  .kit-notice-text { margin-top: 6px; padding: 8px 12px; background: #f3e5ff; border-left: 3px solid #8e44ad; border-radius: 0 5px 5px 0; font-size: 11px; color: #5b2c6f; line-height: 1.6; }
+
   /* ── 설정 ── */
   .settings-section { background: white; border-radius: 8px; padding: 14px 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
   .setting-item { display: flex; align-items: center; gap: 7px; }
@@ -407,6 +415,10 @@
         <span class="kit-empty">등록된 키팅 파일 없음 (선택사항)</span>
       </div>
       <div class="upload-time" id="uptime-kit"></div>
+      <details class="kit-notice" id="kit-notice">
+        <summary id="kit-notice-summary">📌 키팅 집계 안내</summary>
+        <div class="kit-notice-text" id="kit-notice-text">전일 생산계획 다음날 이어서 조립시 해당모델 일부 생산되였더라도 키팅수량으로 집계됨.</div>
+      </details>
     </div>
 
     <!-- 당일 입고자재 복수 업로드 -->
@@ -703,6 +715,7 @@ function dateObjToStr(d) {
 // ── 페이지 로드 시 파일 복원 ───────────────────────
 window.addEventListener('load', async () => {
   await initAuth();
+  loadKitNotice();
   // 기준일자 기본값 = 오늘
   document.getElementById('fromDate').value = getTodayStr();
   let restored = 0;
@@ -2647,10 +2660,19 @@ async function renderAdminPanel(){
   const users=await dbGetAllUsers();
   const body=document.getElementById('admin-body');
   const members=users.filter(u=>!u.isAdmin);
-  if(!members.length){ body.innerHTML='<div style="text-align:center;color:#999;padding:30px;">등록된 회원이 없습니다.</div>'; return; }
+  const savedNotice=localStorage.getItem('ms_kit_notice')||'전일 생산계획 다음날 이어서 조립시 해당모델 일부 생산되였더라도 키팅수량으로 집계됨.';
+  const noticeSection=`<div style="margin-bottom:20px;padding:14px 16px;background:#faf5ff;border:1px solid #d7b8f5;border-radius:8px;">
+    <div style="font-weight:700;font-size:13px;color:#6c3483;margin-bottom:10px;">📌 키팅 공지 문구 편집</div>
+    <textarea id="admin-notice-input" rows="3" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #c39bd3;border-radius:6px;font-size:12px;color:#3d0066;resize:vertical;">${savedNotice}</textarea>
+    <div style="margin-top:8px;display:flex;gap:8px;">
+      <button onclick="saveKitNotice()" style="padding:5px 16px;background:#8e44ad;color:white;border:none;border-radius:5px;font-size:12px;font-weight:700;cursor:pointer;">💾 저장</button>
+      <button onclick="resetKitNotice()" style="padding:5px 16px;background:#bdc3c7;color:#555;border:none;border-radius:5px;font-size:12px;cursor:pointer;">↩️ 기본값 복원</button>
+    </div>
+  </div>`;
+  if(!members.length){ body.innerHTML=noticeSection+'<div style="text-align:center;color:#999;padding:30px;">등록된 회원이 없습니다.</div>'; return; }
   const stLabel={pending:'⏳ 승인대기',approved:'✅ 승인됨',rejected:'❌ 거부됨'};
   const stCls={pending:'st-pending',approved:'st-approved',rejected:'st-rejected'};
-  body.innerHTML=members.map(u=>`
+  body.innerHTML=noticeSection+members.map(u=>`
     <div class="user-card" id="uc-${u.id}">
       <div class="user-top">
         <strong>${u.displayName}</strong>
@@ -2692,6 +2714,29 @@ async function adminSavePerm(uid){
     modify:!!document.getElementById(`pm-${uid}`)?.checked
   };
   await dbUpdateUser(u);
+}
+
+// ── 키팅 공지 ──
+const KIT_NOTICE_DEFAULT='전일 생산계획 다음날 이어서 조립시 해당모델 일부 생산되였더라도 키팅수량으로 집계됨.';
+function loadKitNotice(){
+  const txt=localStorage.getItem('ms_kit_notice')||KIT_NOTICE_DEFAULT;
+  const el=document.getElementById('kit-notice-text');
+  if(el) el.textContent=txt;
+}
+function saveKitNotice(){
+  const val=document.getElementById('admin-notice-input')?.value?.trim();
+  if(!val) return;
+  localStorage.setItem('ms_kit_notice',val);
+  loadKitNotice();
+  alert('공지 문구가 저장되었습니다.');
+}
+function resetKitNotice(){
+  if(!confirm('기본값으로 복원하시겠습니까?')) return;
+  localStorage.removeItem('ms_kit_notice');
+  loadKitNotice();
+  const inp=document.getElementById('admin-notice-input');
+  if(inp) inp.value=KIT_NOTICE_DEFAULT;
+  alert('기본값으로 복원되었습니다.');
 }
 
 // ── 앱 초기화 ──
