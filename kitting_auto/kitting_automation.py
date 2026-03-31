@@ -696,13 +696,14 @@ def navigate_and_download_inventory(app):
     pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
 
-    # ── Tab×3 → 수원부품창고 키보드 타이핑 → Enter ───────────────────────────
-    log("  Tab×3 → '수원부품창고' 타이핑 → Enter...")
+    # ── Tab×3 → ↓3 → Enter ───────────────────────────────────────────────────
+    log("  Tab×3 → ↓3 → Enter...")
     for _ in range(3):
         pyautogui.press('tab')
         time.sleep(0.2)
-    pyautogui.write('수원부품창고', interval=0.05)
-    time.sleep(0.3)
+    for _ in range(3):
+        pyautogui.press('down')
+        time.sleep(0.15)
     pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
 
