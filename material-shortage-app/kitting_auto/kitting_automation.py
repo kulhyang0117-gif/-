@@ -1097,7 +1097,8 @@ def _download_by_keyboard(win):
 
     downloaded = 0
     same_count = 0
-    region = (ROW_X - 200, 140, 500, 400)  # 더 넓은 영역으로 스크롤 감지
+    last_sel_y = ROW_Y          # 마지막으로 감지된 행 Y — 탐지 실패 시 재사용
+    region = (ROW_X - 200, 140, 500, 400)
 
     for i in range(500):
         check_stop()   # 긴급정지 확인
@@ -1106,19 +1107,28 @@ def _download_by_keyboard(win):
         if success:
             downloaded += 1
 
-        # MES 창 포커스 복귀
-        win.set_focus(); time.sleep(0.3)
+        # MES 창 포커스 복귀 — SetForegroundWindow 실패해도 계속 진행
+        try:
+            win.set_focus()
+        except Exception as e:
+            log(f"    ⚠️  set_focus 실패({e}) → pyautogui 클릭으로 대체")
+            try:
+                pyautogui.click(ROW_X, last_sel_y)
+            except Exception:
+                pass
+        time.sleep(0.3)
 
         before = pyautogui.screenshot(region=region)
 
         # 현재 선택된 행 좌표 탐지 (색상 기반)
         sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=560, row_height=ROW_HEIGHT)
         if sel_y is not None:
+            last_sel_y = sel_y   # 성공 시 갱신
             log(f"    품목명 좌표 감지: ({ROW_X}, {sel_y}) → 클릭 후 ↓")
             pyautogui.click(ROW_X, sel_y)
         else:
-            log(f"    품목명 좌표 감지 실패 → 기본 Y 클릭: ({ROW_X}, {ROW_Y})")
-            pyautogui.click(ROW_X, ROW_Y)
+            # 탐지 실패 → 마지막 성공 좌표 유지 (ROW_Y 고정 클릭 금지 — 행 리셋 방지)
+            log(f"    품목명 좌표 감지 실패 → 마지막 위치 유지 ({ROW_X}, {last_sel_y}), ↓만 진행")
 
         time.sleep(0.2)
         pyautogui.press('down')   # 다음 품목으로 이동
@@ -1126,7 +1136,7 @@ def _download_by_keyboard(win):
 
         after = pyautogui.screenshot(region=region)
 
-        # 스크린샷 동일 → 3회 연속 확인 후 종료 (일시적 화면 정지 방지)
+        # 스크린샷 동일 → 3회 연속 확인 후 종료
         if before.tobytes() == after.tobytes():
             same_count += 1
             log(f"    화면 변화 없음 ({same_count}/3)")
