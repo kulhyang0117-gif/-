@@ -850,15 +850,16 @@ def navigate_and_download(app):
         if clicked:
             log("  ✅ child_window 탐색 성공")
 
-    # Method 3: 창 좌표 기준 메뉴바 클릭 (C1MainMenu 4번째 항목)
+    # Method 3: 창 좌표 기준 메뉴바 클릭 (생산관리 = 3번째 항목)
+    # 이미지 기준: System(~40) → 기본정보관리(~100) → 생산관리(~160~175)
     # 최대화 창은 rect.top/left 가 음수 → max()로 화면 내 좌표 보정
     if not clicked:
         try:
             rect = main_win.rectangle()
-            # 최대화 창: rect.top이 -8~-12 → 실제 메뉴바는 화면 Y=7 근처
-            menu_y = max(rect.top + 7, 7)
+            # 최대화 창: rect.top이 -8~-12 → 타이틀바(~22) 아래 메뉴바는 화면 Y=42 근처
+            menu_y = max(rect.top + 42, 42)
             visible_left = max(rect.left, 0)
-            for x_offset in [200, 220, 240, 180, 260]:
+            for x_offset in [360, 355, 370, 345, 375]:
                 menu_x = visible_left + x_offset
                 pyautogui.click(menu_x, menu_y)
                 time.sleep(0.5)
@@ -882,15 +883,22 @@ def navigate_and_download(app):
     pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
 
-    # ── 생산일자 설정 ──────────────────────────────────────────────────────
+    # ── 생산일자 설정 (Tab x2 → 날짜입력 → Tab x5 → Enter) ───────────────
     log(f"  생산일자 설정: {TODAY}")
-    set_date(main_win)
-
-    # ── 조회 클릭 ─────────────────────────────────────────────────────────
-    log("  조회 버튼 클릭...")
-    if not _try_click(main_win, ["조회", "검색", "Search"]):
-        log("  ⚠️  수동으로 '조회'를 클릭해주세요.")
-        input("  조회 완료 후 Enter → ")
+    import pyautogui
+    # Tab 5회: 생산일자 필드로 포커스 이동
+    for _ in range(5):
+        pyautogui.press('tab'); time.sleep(0.15)
+    # 날짜 전체 선택 후 당일 날짜 입력 (YYYY-MM-DD)
+    pyautogui.hotkey('ctrl', 'a'); time.sleep(0.1)
+    pyautogui.typewrite(TODAY, interval=0.05)
+    log(f"  날짜 입력 완료: {TODAY}")
+    time.sleep(0.2)
+    # Tab 5회: 조회 버튼으로 포커스 이동
+    for _ in range(5):
+        pyautogui.press('tab'); time.sleep(0.15)
+    # Enter: 조회 실행
+    pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
     log("  ✅ 조회 완료")
 
@@ -940,153 +948,183 @@ def _try_click(win, candidates):
     return False
 
 
-def download_all_items(win):
+def _find_selected_row_y(col_x, grid_top=150, grid_bottom=560, row_height=22):
+    """
+    그리드에서 현재 선택된(하이라이트) 행의 Y 좌표를 색상으로 탐지.
+    Windows 기본 선택색(파란 계열) 기준으로 열 X를 세로 스캔.
+    """
     import pyautogui
-    downloaded_files = []
 
-    # 그리드 행 찾기 시도
-    rows = []
-    for ct in ["DataItem", "ListItem", "TreeItem", "Custom"]:
+    h = grid_bottom - grid_top
+    region = (col_x - 5, grid_top, 10, h)
+    try:
+        img = pyautogui.screenshot(region=region)
+    except Exception:
+        return None
+
+    # row_height 단위로 각 행의 평균 '파란색 점수' 계산
+    row_scores = {}
+    for y in range(h):
+        row_idx = y // row_height
         try:
-            candidates = win.children(control_type=ct)
-            if len(candidates) > 0:
-                rows = candidates
-                log(f"  그리드 행 {len(rows)}개 발견 (type={ct})")
-                break
+            pixel = img.getpixel((5, y))
+            r, g, b = pixel[0], pixel[1], pixel[2]
         except Exception:
-            pass
+            continue
+        blue_score = b - (r + g) / 2   # 파란색이 강할수록 높음
+        row_scores.setdefault(row_idx, []).append(blue_score)
 
-    if rows:
-        for i, row in enumerate(rows):
-            try:
-                item_name = row.window_text().strip() or f"item_{i+1:03d}"
-                log(f"  [{i+1}/{len(rows)}] {item_name}")
-                row.click_input()
-                time.sleep(STEP_DELAY)
+    if not row_scores:
+        return None
 
-                saved = _click_excel_download(win, i + 1, item_name)
-                if saved:
-                    downloaded_files.append(saved)
-            except Exception as e:
-                log(f"    ⚠️  [{i+1}] 실패: {e}")
-    else:
-        # 행을 못 찾은 경우: 키보드 Down 방식
-        log("  그리드 행 감지 실패 → 키보드 Down 방식으로 전환")
-        downloaded_files = _download_by_keyboard(win)
+    # 평균 blue_score 최대 행
+    best_row, scores = max(row_scores.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))
+    avg = sum(scores) / len(scores)
+    if avg < 20:          # 임계값 미달 → 감지 실패
+        return None
 
-    log(f"  ✅ {len(downloaded_files)}개 파일 다운로드 완료")
-    return downloaded_files
+    selected_y = grid_top + best_row * row_height + row_height // 2
+    return selected_y
+
+
+def download_all_items(win):
+    # 좌표 기준 첫 번째 행 클릭 후 Down 방식으로 전체 다운로드
+    log("  좌표 기준 첫 번째 행 클릭 후 다운로드 시작...")
+    count = _download_by_keyboard(win)
+    log(f"  ✅ {count}개 파일 다운로드 완료")
+    # 실제 파일 목록은 DOWNLOAD_DIR 스캔으로 반환 (automate_upload에서 사용)
+    return []
 
 
 def _click_excel_download(win, idx, item_name):
     """Excel 다운로드 버튼 클릭 및 저장"""
     import pyautogui
-    from pywinauto import Desktop
+    import pyperclip
+    import win32gui
+
+    # 클릭 전 창 목록 수집
+    hwnds_before = set()
+    win32gui.EnumWindows(lambda h, _: hwnds_before.add(h), None)
 
     # Excel 버튼 클릭
-    if not _try_click(win, ["Excel 다운로드", "Excel", "엑셀", "엑셀 다운로드", "Export", "EXCEL"]):
-        log(f"    ⚠️  Excel 버튼 미발견. 수동 저장 후 Enter → ")
-        input()
-        latest = _find_latest_download()
-        if latest:
-            dest = DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}.xlsx"
-            import shutil; shutil.move(str(latest), str(dest))
-            return str(dest)
-        return None
+    pyautogui.click(365, 538)
+    log(f"    Excel 좌표 클릭: (365, 538)")
 
-    time.sleep(EXCEL_DELAY)
+    # 저장 다이얼로그 등장 여부 확인 (최대 3초)
+    dialog_hwnd = None
+    for _ in range(6):
+        time.sleep(0.5)
+        hwnds_after = set()
+        win32gui.EnumWindows(lambda h, _: hwnds_after.add(h), None)
+        for h in hwnds_after - hwnds_before:
+            try:
+                title = win32gui.GetWindowText(h)
+                if any(k in title for k in ["저장", "Save", "다른 이름"]):
+                    dialog_hwnd = h
+                    break
+            except Exception:
+                pass
+        if dialog_hwnd:
+            break
 
-    # 저장 다이얼로그 처리
-    save_path = str(DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}.xlsx")
-    if _handle_save_dialog(save_path):
-        log(f"    ✅ 저장: {Path(save_path).name}")
-        return save_path
+    if dialog_hwnd is None:
+        log(f"    ⚠️  [{idx}] 저장 창 없음 → 키팅 자재 없음, 다음 품목으로")
+        return False   # 다운로드 없음
 
-    # 다이얼로그 없이 자동 저장된 경우 — Downloads 폴더에서 이동
-    latest = _find_latest_download()
-    if latest:
-        import shutil
-        dest = DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}.xlsx"
-        shutil.move(str(latest), str(dest))
-        log(f"    ✅ 이동: {dest.name}")
-        return str(dest)
+    # 저장 다이얼로그 포커스 → Alt+D → Ctrl+V → Alt+S
+    try:
+        win32gui.SetForegroundWindow(dialog_hwnd)
+    except Exception:
+        pass
+    time.sleep(0.4)
 
-    return None
+    save_folder = str(DOWNLOAD_DIR)
+    pyperclip.copy(save_folder)
+    pyautogui.hotkey('alt', 'd'); time.sleep(0.4)
+    pyautogui.hotkey('ctrl', 'v'); time.sleep(0.3)
+    pyautogui.hotkey('alt', 's')
+    log(f"    ✅ [{idx}] 저장 완료 → {save_folder}")
+
+    time.sleep(LOAD_DELAY)
+
+    # Excel 창 닫기 (Alt+F4)
+    try:
+        excel_hwnds = []
+        def _collect_excel(hwnd, _):
+            title = win32gui.GetWindowText(hwnd)
+            cls   = win32gui.GetClassName(hwnd)
+            if win32gui.IsWindowVisible(hwnd) and (
+                'Excel' in title or cls.startswith('XLMAIN')
+            ):
+                excel_hwnds.append(hwnd)
+        win32gui.EnumWindows(_collect_excel, None)
+        for hwnd in excel_hwnds:
+            win32gui.SetForegroundWindow(hwnd)
+            time.sleep(0.3)
+            pyautogui.hotkey('alt', 'f4')
+            time.sleep(0.8)
+            # 저장 여부 묻는 경우 '저장 안 함(N)' 처리
+            pyautogui.press('n')
+            time.sleep(0.3)
+            log(f"    Excel 창 닫기 완료")
+    except Exception as e:
+        log(f"    ⚠️  Excel 닫기 실패: {e}")
+
+    return True   # 다운로드 성공
 
 
 def _download_by_keyboard(win):
     import pyautogui
-    downloaded = []
-    win.set_focus()
-    time.sleep(0.3)
-    pyautogui.hotkey('ctrl', 'Home')
-    time.sleep(0.3)
 
-    for i in range(200):
+    ROW_X      = 1000   # 품목명 컬럼 X (절대 좌표)
+    ROW_Y      = 165    # 첫 번째 행 Y (절대 좌표)
+    ROW_HEIGHT = 22     # 행 높이 픽셀 — 실제 MES 행 높이에 맞게 조정
+
+    # 첫 번째 행 클릭 — 루프 시작 전 딱 한 번만
+    win.set_focus(); time.sleep(0.3)
+    pyautogui.click(ROW_X, ROW_Y)
+    log(f"  첫 번째 행 클릭: ({ROW_X}, {ROW_Y})")
+    time.sleep(0.5)
+
+    downloaded = 0
+    region = (ROW_X - 200, 140, 500, 300)
+
+    for i in range(500):
         log(f"  [{i+1}] Excel 다운로드 시도...")
-        saved = _click_excel_download(win, i + 1, f"kitting_{i+1:03d}")
-        if saved:
-            downloaded.append(saved)
+        success = _click_excel_download(win, i + 1, "")
+        if success:
+            downloaded += 1
+
+        # MES 창 포커스 복귀
+        win.set_focus(); time.sleep(0.3)
+
+        before = pyautogui.screenshot(region=region)
+
+        # 현재 선택된 행 좌표 탐지 (색상 기반)
+        sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=560, row_height=ROW_HEIGHT)
+        if sel_y is not None:
+            log(f"    품목명 좌표 감지: ({ROW_X}, {sel_y}) → 클릭 후 ↓")
+            pyautogui.click(ROW_X, sel_y)
         else:
-            break
-        pyautogui.press('down')
+            log(f"    품목명 좌표 감지 실패 → 기본 Y 클릭: ({ROW_X}, {ROW_Y})")
+            pyautogui.click(ROW_X, ROW_Y)
+
+        time.sleep(0.2)
+        pyautogui.press('down')   # 다음 품목으로 이동
         time.sleep(0.5)
+
+        after = pyautogui.screenshot(region=region)
+
+        # 스크린샷이 동일 → 더 이상 내려갈 행 없음 → 완료
+        if before.tobytes() == after.tobytes():
+            log(f"  ✅ 마지막 행 도달 — 전체 {downloaded}개 다운로드 완료")
+            break
+    else:
+        log(f"  ✅ 최대 반복 도달 — 전체 {downloaded}개 다운로드 완료")
 
     return downloaded
 
 
-def _handle_save_dialog(save_path):
-    """Windows 저장 다이얼로그 자동 처리"""
-    import pyautogui
-    from pywinauto import Desktop
-
-    desktop = Desktop(backend='uia')
-    for _ in range(20):
-        try:
-            dlg = desktop.window(title_re=".*(저장|Save As|다른 이름).*")
-            if dlg.exists(timeout=0.5):
-                dlg.set_focus()
-                time.sleep(0.3)
-                try:
-                    fn_edit = dlg.child_window(control_type="Edit", found_index=0)
-                    fn_edit.set_edit_text(save_path)
-                except Exception:
-                    pyautogui.hotkey('ctrl', 'a')
-                    time.sleep(0.1)
-                    pyautogui.write(save_path, interval=0.02)
-                time.sleep(0.3)
-                pyautogui.press('enter')
-                time.sleep(1.5)
-                # 덮어쓰기 확인
-                try:
-                    conf = desktop.window(title_re=".*(덮어|overwrite|Confirm).*")
-                    if conf.exists(timeout=1):
-                        pyautogui.press('enter')
-                except Exception:
-                    pass
-                return True
-        except Exception:
-            pass
-        time.sleep(0.5)
-    return False
-
-
-def _find_latest_download():
-    """Downloads 폴더 최근 xlsx 파일"""
-    dl_dir = Path.home() / "Downloads"
-    files = list(dl_dir.glob("*.xlsx")) + list(dl_dir.glob("*.xls"))
-    if not files:
-        return None
-    f = max(files, key=lambda x: x.stat().st_mtime)
-    # 5초 이내에 생성된 파일만
-    if time.time() - f.stat().st_mtime < 30:
-        return f
-    return None
-
-
-def _safe(name):
-    import re
-    return re.sub(r'[\\/:*?"<>|]', '_', name)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1183,6 +1221,18 @@ def main():
         return
 
     try:
+        # Step 0: 기존 키팅 파일 전체 삭제
+        log("▶ Step 0: 기존 키팅 파일 삭제...")
+        deleted = 0
+        for f in DOWNLOAD_DIR.iterdir():
+            if f.is_file():
+                try:
+                    f.unlink()
+                    deleted += 1
+                except Exception as e:
+                    log(f"  ⚠️  삭제 실패: {f.name} → {e}")
+        log(f"  ✅ {deleted}개 파일 삭제 완료")
+
         # Step 1: sMES 실행
         launch_smes()
 

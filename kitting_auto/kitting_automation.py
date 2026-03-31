@@ -404,39 +404,61 @@ def _try_click(win, candidates):
     return False
 
 
+def _find_selected_row_y(col_x, grid_top=150, grid_bottom=560, row_height=22):
+    """
+    그리드에서 현재 선택된(하이라이트) 행의 Y 좌표를 색상으로 탐지.
+    Windows 기본 선택색(파란 계열) 기준으로 열 X를 세로 스캔.
+    """
+    import pyautogui
+
+    h = grid_bottom - grid_top
+    region = (col_x - 5, grid_top, 10, h)
+    try:
+        img = pyautogui.screenshot(region=region)
+    except Exception:
+        return None
+
+    row_scores = {}
+    for y in range(h):
+        row_idx = y // row_height
+        try:
+            pixel = img.getpixel((5, y))
+            r, g, b = pixel[0], pixel[1], pixel[2]
+        except Exception:
+            continue
+        blue_score = b - (r + g) / 2
+        row_scores.setdefault(row_idx, []).append(blue_score)
+
+    if not row_scores:
+        return None
+
+    best_row, scores = max(row_scores.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))
+    avg = sum(scores) / len(scores)
+    if avg < 20:
+        return None
+
+    return grid_top + best_row * row_height + row_height // 2
+
+
 def download_all_items(win):
     import pyautogui
-    downloaded_files = []
 
-    # 그리드 행 찾기 시도
-    rows = []
+    # 그리드 첫 번째 행만 클릭 (선택 상태 만들기)
+    # children()은 화면에 보이는 행만 반환하므로 전체 순회에 사용 불가
     for ct in ["DataItem", "ListItem", "TreeItem", "Custom"]:
         try:
             candidates = win.children(control_type=ct)
             if len(candidates) > 0:
-                rows = candidates
-                log(f"  그리드 행 {len(rows)}개 발견 (type={ct})")
+                log(f"  그리드 첫 행 클릭 (type={ct}, 화면 표시 {len(candidates)}개)")
+                candidates[0].click_input()
+                time.sleep(0.5)
                 break
         except Exception:
             pass
 
-    if rows:
-        for i, row in enumerate(rows):
-            try:
-                item_name = row.window_text().strip() or f"item_{i+1:03d}"
-                log(f"  [{i+1}/{len(rows)}] {item_name}")
-                row.click_input()
-                time.sleep(STEP_DELAY)
-
-                saved = _click_excel_download(win, i + 1, item_name)
-                if saved:
-                    downloaded_files.append(saved)
-            except Exception as e:
-                log(f"    ⚠️  [{i+1}] 실패: {e}")
-    else:
-        # 행을 못 찾은 경우: 키보드 Down 방식
-        log("  그리드 행 감지 실패 → 키보드 Down 방식으로 전환")
-        downloaded_files = _download_by_keyboard(win)
+    # 키보드 Down 방식으로 전체 품목 순환 — 스크롤도 자동 처리됨
+    log("  키보드 Down 방식으로 전체 품목 다운로드 시작...")
+    downloaded_files = _download_by_keyboard(win)
 
     log(f"  ✅ {len(downloaded_files)}개 파일 다운로드 완료")
     return downloaded_files
@@ -447,21 +469,15 @@ def _click_excel_download(win, idx, item_name):
     import pyautogui
     from pywinauto import Desktop
 
-    # Excel 버튼 클릭
+    # Excel 버튼 클릭 — 미발견 시 input() 차단 없이 자동 건너뜀
     if not _try_click(win, ["Excel 다운로드", "Excel", "엑셀", "엑셀 다운로드", "Export", "EXCEL"]):
-        log(f"    ⚠️  Excel 버튼 미발견. 수동 저장 후 Enter → ")
-        input()
-        latest = _find_latest_download()
-        if latest:
-            dest = DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}.xlsx"
-            import shutil; shutil.move(str(latest), str(dest))
-            return str(dest)
+        log(f"    ⚠️  [{idx}] Excel 버튼 미발견 — 건너뜀")
         return None
 
     time.sleep(EXCEL_DELAY)
 
-    # 저장 다이얼로그 처리
-    save_path = str(DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}.xlsx")
+    # 저장 다이얼로그 처리 — idx 포함으로 파일명 중복 방지
+    save_path = str(DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}_{idx:03d}.xlsx")
     if _handle_save_dialog(save_path):
         log(f"    ✅ 저장: {Path(save_path).name}")
         return save_path
@@ -470,31 +486,65 @@ def _click_excel_download(win, idx, item_name):
     latest = _find_latest_download()
     if latest:
         import shutil
-        dest = DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}.xlsx"
+        dest = DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}_{idx:03d}.xlsx"
         shutil.move(str(latest), str(dest))
         log(f"    ✅ 이동: {dest.name}")
         return str(dest)
 
+    log(f"    ⚠️  [{idx}] 파일 저장 실패 — 건너뜀")
     return None
 
 
 def _download_by_keyboard(win):
     import pyautogui
-    downloaded = []
-    win.set_focus()
-    time.sleep(0.3)
-    pyautogui.hotkey('ctrl', 'Home')
-    time.sleep(0.3)
 
-    for i in range(200):
+    ROW_X      = 1000   # 품목명 컬럼 X (절대 좌표)
+    ROW_Y      = 165    # 첫 번째(선택) 행 Y (절대 좌표)
+    ROW_HEIGHT = 22     # 행 높이 픽셀 — 실제 MES 그리드 행 높이에 맞게 조정
+
+    win.set_focus(); time.sleep(0.3)
+    pyautogui.click(ROW_X, ROW_Y)
+    log(f"  첫 번째 행 클릭: ({ROW_X}, {ROW_Y})")
+    time.sleep(0.5)
+
+    downloaded = []
+    region = (ROW_X - 200, 140, 500, 300)
+    same_count = 0   # 연속으로 화면 변화 없는 횟수 카운트
+
+    for i in range(500):   # 200 → 500으로 확장 (전 품목 완료 보장)
         log(f"  [{i+1}] Excel 다운로드 시도...")
         saved = _click_excel_download(win, i + 1, f"kitting_{i+1:03d}")
         if saved:
             downloaded.append(saved)
-        else:
-            break
-        pyautogui.press('down')
+
+        # 포커스를 창으로만 복귀 — 고정 Y 클릭 금지 (행 선택 초기화 방지)
+        win.set_focus()
+        time.sleep(0.4)
+
+        before = pyautogui.screenshot(region=region)
+
+        # 현재 선택된 행에만 클릭 (색상 탐지 성공 시) — 실패 시 클릭 없이 Down만
+        sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=560, row_height=ROW_HEIGHT)
+        if sel_y is not None:
+            log(f"    현재 선택 행 클릭: ({ROW_X}, {sel_y}) → ↓")
+            pyautogui.click(ROW_X, sel_y)
+            time.sleep(0.2)
+
+        pyautogui.press('down')   # 다음 품목으로 이동
         time.sleep(0.5)
+        after = pyautogui.screenshot(region=region)
+
+        # 스크린샷이 동일 → 더 이상 내려갈 행 없음 확인 (3회 연속 동일 시 완료)
+        if list(before.getdata()) == list(after.getdata()):
+            same_count += 1
+            log(f"    화면 변화 없음 ({same_count}/3)")
+            if same_count >= 3:
+                log(f"  ✅ 마지막 행 도달 — 전체 {len(downloaded)}개 다운로드 완료")
+                break
+        else:
+            same_count = 0   # 화면 변화 있으면 카운트 초기화
+    else:
+        log(f"  ✅ 최대 반복 도달 — 전체 {len(downloaded)}개 다운로드 완료")
 
     return downloaded
 
