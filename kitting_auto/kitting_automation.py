@@ -752,13 +752,42 @@ def automate_upload(downloaded_files):
         return
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=False,
-            args=["--start-maximized", "--disable-web-security"]
-        )
-        page = browser.new_context(no_viewport=True).new_page()
-        page.goto("https://material-shortage.vercel.app/", timeout=30000)
-        page.wait_for_load_state("networkidle", timeout=15000)
+        page = None
+        is_cdp = False
+
+        # ── 1순위: 이미 열린 브라우저에 CDP 연결 ────────────────────────────
+        try:
+            browser = p.chromium.connect_over_cdp("http://localhost:9222")
+            is_cdp = True
+            log("  ✅ 기존 브라우저 CDP 연결 성공")
+
+            # 이미 열린 앱 탭 찾기
+            for ctx in browser.contexts:
+                for pg in ctx.pages:
+                    if "material-shortage" in pg.url:
+                        page = pg
+                        page.bring_to_front()
+                        log("  ✅ 기존 앱 탭 사용")
+                        break
+                if page:
+                    break
+
+            # 앱 탭 없으면 새 탭 열기
+            if not page:
+                ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+                page = ctx.new_page()
+                page.goto("https://material-shortage.vercel.app/", timeout=30000)
+                page.wait_for_load_state("networkidle", timeout=15000)
+
+        except Exception as e:
+            log(f"  CDP 연결 실패({e}) → 새 브라우저 실행")
+            browser = p.chromium.launch(
+                headless=False,
+                args=["--start-maximized", "--disable-web-security"]
+            )
+            page = browser.new_context(no_viewport=True).new_page()
+            page.goto("https://material-shortage.vercel.app/", timeout=30000)
+            page.wait_for_load_state("networkidle", timeout=15000)
 
         # 로그인 (이미 로그인 상태면 스킵)
         if page.locator(".btn-logout").is_visible():
@@ -804,10 +833,14 @@ def automate_upload(downloaded_files):
         """)
 
         log("✅ 전체 자동화 완료!")
-        try:
-            page.wait_for_timeout(60000)
-        except Exception:
-            pass
+
+        # CDP 연결은 브라우저를 닫지 않음 — 새 브라우저는 60초 후 종료
+        if not is_cdp:
+            try:
+                page.wait_for_timeout(60000)
+            except Exception:
+                pass
+            browser.close()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
