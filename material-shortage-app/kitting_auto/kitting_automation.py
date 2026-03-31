@@ -1242,17 +1242,31 @@ def navigate_and_download_inventory(app):
     pyautogui.press('enter')
     time.sleep(EXCEL_DELAY)
 
-    # ── Ctrl+S → 저장 / Ctrl+W → Excel 현재 창 닫기 ─────────────────────────
-    log("  Ctrl+S → 저장...")
-    pyautogui.hotkey('ctrl', 's')
-    time.sleep(1.5)
+    # ── Save As 다이얼로그: 재고현황+현재시간 으로 저장 ───────────────────────
+    file_name = f"재고현황{datetime.now().strftime('%H%M%S')}"
+    save_path = str(INVENTORY_DIR / f"{file_name}.xlsx")
+    log(f"  Save As 다이얼로그 처리: {file_name}.xlsx")
 
+    if _handle_save_dialog(save_path):
+        log(f"  ✅ 저장 완료: {file_name}.xlsx")
+    else:
+        # 자동 저장된 경우 Downloads에서 이동
+        latest = _find_latest_download()
+        if latest:
+            import shutil
+            dest = INVENTORY_DIR / f"{file_name}.xlsx"
+            shutil.move(str(latest), str(dest))
+            log(f"  ✅ 이동 완료: {dest.name}")
+        else:
+            log("  ⚠️  재고현황 파일 저장 실패")
+
+    # ── Ctrl+W → Excel 현재 창 닫기 ─────────────────────────────────────────
     log("  Ctrl+W → Excel 창 닫기...")
     pyautogui.hotkey('ctrl', 'w')
     time.sleep(0.5)
 
     log("  ✅ 재고현황 저장 및 닫기 완료")
-    return str(INVENTORY_DIR)
+    return save_path
 
 
 # ──────────────────────────────────────────────────────────────────────────────
