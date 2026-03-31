@@ -721,60 +721,17 @@ def navigate_and_download_inventory(app):
     pyautogui.press('enter')
     time.sleep(EXCEL_DELAY)
 
-    # ── 저장 다이얼로그: 파일명 입력 → Alt+D → Ctrl+V → Enter → Alt+S ────────
-    import win32clipboard
-    file_time = datetime.now().strftime("%H%M%S")
-    file_name = f"재고현황{file_time}"
-    folder_path = str(INVENTORY_DIR)
-
-    log(f"  저장 다이얼로그 처리: '{file_name}.xlsx'")
-
-    # 폴더 경로를 클립보드에 복사
-    win32clipboard.OpenClipboard()
-    win32clipboard.EmptyClipboard()
-    win32clipboard.SetClipboardText(folder_path, win32clipboard.CF_UNICODETEXT)
-    win32clipboard.CloseClipboard()
-    time.sleep(0.3)
-
-    # 파일명 입력 (기존 텍스트 전체 선택 후 덮어쓰기)
-    pyautogui.hotkey('ctrl', 'a')
-    time.sleep(0.1)
-    pyautogui.write(file_name, interval=0.05)
-    time.sleep(0.3)
-
-    # Alt+D → 주소창으로 이동
-    pyautogui.hotkey('alt', 'd')
-    time.sleep(0.3)
-
-    # Ctrl+V → 폴더 경로 붙여넣기
-    pyautogui.hotkey('ctrl', 'v')
-    time.sleep(0.3)
-
-    # Enter → 폴더 이동
-    pyautogui.press('enter')
+    # ── Ctrl+S → 저장 / Ctrl+W → Excel 현재 창 닫기 ─────────────────────────
+    log("  Ctrl+S → 저장...")
+    pyautogui.hotkey('ctrl', 's')
     time.sleep(1.5)
 
-    # Alt+S → 저장
-    pyautogui.hotkey('alt', 's')
-    time.sleep(1.5)
-
-    # Ctrl+W → Excel 현재 창 닫기
+    log("  Ctrl+W → Excel 창 닫기...")
     pyautogui.hotkey('ctrl', 'w')
     time.sleep(0.5)
 
-    # 덮어쓰기 확인 팝업 처리
-    try:
-        from pywinauto import Desktop as _Desktop
-        conf = _Desktop(backend='uia').window(title_re=".*(덮어|overwrite|Confirm).*")
-        if conf.exists(timeout=2):
-            pyautogui.press('enter')
-            time.sleep(0.5)
-    except Exception:
-        pass
-
-    save_path = str(INVENTORY_DIR / f"{file_name}.xlsx")
-    log(f"  ✅ 저장 완료: {file_name}.xlsx")
-    return save_path
+    log("  ✅ 재고현황 저장 및 닫기 완료")
+    return str(INVENTORY_DIR)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
