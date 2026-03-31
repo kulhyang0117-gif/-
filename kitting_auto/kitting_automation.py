@@ -692,12 +692,12 @@ def navigate_and_download_inventory(app):
     pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
 
-    # ── Tab×3 → 수원부품창고 → Enter ─────────────────────────────────────────
-    log("  Tab×3 → '수원부품창고' 입력 → Enter...")
+    # ── Tab×3 → 수원부품창고 키보드 타이핑 → Enter ───────────────────────────
+    log("  Tab×3 → '수원부품창고' 타이핑 → Enter...")
     for _ in range(3):
         pyautogui.press('tab')
         time.sleep(0.2)
-    _paste_text("수원부품창고")
+    pyautogui.write('수원부품창고', interval=0.05)
     time.sleep(0.3)
     pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
@@ -710,9 +710,11 @@ def navigate_and_download_inventory(app):
     pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
 
-    # ── Tab×1 → Excel 다운로드 ───────────────────────────────────────────────
-    log("  Tab×1 → Excel 다운로드...")
+    # ── Tab×1 → Enter → Excel 다운로드 ──────────────────────────────────────
+    log("  Tab×1 → Enter → Excel 다운로드...")
     pyautogui.press('tab')
+    time.sleep(0.3)
+    pyautogui.press('enter')
     time.sleep(EXCEL_DELAY)
 
     # 저장 다이얼로그 처리
