@@ -19,6 +19,7 @@ SMES_EXE     = Path(r"C:\Program Files (x86)\I2R\sMES\sMES.exe")
 DOWNLOAD_DIR   = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
 INVENTORY_DIR  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\재고현황")
 HTML_FILE      = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
+STOP_FLAG      = Path(__file__).parent / "stop_flag.txt"
 
 SMES_ID      = "SSAT045"
 SMES_PW      = "rlatndus1!"
@@ -38,6 +39,13 @@ EXCEL_DELAY  = 5.0
 # ──────────────────────────────────────────────────────────────────────────────
 def log(msg):
     print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
+
+def check_stop():
+    """긴급정지 플래그 파일이 있으면 삭제 후 StopIteration 발생"""
+    if STOP_FLAG.exists():
+        STOP_FLAG.unlink(missing_ok=True)
+        log("🛑 긴급정지 요청 감지 — 자동화를 중단합니다.")
+        raise StopIteration("긴급정지")
 
 def is_admin():
     try: return ctypes.windll.shell32.IsUserAnAdmin()
@@ -1088,9 +1096,11 @@ def _download_by_keyboard(win):
     time.sleep(0.5)
 
     downloaded = 0
-    region = (ROW_X - 200, 140, 500, 300)
+    same_count = 0
+    region = (ROW_X - 200, 140, 500, 400)  # 더 넓은 영역으로 스크롤 감지
 
     for i in range(500):
+        check_stop()   # 긴급정지 확인
         log(f"  [{i+1}] Excel 다운로드 시도...")
         success = _click_excel_download(win, i + 1, "")
         if success:
@@ -1116,10 +1126,15 @@ def _download_by_keyboard(win):
 
         after = pyautogui.screenshot(region=region)
 
-        # 스크린샷이 동일 → 더 이상 내려갈 행 없음 → 완료
+        # 스크린샷 동일 → 3회 연속 확인 후 종료 (일시적 화면 정지 방지)
         if before.tobytes() == after.tobytes():
-            log(f"  ✅ 마지막 행 도달 — 전체 {downloaded}개 다운로드 완료")
-            break
+            same_count += 1
+            log(f"    화면 변화 없음 ({same_count}/3)")
+            if same_count >= 3:
+                log(f"  ✅ 마지막 행 도달 — 전체 {downloaded}개 다운로드 완료")
+                break
+        else:
+            same_count = 0
     else:
         log(f"  ✅ 최대 반복 도달 — 전체 {downloaded}개 다운로드 완료")
 
@@ -1425,37 +1440,15 @@ def automate_upload(downloaded_files):
                 log(f"  ⚠️  로그인 실패: {e}")
                 input("  수동 로그인 후 Enter → ")
 
-        # 키팅 로컬 상태 초기화 (Supabase에는 쓰지 않음 — 업로드 시 덮어쓰기)
+        # 키팅 로컬 상태 초기화 — const state는 window.state로 접근 불가, clearKitFiles() 함수 사용
         log("  키팅 로컬 상태 초기화...")
         try:
-            page.evaluate("""
-                () => {
-                    window.state.kitFiles = [];
-                    if (window.dbPut) window.dbPut('kit_list', []);
-                    if (window.renderKitChips) window.renderKitChips();
-                    if (window.checkReady) window.checkReady();
-                    localStorage.removeItem('ms_uptime_kit');
-                    localStorage.removeItem('ms_uploader_kit');
-                    const el = document.getElementById('uptime-kit');
-                    if (el) el.textContent = '';
-                }
-            """)
+            page.evaluate("() => { if (typeof clearKitFiles === 'function') clearKitFiles(); }")
         except Exception as e:
             log(f"  ⚠️  초기화 평가 오류: {e}")
+        time.sleep(1)
 
-        # 재고현황 최신 파일 업로드
-        inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
-        inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if inv_files:
-            latest_inv = str(inv_files[0])
-            log(f"  재고현황 업로드: {inv_files[0].name}")
-            page.locator("#file-inv").set_input_files(latest_inv)
-            time.sleep(3)
-            log("  ✅ 재고현황 업로드 완료")
-        else:
-            log("  ⚠️  재고현황 폴더에 파일 없음")
-
-        # 키팅된 자재 — kitting 자재 폴더 전체 파일 업로드
+        # ── 키팅 자재 업로드 (먼저) ──────────────────────────────────────────
         all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
         all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
         valid = [str(f) for f in all_kit if f.exists()]
@@ -1463,52 +1456,73 @@ def automate_upload(downloaded_files):
         if valid:
             page.locator("#file-kit").set_input_files(valid)
 
-            # 칩 렌더링 대기 (파일이 state에 로드됐을 때)
-            try:
-                page.wait_for_selector('.kit-chip', timeout=15000)
-                log("  파일 처리 완료 — Supabase 저장 중...")
-            except Exception:
-                time.sleep(5)
+            # kit-chip 렌더링 + state.kitFiles 채워질 때까지 폴링 (최대 30초)
+            log("  파일 처리 완료 대기 중...")
+            deadline = time.time() + 30
+            loaded = 0
+            while time.time() < deadline:
+                time.sleep(1)
+                try:
+                    loaded = page.evaluate("() => { try { return state.kitFiles.length; } catch(e) { return 0; } }")
+                    if loaded >= len(valid):
+                        break
+                except Exception:
+                    pass
+            log(f"  state.kitFiles 로드 완료: {loaded}개")
 
-            # Storage 업로드 + upload_logs 동기화를 await로 명시적 완료
+            # handleKitFiles 내부에서 이미 Supabase 업로드가 시작됨 → 완료까지 추가 대기
+            time.sleep(5)
+
+            # upload_logs 동기화 확인 (선택적)
             try:
                 result = page.evaluate("""
                     async () => {
-                        const files = (window.state && window.state.kitFiles) || [];
+                        const files = (typeof state !== 'undefined' && state.kitFiles) ? state.kitFiles : [];
                         if (!files.length) return { ok: false, reason: 'state.kitFiles 비어있음' };
-                        const results = [];
-                        for (const f of files) {
-                            const r = await window.uploadFileToStorage('kit/' + f.name, f.rawData);
-                            results.push({ name: f.name, ok: r?.ok, msg: r?.msg || '' });
-                        }
                         const ts = Date.now();
-                        const uname = (window.currentUser && window.currentUser.displayName) || '';
-                        await window.syncUploadLog('kit', ts, uname, files.map(f => f.name));
+                        const uname = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.displayName || '' : '';
+                        await syncUploadLog('kit', ts, uname, files.map(f => f.name));
                         localStorage.setItem('ms_uptime_kit', String(ts));
                         if (uname) localStorage.setItem('ms_uploader_kit', uname);
-                        return { ok: true, fileCount: files.length, names: files.map(f => f.name), results };
+                        return { ok: true, count: files.length, names: files.map(f => f.name) };
                     }
-                """, None)
+                """)
                 if result and result.get('ok'):
-                    log(f"  ✅ Supabase 저장 완료: {result.get('names')}")
+                    log(f"  ✅ 키팅 업로드 완료 ({result.get('count')}개): {result.get('names')}")
                 else:
-                    log(f"  ⚠️  Supabase 저장 결과: {result}")
+                    log(f"  ⚠️  키팅 업로드 결과: {result}")
             except Exception as e:
-                log(f"  ⚠️  Supabase 저장 오류: {e} — 10초 추가 대기")
-                time.sleep(10)
+                log(f"  ⚠️  키팅 업로드 로그 오류: {e}")
 
-        # 완료 팝업
-        page.evaluate("""
-            const el = document.createElement('div');
-            el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center';
-            el.innerHTML = '<div style="background:white;border-radius:16px;padding:36px 52px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35)">' +
-                '<div style="font-size:52px;margin-bottom:12px">✅</div>' +
-                '<div style="font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:8px">실행완료 되었습니다.</div>' +
-                '<div style="font-size:13px;color:#666;margin-bottom:20px">키팅 파일이 자재부족현황에 업로드되었습니다.</div>' +
-                '<button onclick="this.closest(\'div[style]\').remove()" style="padding:10px 36px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">확인</button>' +
-                '</div>';
-            document.body.appendChild(el);
-        """)
+        # ── 재고현황 업로드 (키팅 완료 후) ──────────────────────────────────
+        inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+        inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if inv_files:
+            latest_inv = str(inv_files[0])
+            log(f"  재고현황 업로드: {inv_files[0].name}")
+            page.locator("#file-inv").set_input_files(latest_inv)
+            time.sleep(4)
+            log("  ✅ 재고현황 업로드 완료")
+        else:
+            log("  ⚠️  재고현황 폴더에 파일 없음")
+
+        # 완료 팝업 — () => {...} 함수 형태로 감싸야 SyntaxError 방지
+        try:
+            page.evaluate("""
+                () => {
+                    const el = document.createElement('div');
+                    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center';
+                    el.innerHTML = '<div style="background:white;border-radius:16px;padding:36px 52px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35)">' +
+                        '<div style="font-size:52px;margin-bottom:12px">\\u2705</div>' +
+                        '<div style="font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:8px">\\uc2e4\\ud589\\uc644\\ub8cc \\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4.</div>' +
+                        '<div style="font-size:13px;color:#666;margin-bottom:20px">\\ud0a4\\ud305 \\ud30c\\uc77c\\uc774 \\uc790\\uc7ac\\ubd80\\uc871\\ud604\\ud669\\uc5d0 \\uc5c5\\ub85c\\ub4dc\\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4.</div>' +
+                        '<button onclick="this.parentElement.parentElement.remove()" style="padding:10px 36px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">\\ud655\\uc778</button>' +
+                        '</div>';
+                    document.body.appendChild(el);
+                }
+            """)
+        except Exception as e:
+            log(f"  ⚠️  완료 팝업 오류: {e}")
 
         log("✅ 전체 자동화 완료!")
 
@@ -1647,6 +1661,9 @@ def main():
         except Exception as e:
             log(f"  ⚠️  sMES 닫기 실패: {e}")
 
+    except StopIteration:
+        log("🛑 자동화가 긴급정지로 중단되었습니다.")
+        STOP_FLAG.unlink(missing_ok=True)
     except Exception as e:
         log(f"❌ 오류: {e}")
         import traceback; traceback.print_exc()

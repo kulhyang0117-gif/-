@@ -34,4 +34,7 @@ echo.
 python kitting_automation.py
 
 echo.
+echo 📄 로그 파일 열기: kitting_log.txt
+start notepad "%~dp0kitting_log.txt"
+
 pause

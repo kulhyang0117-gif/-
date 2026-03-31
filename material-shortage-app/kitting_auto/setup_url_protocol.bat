@@ -11,18 +11,24 @@ if %errorLevel% neq 0 (
 
 set "RUN_BAT=%~dp0run.bat"
 set "ELEVATED_BAT=%~dp0run_elevated.bat"
+set "STOP_BAT=%~dp0stop.bat"
 
-:: ── 레지스트리 등록 ───────────────────────────────────────────────────────
+:: ── mes-kit://start 등록 ───────────────────────────────────────────────────
 reg add "HKEY_CLASSES_ROOT\mes-kit"                         /f /ve /d "URL:MES Kitting Automation"
 reg add "HKEY_CLASSES_ROOT\mes-kit"                         /f /v "URL Protocol" /d ""
 reg add "HKEY_CLASSES_ROOT\mes-kit\DefaultIcon"             /f /ve /d "%RUN_BAT%,0"
-:: run_elevated.bat 이 PowerShell을 통해 관리자로 run.bat을 실행
 reg add "HKEY_CLASSES_ROOT\mes-kit\shell\open\command"      /f /ve /d "cmd.exe /c \"\"%ELEVATED_BAT%\"\""
 
+:: ── mes-kit-stop:// 등록 (긴급정지) ─────────────────────────────────────
+reg add "HKEY_CLASSES_ROOT\mes-kit-stop"                    /f /ve /d "URL:MES Kitting Stop"
+reg add "HKEY_CLASSES_ROOT\mes-kit-stop"                    /f /v "URL Protocol" /d ""
+reg add "HKEY_CLASSES_ROOT\mes-kit-stop\shell\open\command" /f /ve /d "cmd.exe /c \"\"%STOP_BAT%\"\""
+
 echo.
-echo ✅ mes-kit:// 프로토콜 등록 완료!
+echo ✅ 프로토콜 등록 완료!
+echo    mes-kit://       - 키팅 자동화 시작
+echo    mes-kit-stop://  - 긴급정지
 echo.
-echo    이제 자재부족현황.html의 [🤖 키팅 자동화] 버튼을 클릭하면
-echo    자동으로 sMES 다운로드 및 업로드가 실행됩니다.
+echo    setup_url_protocol.bat 을 다시 관리자로 실행해야 긴급정지가 활성화됩니다.
 echo.
 pause

@@ -19,6 +19,7 @@ SMES_EXE     = Path(r"C:\Program Files (x86)\I2R\sMES\sMES.exe")
 DOWNLOAD_DIR   = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
 INVENTORY_DIR  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\재고현황")
 HTML_FILE      = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
+LOG_FILE       = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting_auto\kitting_log.txt")
 
 SMES_ID      = "SSAT045"
 SMES_PW      = "rlatndus1!"
@@ -36,8 +37,21 @@ EXCEL_DELAY  = 5.0
 # ──────────────────────────────────────────────────────────────────────────────
 # 유틸
 # ──────────────────────────────────────────────────────────────────────────────
+_log_file = None
+
+def _init_log():
+    global _log_file
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _log_file = open(LOG_FILE, "a", encoding="utf-8")
+    log(f"{'='*60}")
+    log(f"로그 파일: {LOG_FILE}")
+
 def log(msg):
-    print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
+    line = f"[{datetime.now():%H:%M:%S}] {msg}"
+    print(line, flush=True)
+    if _log_file:
+        _log_file.write(line + "\n")
+        _log_file.flush()
 
 def is_admin():
     try: return ctypes.windll.shell32.IsUserAnAdmin()
@@ -926,19 +940,7 @@ def automate_upload(downloaded_files):
         except Exception as e:
             log(f"  ⚠️  초기화 평가 오류: {e}")
 
-        # 재고현황 최신 파일 업로드
-        inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
-        inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if inv_files:
-            latest_inv = str(inv_files[0])
-            log(f"  재고현황 업로드: {inv_files[0].name}")
-            page.locator("#file-inv").set_input_files(latest_inv)
-            time.sleep(3)
-            log("  ✅ 재고현황 업로드 완료")
-        else:
-            log("  ⚠️  재고현황 폴더에 파일 없음")
-
-        # 키팅된 자재 — kitting 자재 폴더 전체 파일 업로드
+        # 키팅된 자재 — kitting 자재 폴더 전체 파일 업로드 (먼저)
         all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
         all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
         valid = [str(f) for f in all_kit if f.exists()]
@@ -973,12 +975,24 @@ def automate_upload(downloaded_files):
                     }
                 """, None)
                 if result and result.get('ok'):
-                    log(f"  ✅ Supabase 저장 완료: {result.get('names')}")
+                    log(f"  ✅ 키팅 Supabase 저장 완료: {result.get('names')}")
                 else:
-                    log(f"  ⚠️  Supabase 저장 결과: {result}")
+                    log(f"  ⚠️  키팅 Supabase 저장 결과: {result}")
             except Exception as e:
-                log(f"  ⚠️  Supabase 저장 오류: {e} — 10초 추가 대기")
+                log(f"  ⚠️  키팅 Supabase 저장 오류: {e} — 10초 추가 대기")
                 time.sleep(10)
+
+        # 재고현황 최신 파일 업로드 (키팅 업로드 완료 후)
+        inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+        inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if inv_files:
+            latest_inv = str(inv_files[0])
+            log(f"  재고현황 업로드: {inv_files[0].name}")
+            page.locator("#file-inv").set_input_files(latest_inv)
+            time.sleep(3)
+            log("  ✅ 재고현황 업로드 완료")
+        else:
+            log("  ⚠️  재고현황 폴더에 파일 없음")
 
         # 완료 팝업
         page.evaluate("""
@@ -1008,6 +1022,7 @@ def automate_upload(downloaded_files):
 # 메인
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
+    _init_log()
     log("=" * 60)
     log(f"sMES 키팅 자동화 시작  ({TODAY})")
     log("=" * 60)

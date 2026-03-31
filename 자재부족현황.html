@@ -16,6 +16,10 @@
   .btn-auto-kit { display: inline-flex; align-items: center; gap: 8px; padding: 9px 20px; background: linear-gradient(135deg,#8e44ad,#6c3483); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: all 0.2s; white-space: nowrap; }
   .btn-auto-kit:hover { background: linear-gradient(135deg,#9b59b6,#7d3c98); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
   .btn-auto-kit:active { transform: translateY(0); }
+  .btn-emergency-stop { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; background: linear-gradient(135deg,#e74c3c,#c0392b); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(231,76,60,0.4); transition: all 0.2s; white-space: nowrap; animation: pulse-red 2s infinite; }
+  .btn-emergency-stop:hover { background: linear-gradient(135deg,#ec6557,#d44235); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(231,76,60,0.6); }
+  .btn-emergency-stop:active { transform: scale(0.96); }
+  @keyframes pulse-red { 0%,100% { box-shadow: 0 2px 8px rgba(231,76,60,0.4); } 50% { box-shadow: 0 2px 16px rgba(231,76,60,0.8); } }
   .auto-kit-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; }
   .auto-kit-modal.open { display:flex; }
   .auto-kit-box { background:white; border-radius:16px; padding:32px 40px; max-width:480px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.4); }
@@ -296,6 +300,9 @@
   </div>
   <button class="btn-auto-kit" onclick="openAutoKitModal()" title="sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다">
     🤖 키팅 자동화
+  </button>
+  <button class="btn-emergency-stop" onclick="emergencyStop()" title="실행 중인 키팅 자동화를 즉시 중단합니다">
+    🛑 긴급정지
   </button>
   <div class="header-user" id="header-user" style="display:none;">
     <span class="hdr-uname" id="hdr-uname"></span>
@@ -3676,8 +3683,23 @@ function closeAutoKitModal() {
 }
 function startAutoKit() {
   closeAutoKitModal();
-  // mes-kit:// 프로토콜로 자동화 스크립트 실행
   window.location.href = 'mes-kit://start';
+}
+function emergencyStop() {
+  if (!confirm('⚠️ 키팅 자동화를 긴급정지 하시겠습니까?\n\n현재 진행 중인 다운로드는 중단되며\n이미 저장된 파일은 유지됩니다.')) return;
+  window.location.href = 'mes-kit-stop://stop';
+  // 버튼 시각적 피드백
+  const btn = document.querySelector('.btn-emergency-stop');
+  if (btn) {
+    btn.textContent = '⏹ 중지 요청됨';
+    btn.style.background = '#7f8c8d';
+    btn.style.animation = 'none';
+    setTimeout(() => {
+      btn.textContent = '🛑 긴급정지';
+      btn.style.background = '';
+      btn.style.animation = '';
+    }, 3000);
+  }
 }
 function downloadSetupBat() {
   // setup_url_protocol.bat 경로 안내 (로컬 파일 다운로드 불가 → 경로 복사 안내)
