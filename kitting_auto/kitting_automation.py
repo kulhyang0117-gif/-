@@ -804,10 +804,34 @@ def navigate_and_download_inventory(app):
         else:
             log("  ⚠️  파일 저장 실패")
 
-    # ── Ctrl+W → Excel 현재 창 닫기 ─────────────────────────────────────────
+    # ── Excel 창 포커스 후 Ctrl+W 닫기 ──────────────────────────────────────
     log("  Ctrl+W → Excel 창 닫기...")
-    pyautogui.hotkey('ctrl', 'w')
-    time.sleep(0.5)
+    # 저장 후 포커스가 MES로 넘어갈 수 있으므로 Excel 창 직접 탐색 후 닫기
+    closed = False
+    try:
+        excel_hwnd = None
+        def _find_excel(h, _):
+            nonlocal excel_hwnd
+            try:
+                title = win32gui.GetWindowText(h)
+                if any(k in title for k in ['.xlsx', '.xls', 'Excel', '엑셀', file_name]):
+                    excel_hwnd = h
+            except Exception:
+                pass
+        win32gui.EnumWindows(_find_excel, None)
+        if excel_hwnd:
+            win32gui.SetForegroundWindow(excel_hwnd)
+            time.sleep(0.3)
+            pyautogui.hotkey('ctrl', 'w')
+            time.sleep(0.8)
+            closed = True
+            log("  ✅ Excel 창(hwnd) 포커스 후 Ctrl+W 완료")
+    except Exception as e:
+        log(f"  hwnd 방식 실패({e}) → 직접 Ctrl+W")
+
+    if not closed:
+        pyautogui.hotkey('ctrl', 'w')
+        time.sleep(0.5)
 
     log("  ✅ 재고현황 저장 및 닫기 완료")
     return str(INVENTORY_DIR / f"{file_name}.xlsx")
@@ -914,9 +938,11 @@ def automate_upload(downloaded_files):
         else:
             log("  ⚠️  재고현황 폴더에 파일 없음")
 
-        # 파일 업로드
-        valid = [f for f in downloaded_files if Path(f).exists()]
-        log(f"  {len(valid)}개 파일 업로드 중...")
+        # 키팅된 자재 — kitting 자재 폴더 전체 파일 업로드
+        all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
+        all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
+        valid = [str(f) for f in all_kit if f.exists()]
+        log(f"  kitting 자재 폴더 전체 {len(valid)}개 파일 업로드 중...")
         if valid:
             page.locator("#file-kit").set_input_files(valid)
 
