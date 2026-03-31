@@ -1346,6 +1346,18 @@ def automate_upload(downloaded_files):
         except Exception:
             pass
 
+        # 재고현황 최신 파일 업로드
+        inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+        inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
+        if inv_files:
+            latest_inv = str(inv_files[0])
+            log(f"  재고현황 업로드: {inv_files[0].name}")
+            page.locator("#file-inv").set_input_files(latest_inv)
+            time.sleep(3)
+            log("  ✅ 재고현황 업로드 완료")
+        else:
+            log("  ⚠️  재고현황 폴더에 파일 없음")
+
         # 파일 업로드
         valid = [f for f in downloaded_files if Path(f).exists()]
         log(f"  {len(valid)}개 파일 업로드 중...")
