@@ -938,6 +938,18 @@ def main():
         # Step 6: 자재부족현황 웹앱 업로드
         automate_upload(downloaded)
 
+        # Step 7: sMES 창 닫기
+        log("▶ Step 7: sMES 창 닫기...")
+        try:
+            _, main_win = _get_smes_window()
+            if main_win:
+                main_win.close()
+                log("  ✅ sMES 창 닫기 완료")
+            else:
+                log("  ⚠️  sMES 창을 찾을 수 없음")
+        except Exception as e:
+            log(f"  ⚠️  sMES 닫기 실패: {e}")
+
     except Exception as e:
         log(f"❌ 오류: {e}")
         import traceback; traceback.print_exc()
