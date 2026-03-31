@@ -716,21 +716,85 @@ def navigate_and_download_inventory(app):
     time.sleep(LOAD_DELAY)
 
     # ── Tab×1 → Enter → Excel 다운로드 트리거 ───────────────────────────────
+    import win32gui, win32clipboard
+
+    # 다운로드 전 현재 창 목록 수집
+    hwnds_before = set()
+    win32gui.EnumWindows(lambda h, _: hwnds_before.add(h), None)
+
     log("  Tab×1 → Enter → Excel 다운로드...")
     pyautogui.press('tab')
     time.sleep(0.3)
     pyautogui.press('enter')
     time.sleep(EXCEL_DELAY)
 
-    # ── Save As 다이얼로그: 재고현황+현재시간 으로 저장 ───────────────────────
+    # ── 새로 생긴 Save As 다이얼로그 감지 ────────────────────────────────────
     file_name = f"재고현황{datetime.now().strftime('%H%M%S')}"
-    save_path = str(INVENTORY_DIR / f"{file_name}.xlsx")
-    log(f"  Save As 다이얼로그 처리: {file_name}.xlsx")
+    save_folder = str(INVENTORY_DIR)
+    dialog_hwnd = None
 
-    if _handle_save_dialog(save_path):
+    for _ in range(20):
+        hwnds_after = set()
+        win32gui.EnumWindows(lambda h, _: hwnds_after.add(h), None)
+        for h in hwnds_after - hwnds_before:
+            try:
+                title = win32gui.GetWindowText(h)
+                if any(k in title for k in ["저장", "Save", "다른 이름"]):
+                    dialog_hwnd = h
+                    break
+            except Exception:
+                pass
+        if dialog_hwnd:
+            break
+        time.sleep(0.5)
+
+    if dialog_hwnd:
+        log(f"  Save As 다이얼로그 감지 → {file_name}.xlsx 저장...")
+        try:
+            win32gui.SetForegroundWindow(dialog_hwnd)
+        except Exception:
+            pass
+        time.sleep(0.4)
+
+        # Alt+D → 주소창 → Ctrl+V(폴더경로) → Enter
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(save_folder, win32clipboard.CF_UNICODETEXT)
+        win32clipboard.CloseClipboard()
+        pyautogui.hotkey('alt', 'd')
+        time.sleep(0.3)
+        pyautogui.hotkey('ctrl', 'v')
+        time.sleep(0.3)
+        pyautogui.press('enter')
+        time.sleep(1.5)
+
+        # 파일명 입력 (Ctrl+A → 클립보드로 붙여넣기)
+        win32clipboard.OpenClipboard()
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText(file_name, win32clipboard.CF_UNICODETEXT)
+        win32clipboard.CloseClipboard()
+        pyautogui.hotkey('ctrl', 'a')
+        time.sleep(0.1)
+        pyautogui.hotkey('ctrl', 'v')
+        time.sleep(0.3)
+
+        # Alt+S → 저장
+        pyautogui.hotkey('alt', 's')
+        time.sleep(1.5)
+
+        # 덮어쓰기 확인 팝업
+        try:
+            from pywinauto import Desktop as _Desktop
+            conf = _Desktop(backend='uia').window(title_re=".*(덮어|overwrite|Confirm).*")
+            if conf.exists(timeout=2):
+                pyautogui.press('enter')
+                time.sleep(0.5)
+        except Exception:
+            pass
+
         log(f"  ✅ 저장 완료: {file_name}.xlsx")
     else:
-        # 자동 저장된 경우 Downloads에서 이동
+        log("  ⚠️  Save As 다이얼로그 미감지 — Downloads 폴더 폴백")
         latest = _find_latest_download()
         if latest:
             import shutil
@@ -738,7 +802,7 @@ def navigate_and_download_inventory(app):
             shutil.move(str(latest), str(dest))
             log(f"  ✅ 이동 완료: {dest.name}")
         else:
-            log("  ⚠️  재고현황 파일 저장 실패")
+            log("  ⚠️  파일 저장 실패")
 
     # ── Ctrl+W → Excel 현재 창 닫기 ─────────────────────────────────────────
     log("  Ctrl+W → Excel 창 닫기...")
@@ -746,7 +810,7 @@ def navigate_and_download_inventory(app):
     time.sleep(0.5)
 
     log("  ✅ 재고현황 저장 및 닫기 완료")
-    return save_path
+    return str(INVENTORY_DIR / f"{file_name}.xlsx")
 
 
 # ──────────────────────────────────────────────────────────────────────────────
