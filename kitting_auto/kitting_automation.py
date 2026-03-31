@@ -1050,12 +1050,46 @@ def main():
         # Step 7: sMES 창 닫기
         log("▶ Step 7: sMES 창 닫기...")
         try:
+            import psutil, win32gui, win32con
+            pid = _get_smes_pid()
+
+            # 1차: pywinauto close()
             _, main_win = _get_smes_window()
             if main_win:
-                main_win.close()
-                log("  ✅ sMES 창 닫기 완료")
+                try:
+                    main_win.close()
+                    time.sleep(1.5)
+                except Exception:
+                    pass
+
+            # 2차: WM_CLOSE 메시지 전송 (닫기 확인창 자동 처리)
+            if pid and psutil.pid_exists(pid):
+                def _close_hwnd(h, _):
+                    try:
+                        if win32gui.IsWindowVisible(h):
+                            wp = win32gui.GetWindowThreadProcessId(h)[1]
+                            if wp == pid:
+                                win32gui.PostMessage(h, win32con.WM_CLOSE, 0, 0)
+                    except Exception:
+                        pass
+                win32gui.EnumWindows(_close_hwnd, None)
+                time.sleep(1.5)
+
+                # 닫기 확인 팝업(예/아니오) 자동 Enter
+                try:
+                    import pyautogui
+                    pyautogui.press('enter')
+                    time.sleep(0.5)
+                except Exception:
+                    pass
+
+            # 3차: 프로세스 강제 종료
+            if pid and psutil.pid_exists(pid):
+                psutil.Process(pid).terminate()
+                time.sleep(1)
+                log("  ✅ sMES 프로세스 종료 완료")
             else:
-                log("  ⚠️  sMES 창을 찾을 수 없음")
+                log("  ✅ sMES 창 닫기 완료")
         except Exception as e:
             log(f"  ⚠️  sMES 닫기 실패: {e}")
 
