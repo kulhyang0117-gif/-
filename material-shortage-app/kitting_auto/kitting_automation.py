@@ -21,6 +21,15 @@ INVENTORY_DIR  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status 
 HTML_FILE      = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
 STOP_FLAG      = Path(__file__).parent / "stop_flag.txt"
 
+# Microsoft Edge 실행 경로 (64bit 우선, 없으면 32bit)
+EDGE_EXE = next(
+    (p for p in [
+        Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+        Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+    ] if p.exists()),
+    None
+)
+
 SMES_ID      = "SSAT045"
 SMES_PW      = "rlatndus1!"
 
@@ -1474,11 +1483,17 @@ def automate_upload(downloaded_files):
                 page.wait_for_load_state("networkidle", timeout=15000)
 
         except Exception as e:
-            log(f"  CDP 연결 실패({e}) → 새 브라우저 실행")
-            browser = p.chromium.launch(
+            log(f"  CDP 연결 실패({e}) → Microsoft Edge 실행")
+            launch_kwargs = dict(
                 headless=False,
                 args=["--start-maximized", "--disable-web-security"]
             )
+            if EDGE_EXE:
+                launch_kwargs["executable_path"] = str(EDGE_EXE)
+                log(f"  Edge 경로: {EDGE_EXE}")
+            else:
+                log("  ⚠️  Edge 경로를 찾을 수 없음 — Playwright 기본 Chromium 사용")
+            browser = p.chromium.launch(**launch_kwargs)
             page = browser.new_context(no_viewport=True).new_page()
             page.goto("https://material-shortage.vercel.app/", timeout=30000)
             page.wait_for_load_state("networkidle", timeout=15000)
