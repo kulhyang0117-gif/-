@@ -1048,7 +1048,7 @@ def _click_excel_download(win, idx, item_name):
 
     time.sleep(LOAD_DELAY)
 
-    # Excel 창 닫기 (Alt+F4)
+    # Excel 현재 창 닫기 (Ctrl+W)
     try:
         excel_hwnds = []
         def _collect_excel(hwnd, _):
@@ -1062,7 +1062,7 @@ def _click_excel_download(win, idx, item_name):
         for hwnd in excel_hwnds:
             win32gui.SetForegroundWindow(hwnd)
             time.sleep(0.3)
-            pyautogui.hotkey('alt', 'f4')
+            pyautogui.hotkey('ctrl', 'w')
             time.sleep(0.8)
             # 저장 여부 묻는 경우 '저장 안 함(N)' 처리
             pyautogui.press('n')
@@ -1277,6 +1277,10 @@ def navigate_and_download_inventory(app):
     # Alt+S → 저장
     pyautogui.hotkey('alt', 's')
     time.sleep(1.5)
+
+    # Ctrl+W → Excel 현재 창 닫기
+    pyautogui.hotkey('ctrl', 'w')
+    time.sleep(0.5)
 
     # 덮어쓰기 확인 팝업 처리
     try:

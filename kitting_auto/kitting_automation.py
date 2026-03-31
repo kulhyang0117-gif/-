@@ -481,6 +481,8 @@ def _click_excel_download(win, idx, item_name):
     save_path = str(DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}_{idx:03d}.xlsx")
     if _handle_save_dialog(save_path):
         log(f"    ✅ 저장: {Path(save_path).name}")
+        pyautogui.hotkey('ctrl', 'w')   # Excel 현재 창 닫기
+        time.sleep(0.5)
         return save_path
 
     # 다이얼로그 없이 자동 저장된 경우 — Downloads 폴더에서 이동
@@ -490,6 +492,8 @@ def _click_excel_download(win, idx, item_name):
         dest = DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}_{idx:03d}.xlsx"
         shutil.move(str(latest), str(dest))
         log(f"    ✅ 이동: {dest.name}")
+        pyautogui.hotkey('ctrl', 'w')   # Excel 현재 창 닫기
+        time.sleep(0.5)
         return str(dest)
 
     log(f"    ⚠️  [{idx}] 파일 저장 실패 — 건너뜀")
@@ -753,6 +757,10 @@ def navigate_and_download_inventory(app):
     # Alt+S → 저장
     pyautogui.hotkey('alt', 's')
     time.sleep(1.5)
+
+    # Ctrl+W → Excel 현재 창 닫기
+    pyautogui.hotkey('ctrl', 'w')
+    time.sleep(0.5)
 
     # 덮어쓰기 확인 팝업 처리
     try:
