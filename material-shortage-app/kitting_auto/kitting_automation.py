@@ -1086,19 +1086,31 @@ def _download_by_keyboard(win):
     import pyautogui
 
     ROW_X      = 1000   # 품목명 컬럼 X (절대 좌표)
-    ROW_Y      = 165    # 첫 번째 행 Y (절대 좌표)
-    ROW_HEIGHT = 22     # 행 높이 픽셀 — 실제 MES 행 높이에 맞게 조정
+    ROW_Y      = 172    # 첫 번째 행 중심 Y — 2560x1600 스크린 실측값
+    ROW_HEIGHT = 33     # 행 높이 — 2560x1600 스크린 실측값 (구분선 간격 33px)
+    GRID_TOP   = 155    # 그리드 상단 경계 Y
+    GRID_BOT   = 750    # 그리드 하단 경계 Y (스크롤 여유 포함)
 
-    # 첫 번째 행 클릭 — 루프 시작 전 딱 한 번만
-    win.set_focus(); time.sleep(0.3)
+    # 행 인덱스 기반 Y 계산 — 색상 탐지 대신 인덱스로 정확한 행 클릭
+    def row_click_y(idx):
+        """0-based 행 인덱스 → 화면 Y 좌표 (그리드 바깥 클램핑)"""
+        y = ROW_Y + idx * ROW_HEIGHT
+        return min(y, GRID_BOT - ROW_HEIGHT // 2)
+
+    # 첫 번째 행 클릭
+    try:
+        win.set_focus()
+    except Exception:
+        pass
+    time.sleep(0.3)
     pyautogui.click(ROW_X, ROW_Y)
     log(f"  첫 번째 행 클릭: ({ROW_X}, {ROW_Y})")
     time.sleep(0.5)
 
-    downloaded = 0
-    same_count = 0
-    last_sel_y = ROW_Y          # 마지막으로 감지된 행 Y — 탐지 실패 시 재사용
-    region = (ROW_X - 200, 140, 500, 400)
+    downloaded  = 0
+    same_count  = 0
+    row_index   = 0                                    # 현재 행 인덱스 (0-based)
+    region      = (ROW_X - 200, GRID_TOP - 10, 500, GRID_BOT - GRID_TOP + 20)
 
     for i in range(500):
         check_stop()   # 긴급정지 확인
@@ -1107,31 +1119,22 @@ def _download_by_keyboard(win):
         if success:
             downloaded += 1
 
-        # MES 창 포커스 복귀 — SetForegroundWindow 실패해도 계속 진행
+        # MES 창 포커스 복귀
         try:
             win.set_focus()
         except Exception as e:
-            log(f"    ⚠️  set_focus 실패({e}) → pyautogui 클릭으로 대체")
-            try:
-                pyautogui.click(ROW_X, last_sel_y)
-            except Exception:
-                pass
-        time.sleep(0.3)
+            log(f"    ⚠️  set_focus 실패({e})")
+        time.sleep(0.4)
 
         before = pyautogui.screenshot(region=region)
 
-        # 현재 선택된 행 좌표 탐지 (색상 기반)
-        sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=560, row_height=ROW_HEIGHT)
-        if sel_y is not None:
-            last_sel_y = sel_y   # 성공 시 갱신
-            log(f"    품목명 좌표 감지: ({ROW_X}, {sel_y}) → 클릭 후 ↓")
-            pyautogui.click(ROW_X, sel_y)
-        else:
-            # 탐지 실패 → 마지막 성공 좌표 유지 (ROW_Y 고정 클릭 금지 — 행 리셋 방지)
-            log(f"    품목명 좌표 감지 실패 → 마지막 위치 유지 ({ROW_X}, {last_sel_y}), ↓만 진행")
-
+        # 현재 행 인덱스 기반으로 정확한 Y 클릭 → 그리드 포커스 복구
+        cy = row_click_y(row_index)
+        log(f"    행[{row_index+1}] 클릭: ({ROW_X}, {cy}) → ↓")
+        pyautogui.click(ROW_X, cy)
         time.sleep(0.2)
         pyautogui.press('down')   # 다음 품목으로 이동
+        row_index += 1
         time.sleep(0.5)
 
         after = pyautogui.screenshot(region=region)
