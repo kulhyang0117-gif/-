@@ -831,7 +831,33 @@ def automate_upload(downloaded_files):
         log(f"  {len(valid)}개 파일 업로드 중...")
         if valid:
             page.locator("#file-kit").set_input_files(valid)
-            time.sleep(max(3, len(valid) * 0.5))
+
+            # 칩 렌더링 대기 (파일이 state에 로드됐을 때)
+            try:
+                page.wait_for_selector('.kit-chip', timeout=15000)
+                log("  파일 처리 완료 — Supabase 저장 중...")
+            except Exception:
+                time.sleep(5)
+
+            # Storage 업로드 + upload_logs 동기화를 await로 명시적 완료
+            try:
+                page.evaluate("""
+                    async () => {
+                        const files = (window.state && window.state.kitFiles) || [];
+                        if (!files.length) return;
+                        const uploads = files.map(f =>
+                            window.uploadFileToStorage('kit/' + f.name, f.rawData)
+                        );
+                        await Promise.all(uploads);
+                        const ts = Date.now();
+                        const uname = (window.currentUser && window.currentUser.displayName) || '';
+                        await window.syncUploadLog('kit', ts, uname, files.map(f => f.name));
+                    }
+                """)
+                log("  ✅ Supabase 저장 완료")
+            except Exception as e:
+                log(f"  ⚠️  Supabase 저장 오류: {e} — 10초 추가 대기")
+                time.sleep(10)
 
         # 완료 팝업
         page.evaluate("""
