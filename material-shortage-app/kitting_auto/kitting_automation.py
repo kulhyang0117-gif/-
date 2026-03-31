@@ -1082,20 +1082,43 @@ def _click_excel_download(win, idx, item_name):
     return True   # 다운로드 성공
 
 
+def _get_total_rows(win):
+    """MES 창에서 '조회 결과 : N Rows' 텍스트를 읽어 총 행 수 반환. 실패 시 None."""
+    import re
+    try:
+        for ctrl in win.descendants():
+            try:
+                txt = ctrl.window_text().strip()
+                if not txt:
+                    continue
+                m = re.search(r'(\d+)\s*Rows', txt, re.IGNORECASE)
+                if m:
+                    return int(m.group(1))
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return None
+
+
 def _download_by_keyboard(win):
     import pyautogui
 
     ROW_X      = 1000   # 품목명 컬럼 X (절대 좌표)
     ROW_Y      = 172    # 첫 번째 행 중심 Y — 2560x1600 스크린 실측값
-    ROW_HEIGHT = 33     # 행 높이 — 2560x1600 스크린 실측값 (구분선 간격 33px)
-    GRID_TOP   = 155    # 그리드 상단 경계 Y
+    ROW_HEIGHT = 33     # 행 높이 — 2560x1600 스크린 실측값
     GRID_BOT   = 750    # 그리드 하단 경계 Y (스크롤 여유 포함)
 
-    # 행 인덱스 기반 Y 계산 — 색상 탐지 대신 인덱스로 정확한 행 클릭
     def row_click_y(idx):
-        """0-based 행 인덱스 → 화면 Y 좌표 (그리드 바깥 클램핑)"""
         y = ROW_Y + idx * ROW_HEIGHT
         return min(y, GRID_BOT - ROW_HEIGHT // 2)
+
+    # ── 총 행 수 읽기 ──────────────────────────────────────────────────────
+    total_rows = _get_total_rows(win)
+    if total_rows:
+        log(f"  조회 결과: {total_rows}개 행 감지 → 정확히 {total_rows}번 반복")
+    else:
+        log("  ⚠️  행 수 감지 실패 → 스크린샷 비교 방식으로 폴백")
 
     # 첫 번째 행 클릭
     try:
@@ -1107,49 +1130,71 @@ def _download_by_keyboard(win):
     log(f"  첫 번째 행 클릭: ({ROW_X}, {ROW_Y})")
     time.sleep(0.5)
 
-    downloaded  = 0
-    same_count  = 0
-    row_index   = 0                                    # 현재 행 인덱스 (0-based)
-    region      = (ROW_X - 200, GRID_TOP - 10, 500, GRID_BOT - GRID_TOP + 20)
+    downloaded = 0
+    row_index  = 0
+    max_iter   = total_rows if total_rows else 500
 
-    for i in range(500):
-        check_stop()   # 긴급정지 확인
-        log(f"  [{i+1}] Excel 다운로드 시도...")
+    for i in range(max_iter):
+        check_stop()
+        log(f"  [{i+1}/{max_iter}] Excel 다운로드 시도...")
         success = _click_excel_download(win, i + 1, "")
         if success:
             downloaded += 1
 
-        # MES 창 포커스 복귀
+        # 마지막 행이면 Down 없이 종료
+        if i >= max_iter - 1:
+            log(f"  ✅ 마지막 행 완료 — 전체 {downloaded}개 다운로드 완료")
+            break
+
+        # MES 창 포커스 복귀 후 현재 행 클릭 → ↓
         try:
             win.set_focus()
         except Exception as e:
             log(f"    ⚠️  set_focus 실패({e})")
         time.sleep(0.4)
 
-        before = pyautogui.screenshot(region=region)
-
-        # 현재 행 인덱스 기반으로 정확한 Y 클릭 → 그리드 포커스 복구
         cy = row_click_y(row_index)
         log(f"    행[{row_index+1}] 클릭: ({ROW_X}, {cy}) → ↓")
         pyautogui.click(ROW_X, cy)
         time.sleep(0.2)
-        pyautogui.press('down')   # 다음 품목으로 이동
+        pyautogui.press('down')
         row_index += 1
         time.sleep(0.5)
 
-        after = pyautogui.screenshot(region=region)
+    # total_rows 감지 실패 시 폴백: 스크린샷 비교로 추가 탐지
+    if not total_rows:
+        log("  (스크린샷 비교 폴백 — 행 수 미감지)")
+        region = (ROW_X - 200, 145, 500, 615)
+        same_count = 0
+        for i in range(max_iter, 500):
+            check_stop()
+            log(f"  [{i+1}] Excel 다운로드 시도...")
+            success = _click_excel_download(win, i + 1, "")
+            if success:
+                downloaded += 1
+            try:
+                win.set_focus()
+            except Exception:
+                pass
+            time.sleep(0.4)
+            before = pyautogui.screenshot(region=region)
+            cy = row_click_y(row_index)
+            pyautogui.click(ROW_X, cy)
+            time.sleep(0.2)
+            pyautogui.press('down')
+            row_index += 1
+            time.sleep(0.5)
+            after = pyautogui.screenshot(region=region)
+            if before.tobytes() == after.tobytes():
+                same_count += 1
+                log(f"    화면 변화 없음 ({same_count}/3)")
+                if same_count >= 3:
+                    log(f"  ✅ 마지막 행 도달 — 전체 {downloaded}개 완료")
+                    break
+            else:
+                same_count = 0
 
-        # 스크린샷 동일 → 3회 연속 확인 후 종료
-        if before.tobytes() == after.tobytes():
-            same_count += 1
-            log(f"    화면 변화 없음 ({same_count}/3)")
-            if same_count >= 3:
-                log(f"  ✅ 마지막 행 도달 — 전체 {downloaded}개 다운로드 완료")
-                break
-        else:
-            same_count = 0
-    else:
-        log(f"  ✅ 최대 반복 도달 — 전체 {downloaded}개 다운로드 완료")
+    return downloaded
 
     return downloaded
 
