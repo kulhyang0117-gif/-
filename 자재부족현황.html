@@ -855,9 +855,14 @@ function _processKitFiles(files) {
         localStorage.setItem('ms_uptime_kit', ts);
         if (uname) localStorage.setItem('ms_uploader_kit', uname);
         document.getElementById('uptime-kit').textContent = fmtUpTime(ts, uname);
-        // Storage 업로드 + file_names 저장
-        files.forEach(f => { const kf = state.kitFiles.find(k => k.name === f.name); if(kf) uploadFileToStorage('kit/' + f.name, kf.rawData); });
-        syncUploadLog('kit', ts, uname, state.kitFiles.map(f => f.name));
+        // Storage 업로드 완료 후 file_names 저장 (비동기 순서 보장)
+        (async () => {
+          await Promise.all(files.map(f => {
+            const kf = state.kitFiles.find(k => k.name === f.name);
+            return kf ? uploadFileToStorage('kit/' + f.name, kf.rawData) : Promise.resolve();
+          }));
+          await syncUploadLog('kit', ts, uname, state.kitFiles.map(f => f.name));
+        })();
       }
     };
     reader.readAsArrayBuffer(file);
@@ -918,6 +923,15 @@ function clearKitFiles() {
   localStorage.removeItem('ms_uploader_kit');
   document.getElementById('uptime-kit').textContent = '';
   syncUploadLog('kit', Date.now(), '', []);
+}
+
+// 자동화 전용: 로컬 상태만 초기화 (DB 건드리지 않음 — 업로드 중 빈 목록 노출 방지)
+function clearKitFilesLocal() {
+  state.kitFiles = [];
+  dbPut('kit_list', []); renderKitChips(); checkReady();
+  localStorage.removeItem('ms_uptime_kit');
+  localStorage.removeItem('ms_uploader_kit');
+  document.getElementById('uptime-kit').textContent = '';
 }
 
 function saveKitList() {

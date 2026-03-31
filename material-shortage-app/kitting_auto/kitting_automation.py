@@ -1498,10 +1498,10 @@ def automate_upload(downloaded_files):
                 log(f"  ⚠️  로그인 실패: {e}")
                 input("  수동 로그인 후 Enter → ")
 
-        # 키팅 로컬 상태 초기화 — const state는 window.state로 접근 불가, clearKitFiles() 함수 사용
-        log("  키팅 로컬 상태 초기화...")
+        # 키팅 로컬 상태만 초기화 (DB는 건드리지 않음 — 업로드 완료 전 빈 목록 노출 방지)
+        log("  키팅 로컬 상태 초기화 (DB 유지)...")
         try:
-            page.evaluate("() => { if (typeof clearKitFiles === 'function') clearKitFiles(); }")
+            page.evaluate("() => { if (typeof clearKitFilesLocal === 'function') clearKitFilesLocal(); else if (typeof clearKitFiles === 'function') clearKitFiles(); }")
         except Exception as e:
             log(f"  ⚠️  초기화 평가 오류: {e}")
         time.sleep(1)
@@ -1528,10 +1528,8 @@ def automate_upload(downloaded_files):
                     pass
             log(f"  state.kitFiles 로드 완료: {loaded}개")
 
-            # handleKitFiles 내부에서 이미 Supabase 업로드가 시작됨 → 완료까지 추가 대기
-            time.sleep(5)
-
-            # upload_logs 동기화 확인 (선택적)
+            # Storage 업로드 완료 확인 후 upload_logs 동기화 (파일 먼저, DB 나중에)
+            log("  Supabase Storage 업로드 및 DB 동기화 대기 중...")
             try:
                 result = page.evaluate("""
                     async () => {
@@ -1539,6 +1537,8 @@ def automate_upload(downloaded_files):
                         if (!files.length) return { ok: false, reason: 'state.kitFiles 비어있음' };
                         const ts = Date.now();
                         const uname = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.displayName || '' : '';
+                        // Storage 업로드 완료 대기 (DB 갱신 전에 파일이 Storage에 존재해야 함)
+                        await Promise.all(files.map(f => uploadFileToStorage('kit/' + f.name, f.rawData)));
                         await syncUploadLog('kit', ts, uname, files.map(f => f.name));
                         localStorage.setItem('ms_uptime_kit', String(ts));
                         if (uname) localStorage.setItem('ms_uploader_kit', uname);
