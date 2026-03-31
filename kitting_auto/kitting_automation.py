@@ -16,8 +16,9 @@ from pathlib import Path
 # 설정
 # ──────────────────────────────────────────────────────────────────────────────
 SMES_EXE     = Path(r"C:\Program Files (x86)\I2R\sMES\sMES.exe")
-DOWNLOAD_DIR = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
-HTML_FILE    = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
+DOWNLOAD_DIR   = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
+INVENTORY_DIR  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\재고현황")
+HTML_FILE      = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
 
 SMES_ID      = "SSAT045"
 SMES_PW      = "rlatndus1!"
@@ -604,7 +605,137 @@ def _safe(name):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Step 6 : 자재부족현황.html Playwright 업로드
+# Step 5b : 현황조회 → 창고별 부품 현재고 조회 → Excel 다운로드
+# ──────────────────────────────────────────────────────────────────────────────
+def navigate_and_download_inventory(app):
+    """
+    현황조회 메뉴(생산관리 오른쪽 5번째) → ↓7 → Enter
+    → Tab×3 → 수원부품창고 → Enter
+    → Tab×7 → Enter
+    → Tab×1 → Excel 저장 → 재고현황 폴더
+    """
+    import pyautogui
+
+    log("▶ Step 5b: 재고현황 다운로드...")
+    INVENTORY_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 메인 창 재취득
+    time.sleep(LOAD_DELAY)
+    _, main_win = _get_smes_window()
+    if not main_win:
+        log("  ⚠️  메인 창 없음. 수동으로 열어주세요.")
+        input("  열린 후 Enter → ")
+        _, main_win = _get_smes_window()
+
+    main_win.set_focus()
+    time.sleep(0.5)
+
+    # ── 현황조회 클릭 (다중 방법) ────────────────────────────────────────────
+    log("  현황조회 클릭...")
+    clicked = False
+
+    try:
+        main_win.menu_select("현황조회")
+        clicked = True
+        log("  ✅ menu_select 성공")
+    except Exception as e:
+        log(f"  menu_select 실패: {e}")
+
+    if not clicked:
+        try:
+            from pywinauto import Application as _App
+            _pid = main_win.process_id()
+            _uia = _App(backend='uia').connect(process=_pid, timeout=5)
+            for _w in _uia.windows():
+                try:
+                    for _d in _w.descendants(control_type="MenuItem"):
+                        if "현황조회" in (_d.window_text() or ""):
+                            _d.click_input()
+                            clicked = True
+                            log("  ✅ UIA MenuItem 성공")
+                            break
+                except Exception:
+                    pass
+                if clicked:
+                    break
+        except Exception as e:
+            log(f"  UIA MenuItem 실패: {e}")
+
+    if not clicked:
+        clicked = _try_click(main_win, ["현황조회"])
+        if clicked:
+            log("  ✅ child_window 탐색 성공")
+
+    if not clicked:
+        try:
+            rect = main_win.rectangle()
+            menu_y = rect.top + 7
+            # 생산관리(230) 오른쪽 5번째 — 각 메뉴 약 80px 간격
+            menu_x = rect.left + 630
+            pyautogui.click(menu_x, menu_y)
+            clicked = True
+            log(f"  ✅ 좌표 클릭: ({menu_x}, {menu_y})")
+        except Exception as e:
+            log(f"  좌표 클릭 실패: {e}")
+
+    if not clicked:
+        log("  ⚠️  수동으로 '현황조회'를 클릭해주세요.")
+        input("  완료 후 Enter → ")
+
+    time.sleep(STEP_DELAY)
+
+    # ── ↓ 7번 → Enter (창고별 부품 현재고 조회) ──────────────────────────────
+    log("  ↓ 7번 → Enter (창고별 부품 현재고 조회)...")
+    for _ in range(7):
+        pyautogui.press('down')
+        time.sleep(0.15)
+    pyautogui.press('enter')
+    time.sleep(LOAD_DELAY)
+
+    # ── Tab×3 → 수원부품창고 → Enter ─────────────────────────────────────────
+    log("  Tab×3 → '수원부품창고' 입력 → Enter...")
+    for _ in range(3):
+        pyautogui.press('tab')
+        time.sleep(0.2)
+    _paste_text("수원부품창고")
+    time.sleep(0.3)
+    pyautogui.press('enter')
+    time.sleep(LOAD_DELAY)
+
+    # ── Tab×7 → Enter (조회 실행) ────────────────────────────────────────────
+    log("  Tab×7 → Enter (조회)...")
+    for _ in range(7):
+        pyautogui.press('tab')
+        time.sleep(0.2)
+    pyautogui.press('enter')
+    time.sleep(LOAD_DELAY)
+
+    # ── Tab×1 → Excel 다운로드 ───────────────────────────────────────────────
+    log("  Tab×1 → Excel 다운로드...")
+    pyautogui.press('tab')
+    time.sleep(EXCEL_DELAY)
+
+    # 저장 다이얼로그 처리
+    save_path = str(INVENTORY_DIR / f"재고현황_{TODAY_KR}.xlsx")
+    if _handle_save_dialog(save_path):
+        log(f"  ✅ 저장 완료: {Path(save_path).name}")
+        return save_path
+
+    # 자동 저장된 경우 Downloads에서 이동
+    latest = _find_latest_download()
+    if latest:
+        import shutil
+        dest = INVENTORY_DIR / f"재고현황_{TODAY_KR}.xlsx"
+        shutil.move(str(latest), str(dest))
+        log(f"  ✅ 이동 완료: {dest.name}")
+        return str(dest)
+
+    log("  ⚠️  재고현황 파일 저장 실패")
+    return None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Step 6 : 자재부족현황 Playwright 업로드
 # ──────────────────────────────────────────────────────────────────────────────
 def automate_upload(downloaded_files):
     from playwright.sync_api import sync_playwright
@@ -625,20 +756,23 @@ def automate_upload(downloaded_files):
             args=["--start-maximized", "--disable-web-security"]
         )
         page = browser.new_context(no_viewport=True).new_page()
-        page.goto(HTML_FILE.as_uri(), timeout=30000)
-        time.sleep(2)
+        page.goto("https://material-shortage.vercel.app/", timeout=30000)
+        page.wait_for_load_state("networkidle", timeout=15000)
 
-        # 로그인
-        log("  로그인 중...")
-        try:
-            page.locator("#login-email").fill(WEB_EMAIL)
-            page.locator("#login-pw").fill(WEB_PW)
-            page.locator("#btn-login").click()
-            time.sleep(2)
-            log("  ✅ 로그인 완료")
-        except Exception as e:
-            log(f"  ⚠️  로그인 실패: {e}")
-            input("  수동 로그인 후 Enter → ")
+        # 로그인 (이미 로그인 상태면 스킵)
+        if page.locator(".btn-logout").is_visible():
+            log("  ✅ 이미 로그인 상태")
+        else:
+            log("  로그인 중...")
+            try:
+                page.locator("#login-email").fill(WEB_EMAIL)
+                page.locator("#login-pw").fill(WEB_PW)
+                page.locator("#auth-login .btn-auth").click()
+                page.wait_for_selector(".btn-logout", timeout=10000)
+                log("  ✅ 로그인 완료")
+            except Exception as e:
+                log(f"  ⚠️  로그인 실패: {e}")
+                input("  수동 로그인 후 Enter → ")
 
         # 키팅 초기화
         log("  키팅 초기화...")
@@ -708,11 +842,14 @@ def main():
         log("▶ Step 3: 로그인...")
         login_smes(win)
 
-        # Step 3~5: 메뉴 이동 + 다운로드
-        log("▶ Step 4~5: 메뉴 이동 및 다운로드...")
+        # Step 3~5: 키팅 자재 메뉴 이동 + 다운로드
+        log("▶ Step 4~5: 키팅 자재 메뉴 이동 및 다운로드...")
         downloaded = navigate_and_download(app)
 
-        # Step 6: 업로드
+        # Step 5b: 재고현황 다운로드
+        navigate_and_download_inventory(app)
+
+        # Step 6: 자재부족현황 웹앱 업로드
         automate_upload(downloaded)
 
     except Exception as e:
