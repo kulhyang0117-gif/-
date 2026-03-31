@@ -1402,13 +1402,23 @@ def automate_upload(downloaded_files):
                 log(f"  ⚠️  로그인 실패: {e}")
                 input("  수동 로그인 후 Enter → ")
 
-        # 키팅 초기화
-        log("  키팅 초기화...")
+        # 키팅 로컬 상태 초기화 (Supabase에는 쓰지 않음 — 업로드 시 덮어쓰기)
+        log("  키팅 로컬 상태 초기화...")
         try:
-            page.locator(".btn-kit-clear").click()
-            time.sleep(1)
-        except Exception:
-            pass
+            page.evaluate("""
+                () => {
+                    window.state.kitFiles = [];
+                    if (window.dbPut) window.dbPut('kit_list', []);
+                    if (window.renderKitChips) window.renderKitChips();
+                    if (window.checkReady) window.checkReady();
+                    localStorage.removeItem('ms_uptime_kit');
+                    localStorage.removeItem('ms_uploader_kit');
+                    const el = document.getElementById('uptime-kit');
+                    if (el) el.textContent = '';
+                }
+            """)
+        except Exception as e:
+            log(f"  ⚠️  초기화 평가 오류: {e}")
 
         # 재고현황 최신 파일 업로드
         inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
@@ -1437,20 +1447,27 @@ def automate_upload(downloaded_files):
 
             # Storage 업로드 + upload_logs 동기화를 await로 명시적 완료
             try:
-                page.evaluate("""
+                result = page.evaluate("""
                     async () => {
                         const files = (window.state && window.state.kitFiles) || [];
-                        if (!files.length) return;
-                        const uploads = files.map(f =>
-                            window.uploadFileToStorage('kit/' + f.name, f.rawData)
-                        );
-                        await Promise.all(uploads);
+                        if (!files.length) return { ok: false, reason: 'state.kitFiles 비어있음' };
+                        const results = [];
+                        for (const f of files) {
+                            const r = await window.uploadFileToStorage('kit/' + f.name, f.rawData);
+                            results.push({ name: f.name, ok: r?.ok, msg: r?.msg || '' });
+                        }
                         const ts = Date.now();
                         const uname = (window.currentUser && window.currentUser.displayName) || '';
                         await window.syncUploadLog('kit', ts, uname, files.map(f => f.name));
+                        localStorage.setItem('ms_uptime_kit', String(ts));
+                        if (uname) localStorage.setItem('ms_uploader_kit', uname);
+                        return { ok: true, fileCount: files.length, names: files.map(f => f.name), results };
                     }
-                """)
-                log("  ✅ Supabase 저장 완료")
+                """, None)
+                if result and result.get('ok'):
+                    log(f"  ✅ Supabase 저장 완료: {result.get('names')}")
+                else:
+                    log(f"  ⚠️  Supabase 저장 결과: {result}")
             except Exception as e:
                 log(f"  ⚠️  Supabase 저장 오류: {e} — 10초 추가 대기")
                 time.sleep(10)
