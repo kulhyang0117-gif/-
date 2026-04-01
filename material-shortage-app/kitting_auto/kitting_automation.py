@@ -1513,6 +1513,10 @@ def automate_upload(downloaded_files):
                 log(f"  ⚠️  로그인 실패: {e}")
                 input("  수동 로그인 후 Enter → ")
 
+        # 로그인 후 앱 초기화 대기 (3초)
+        log("  로그인 후 앱 초기화 대기 중... (3초)")
+        time.sleep(3)
+
         # 키팅 로컬 상태만 초기화 (DB는 건드리지 않음 — 업로드 완료 전 빈 목록 노출 방지)
         log("  키팅 로컬 상태 초기화 (DB 유지)...")
         try:
