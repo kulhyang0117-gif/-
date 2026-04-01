@@ -38,7 +38,13 @@
 
   /* ── 업로드 ── */
   .upload-section { background: white; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-  .upload-section h2 { font-size: 14px; font-weight: 700; color: #1e3a5f; margin-bottom: 16px; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; }
+  .upload-section h2 { font-size: 14px; font-weight: 700; color: #1e3a5f; margin-bottom: 16px; border-bottom: 2px solid #1e3a5f; padding-bottom: 8px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; user-select: none; }
+  .upload-section h2:hover { color: #2c5282; }
+  .upload-toggle-icon { font-size: 12px; transition: transform 0.25s; display: inline-block; }
+  .upload-section.collapsed h2 { margin-bottom: 0; border-bottom-color: transparent; }
+  .upload-section.collapsed .upload-toggle-icon { transform: rotate(-90deg); }
+  .upload-body { overflow: hidden; transition: max-height 0.3s ease, opacity 0.3s ease; max-height: 1000px; opacity: 1; }
+  .upload-section.collapsed .upload-body { max-height: 0; opacity: 0; pointer-events: none; }
   .upload-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
   .upload-item { border: 2px dashed #c8d6e5; border-radius: 8px; padding: 16px; text-align: center; cursor: pointer; transition: all 0.2s; position: relative; }
   .upload-item:hover { border-color: #1e3a5f; background: #f8fafc; }
@@ -333,8 +339,9 @@
   <div class="restore-notice" id="restore-notice">💾 이전에 업로드된 파일이 복원되었습니다. 새 파일을 선택하면 덮어씁니다.</div>
 
   <!-- 파일 업로드 -->
-  <div class="upload-section">
-    <h2>📂 파일 업로드</h2>
+  <div class="upload-section collapsed" id="upload-section">
+    <h2 onclick="toggleUploadSection()">📂 파일 업로드 <span class="upload-toggle-icon">▼</span></h2>
+    <div class="upload-body">
     <div class="upload-grid">
       <div class="upload-item" id="drop-bom">
         <input type="file" accept=".xlsx,.xls" id="file-bom" onchange="handleFile('bom',this)">
@@ -391,6 +398,7 @@
         <div class="kit-notice-text" id="kit-notice-text">전일 생산계획 다음날 이어서 조립시 해당모델 일부 생산되였더라도 키팅수량으로 집계됨.</div>
       </details>
     </div>
+    </div><!-- /.upload-body -->
 
   </div>
 
@@ -776,6 +784,10 @@ if (restored > 0) document.getElementById('restore-notice').style.display = 'blo
   if (tsKit) document.getElementById('uptime-kit').textContent = fmtUpTime(tsKit, nameKit);
   checkReady();
   initDragDrop();
+  // 업로드 섹션 접힘 상태 복원 (저장된 값 없으면 기본값 collapsed)
+  if (localStorage.getItem('upload_section_collapsed') === '0') {
+    document.getElementById('upload-section').classList.remove('collapsed');
+  }
   // 타임스탬프 비교 후 Supabase가 더 최신일 때만 다운로드 (로컬 최신 파일 보호)
   await syncFilesFromSupabase(false, false, false);
   // 3분마다 Supabase에서 최신 파일 확인 (다른 사용자가 올린 파일 자동 반영, 로컬 덮어쓰기 방지)
@@ -869,6 +881,13 @@ function _processKitFiles(files) {
   });
 }
 function handleKitFiles(input) { _processKitFiles(Array.from(input.files)); input.value = ''; }
+
+// ── 업로드 섹션 접기/펼치기 ─────────────────────────
+function toggleUploadSection() {
+  const sec = document.getElementById('upload-section');
+  const collapsed = sec.classList.toggle('collapsed');
+  localStorage.setItem('upload_section_collapsed', collapsed ? '1' : '0');
+}
 
 // ── 드래그앤드롭 초기화 ──────────────────────────────
 function initDragDrop() {
