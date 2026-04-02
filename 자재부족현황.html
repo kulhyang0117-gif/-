@@ -242,6 +242,89 @@
   .btn-logout:hover { background:rgba(255,255,255,0.28); }
   .btn-admin-open { padding:5px 12px; border-radius:5px; background:#e67e22; border:none; color:white; font-size:11px; font-weight:700; cursor:pointer; }
   .btn-admin-open:hover { background:#d35400; }
+
+  /* ── Kitting Board 버튼 ── */
+  .btn-kb { display:inline-flex; align-items:center; gap:8px; padding:9px 20px; background:linear-gradient(135deg,#0f766e,#0d9488); color:white; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(15,118,110,0.4); transition:all 0.2s; white-space:nowrap; }
+  .btn-kb:hover { background:linear-gradient(135deg,#14b8a6,#0f766e); transform:translateY(-1px); box-shadow:0 4px 12px rgba(15,118,110,0.55); }
+
+  /* ── Kitting Board 모달 ── */
+  .kb-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9998; align-items:flex-start; justify-content:center; overflow-y:auto; padding:20px; }
+  .kb-modal.open { display:flex; }
+  .kb-wrap { background:#f5f7fa; border-radius:16px; width:min(1300px,98vw); min-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.4); overflow:hidden; }
+  .kb-head { background:white; padding:20px 28px 14px; border-bottom:1px solid #e5e7eb; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .kb-head-left h2 { font-size:22px; font-weight:800; color:#111827; margin-bottom:3px; }
+  .kb-head-left p { font-size:12px; color:#6b7280; }
+  .kb-head-right { display:flex; align-items:center; gap:10px; }
+  .kb-upload-label { display:inline-flex; align-items:center; gap:7px; padding:8px 18px; background:#1e3a5f; color:white; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; }
+  .kb-upload-label:hover { background:#2952a3; }
+  .kb-file-info { font-size:11px; color:#9ca3af; }
+  .kb-close { background:none; border:none; font-size:20px; color:#9ca3af; cursor:pointer; padding:4px 8px; border-radius:6px; }
+  .kb-close:hover { background:#f3f4f6; color:#374151; }
+  .kb-nav-bar { background:white; border-bottom:1px solid #e5e7eb; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .kb-date-nav { display:flex; align-items:center; gap:12px; }
+  .kb-nav-btn { background:none; border:1px solid #d1d5db; border-radius:6px; padding:5px 10px; cursor:pointer; font-size:14px; color:#374151; }
+  .kb-nav-btn:hover { background:#f3f4f6; }
+  .kb-date-label { font-size:16px; font-weight:700; color:#111827; min-width:140px; text-align:center; }
+  .kb-stats { display:flex; align-items:center; gap:20px; font-size:13px; }
+  .kb-stat { display:flex; align-items:center; gap:6px; }
+  .kb-stat .kb-stat-val { font-weight:700; font-size:15px; }
+  .kb-stat.total .kb-stat-val { color:#374151; }
+  .kb-stat.ready .kb-stat-val { color:#16a34a; }
+  .kb-stat.short .kb-stat-val { color:#dc2626; }
+  .kb-stat-pct { font-size:11px; color:#6b7280; }
+  .kb-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .kb-dot.ready { background:#16a34a; }
+  .kb-dot.short { background:#dc2626; }
+  .kb-body { padding:20px 28px; flex:1; }
+
+  /* Gantt */
+  .kb-gantt { background:white; border-radius:12px; padding:0; box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden; margin-bottom:20px; }
+  .kb-gantt-inner { overflow-x:auto; }
+  .kb-tl-header { display:flex; align-items:center; border-bottom:1px solid #e5e7eb; background:#f9fafb; }
+  .kb-line-label { width:72px; min-width:72px; padding:8px 12px; border-right:1px solid #e5e7eb; flex-shrink:0; }
+  .kb-tl-track { flex:1; position:relative; height:32px; }
+  .kb-tl-mark { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:11px; color:#9ca3af; white-space:nowrap; }
+  .kb-tl-mark::before { content:''; position:absolute; top:100%; left:50%; width:1px; height:6px; background:#e5e7eb; }
+  .kb-row { display:flex; align-items:stretch; border-bottom:1px solid #f3f4f6; min-height:58px; }
+  .kb-row:last-child { border-bottom:none; }
+  .kb-line-label { width:72px; min-width:72px; padding:8px 12px; border-right:1px solid #e5e7eb; flex-shrink:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .kb-ln { font-size:16px; font-weight:800; color:#1e3a5f; }
+  .kb-ln-sub { font-size:10px; color:#9ca3af; }
+  .kb-track { flex:1; position:relative; background:repeating-linear-gradient(90deg, transparent, transparent calc(100%/10 - 1px), #f3f4f6 calc(100%/10 - 1px), #f3f4f6 calc(100%/10)); min-height:58px; }
+  .kb-block { position:absolute; top:4px; bottom:4px; border-radius:6px; padding:4px 7px; overflow:hidden; cursor:default; transition:opacity 0.15s; display:flex; flex-direction:column; justify-content:center; min-width:2%; }
+  .kb-block:hover { opacity:0.85; z-index:10; }
+  .kb-block-ok      { background:#16a34a; color:white; }
+  .kb-block-danger  { background:#dc2626; color:white; }
+  .kb-block-warning { background:#ea580c; color:white; }
+  .kb-block-na      { background:#9ca3af; color:white; }
+  .kb-block-name { font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kb-block-time { font-size:10px; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kb-legend { display:flex; gap:16px; padding:10px 14px; border-top:1px solid #f3f4f6; font-size:11px; color:#6b7280; background:#fafafa; flex-wrap:wrap; }
+  .kb-legend-item { display:flex; align-items:center; gap:5px; }
+  .kb-legend-dot { width:12px; height:12px; border-radius:3px; }
+
+  /* 부족자재 테이블 */
+  .kb-shortage-section { background:white; border-radius:12px; box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden; }
+  .kb-st-header { display:flex; align-items:center; justify-content:space-between; padding:14px 20px; border-bottom:1px solid #f3f4f6; }
+  .kb-st-title { font-size:14px; font-weight:700; color:#374151; display:flex; align-items:center; gap:8px; }
+  .kb-st-cnt { display:inline-flex; align-items:center; justify-content:center; background:#dc2626; color:white; border-radius:12px; padding:2px 10px; font-size:12px; font-weight:700; }
+  .kb-st-date { font-size:11px; color:#9ca3af; }
+  .kb-st-body { padding:0 20px 16px; max-height:420px; overflow-y:auto; }
+  .kb-st-line-hdr { font-size:13px; font-weight:700; color:#374151; padding:14px 0 6px; display:flex; align-items:center; gap:8px; }
+  .kb-st-badge { font-size:11px; color:#dc2626; font-weight:600; }
+  .kb-st-table { width:100%; border-collapse:collapse; font-size:12px; margin-bottom:4px; }
+  .kb-st-table thead th { background:#f9fafb; color:#6b7280; font-size:11px; font-weight:600; padding:7px 10px; border-bottom:1px solid #e5e7eb; text-align:left; white-space:nowrap; }
+  .kb-st-table thead th.num { text-align:right; }
+  .kb-st-table tbody td { padding:7px 10px; border-bottom:1px solid #f3f4f6; vertical-align:middle; white-space:nowrap; }
+  .kb-st-table tbody tr:last-child td { border-bottom:none; }
+  .kb-st-table .num { text-align:right; }
+  .kb-st-table .center { text-align:center; }
+  .kb-proc-tag { display:inline-block; background:#dbeafe; color:#1d4ed8; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; }
+  .kb-shortage-neg { color:#dc2626; font-weight:700; }
+  .kb-note-input { width:140px; border:1px solid #e5e7eb; border-radius:4px; padding:4px 7px; font-size:11px; color:#374151; }
+  .kb-note-input:focus { outline:none; border-color:#1e3a5f; }
+  .kb-empty-state { text-align:center; padding:60px 20px; color:#9ca3af; }
+  .kb-empty-icon { font-size:40px; margin-bottom:12px; }
 </style>
 </head>
 <body>
@@ -298,6 +381,62 @@
   </div>
 </div>
 
+<!-- ── Kitting Board 모달 ── -->
+<div class="kb-modal" id="kb-modal">
+  <div class="kb-wrap">
+    <!-- 헤더 -->
+    <div class="kb-head">
+      <div class="kb-head-left">
+        <h2>📋 Kitting Board</h2>
+        <p>조립라인별 생산계획 · 자재부족현황</p>
+      </div>
+      <div class="kb-head-right">
+        <div id="kb-file-info" class="kb-file-info"></div>
+        <button class="kb-close" onclick="closeKittingBoard()">✕</button>
+      </div>
+    </div>
+    <!-- 날짜 네비 + 통계 -->
+    <div class="kb-nav-bar">
+      <div class="kb-date-nav">
+        <button class="kb-nav-btn" onclick="kbPrevDate()">&#8249;</button>
+        <div class="kb-date-label" id="kb-date-label">—</div>
+        <button class="kb-nav-btn" onclick="kbNextDate()">&#8250;</button>
+      </div>
+      <div class="kb-stats">
+        <div class="kb-stat total">전체 <span class="kb-stat-val" id="kb-total">0</span></div>
+        <div class="kb-stat ready"><span class="kb-dot ready"></span>준비완료 <span class="kb-stat-val" id="kb-ready">0</span> <span class="kb-stat-pct" id="kb-ready-pct"></span></div>
+        <div class="kb-stat short"><span class="kb-dot short"></span>부족 <span class="kb-stat-val" id="kb-short">0</span></div>
+      </div>
+    </div>
+    <!-- 본문 -->
+    <div class="kb-body">
+      <!-- Gantt -->
+      <div class="kb-gantt">
+        <div class="kb-gantt-inner" id="kb-gantt"></div>
+        <div class="kb-legend">
+          <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#16a34a"></div>준비완료</div>
+          <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#dc2626"></div>자재부족</div>
+          <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#ea580c"></div>위험</div>
+          <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#9ca3af"></div>BOM없음</div>
+        </div>
+      </div>
+      <!-- 부족자재 현황 -->
+      <div class="kb-shortage-section">
+        <div class="kb-st-header">
+          <div class="kb-st-title">
+            <span style="color:#dc2626">●</span> 부족자재 현황
+            <span class="kb-st-cnt" id="kb-shortage-cnt">0</span>건
+          </div>
+          <div class="kb-st-date" id="kb-st-date"></div>
+        </div>
+        <div class="kb-st-body" id="kb-shortage-body">
+          <div class="kb-empty-state"><div class="kb-empty-icon">📊</div>분석을 실행하면 표시됩니다.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="header">
   <div style="font-size:22px;">📦</div>
   <div>
@@ -309,6 +448,9 @@
   </button>
   <button class="btn-emergency-stop" onclick="emergencyStop()" title="실행 중인 키팅 자동화를 즉시 중단합니다">
     🛑 긴급정지
+  </button>
+  <button class="btn-kb" onclick="openKittingBoard()" title="조립라인별 키팅 현황 보드">
+    📋 Kitting Board
   </button>
   <div class="header-user" id="header-user" style="display:none;">
     <span class="hdr-uname" id="hdr-uname"></span>
@@ -637,6 +779,7 @@ let _analysisRanOnce = false; // 첫 로드 후 분석 1회 여부 추적
 
 let analysisResult = [];
 let filteredResult = [];
+let _kitBoardDateIdx = 0;
 let modelResult = [];
 let filteredModelResult = [];
 let inventoryResult = [];
@@ -1156,6 +1299,7 @@ const PLAN_COL_KW = {
   model: ['MODEL','모델','모델명','MODELNO','MODEL NO'],
   spec:  ['사양','SPEC','규격','제품사양','차종사양','사양명','형식','타입','TYPE'],
   lhrh:  ['LH/RH','LH-RH','LH_RH','LHRH','L/R','LH','RH','좌우','좌/우','Left/Right'],
+  takt:  ['소요시간','소요(분)','작업시간','분','TAKT','WORK_TIME','작업분','소요'],
 };
 
 // 헤더 행에서 컬럼 인덱스 매핑을 반환
@@ -1195,6 +1339,7 @@ function detectPlanColIdx(headerRow) {
     model: find(PLAN_COL_KW.model),
     spec:  find(PLAN_COL_KW.spec),
     lhrh:  find(PLAN_COL_KW.lhrh),
+    takt:  find(PLAN_COL_KW.takt),
   };
 }
 
@@ -1248,7 +1393,7 @@ function parsePlan(wb, fromSerial) {
   const result = [];
   for (const sn of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
-    let ds=-1, cD=0, cP=1, cQ=5, cM=-1, cS=-1, cLR=-1, cP2=-1;
+    let ds=-1, cD=0, cP=1, cQ=5, cM=-1, cS=-1, cLR=-1, cP2=-1, cT=-1;
 
     for (let i=0; i<Math.min(20,rows.length); i++) {
       const r = rows[i].map(v => String(v).trim());
@@ -1265,6 +1410,7 @@ function parsePlan(wb, fromSerial) {
         cM  = m.model.idx; // -1이면 model 없음
         cS  = m.spec.idx;  // -1이면 spec 없음
         if (m.lhrh.idx  >= 0) cLR = m.lhrh.idx;
+        if (m.takt.idx  >= 0) cT  = m.takt.idx;
         // 1차 P/N이 품목코드(시스템 P/N)인 경우 → 고객사 PART NO(P/N) 컬럼을 보조로 탐색
         // 품목코드가 비어있는 행에서 fallback으로 사용
         if (m.pn.idx >= 0) {
@@ -1293,7 +1439,8 @@ function parsePlan(wb, fromSerial) {
         pn, qty,
         model: cM >= 0 ? String(r[cM]||'').trim() : '',
         spec:  cS >= 0 ? String(r[cS]||'').trim() : '',
-        lhrh:  cLR >= 0 ? String(r[cLR]||'').trim() : '' });
+        lhrh:  cLR >= 0 ? String(r[cLR]||'').trim() : '',
+        takt:  cT >= 0 ? (parseFloat(r[cT])||0) : 0 });
     }
   }
   return result;
@@ -1382,6 +1529,7 @@ function runAnalysis() {
 
       const { bomMap, productNameMap, custPartMap }=parseBOM(state.bom,bomLevel,partType);
       const planRows=parsePlan(state.plan,fromSerial);
+      window._kitBoardPlanRows=planRows;
       const invMap=parseInventory(state.inv);
       const kitMap=parseKitting(state.kitFiles);
 
@@ -3734,6 +3882,261 @@ function emergencyStop() {
     }, 3000);
   }
 }
+// ── Kitting Board ──────────────────────────────────────────────────────────
+let _kitBoardDates = [];
+
+function openKittingBoard() {
+  const planRows = window._kitBoardPlanRows || [];
+  if (!planRows.length) {
+    alert('먼저 생산계획 파일을 업로드하고 분석을 실행해주세요.');
+    return;
+  }
+  // 날짜 목록 구성
+  const dateMap = {};
+  for (const row of planRows) {
+    if (!dateMap[row.dateSerial]) dateMap[row.dateSerial] = row.dateStr;
+  }
+  _kitBoardDates = Object.entries(dateMap)
+    .sort((a,b) => Number(a[0]) - Number(b[0]))
+    .map(([serial, str]) => ({ serial: Number(serial), str }));
+  if (_kitBoardDateIdx >= _kitBoardDates.length) _kitBoardDateIdx = 0;
+  // 파일 정보 표시
+  if (state.plan) {
+    const name = state.plan._fileName || '생산계획';
+    document.getElementById('kb-file-info').textContent = name;
+  }
+  document.getElementById('kb-modal').classList.add('open');
+  _kbRenderDate();
+}
+
+function closeKittingBoard() {
+  document.getElementById('kb-modal').classList.remove('open');
+}
+
+function kbPrevDate() {
+  if (_kitBoardDateIdx > 0) { _kitBoardDateIdx--; _kbRenderDate(); }
+}
+function kbNextDate() {
+  if (_kitBoardDateIdx < _kitBoardDates.length - 1) { _kitBoardDateIdx++; _kbRenderDate(); }
+}
+
+function _kbRenderDate() {
+  const planRows = window._kitBoardPlanRows || [];
+  const dateObj  = _kitBoardDates[_kitBoardDateIdx];
+  if (!dateObj) return;
+
+  const dayNames = ['일','월','화','수','목','금','토'];
+  const ds = dateObj.serial;
+  // Excel serial → JS Date
+  const jsDate = new Date(Date.UTC(1899,11,30) + ds * 86400000);
+  const dateLabel = `${jsDate.getUTCMonth()+1}월 ${jsDate.getUTCDate()}일 (${dayNames[jsDate.getUTCDay()]})`;
+  document.getElementById('kb-date-label').textContent = dateLabel;
+  document.getElementById('kb-st-date').textContent = `${jsDate.getUTCMonth()+1}월 ${jsDate.getUTCDate()}일 기준`;
+
+  // 해당 날짜 행 필터
+  const rows = planRows.filter(r => r.dateSerial === ds);
+
+  // 라인별 그룹 (sheet: 조립_A, 조립_B ...)
+  const lineMap = {};
+  for (const row of rows) {
+    const line = row.sheet.replace(/조립[_ ]/,'').trim();
+    if (!lineMap[line]) lineMap[line] = [];
+    lineMap[line].push(row);
+  }
+
+  // modelResult 조회용 맵
+  const mStatusMap = {};
+  for (const e of modelResult) {
+    const key = `${e.sheet}||${e.pn}||${e.model}||${e.lhrh}`;
+    mStatusMap[key] = e;
+  }
+
+  // 통계
+  const lines = Object.keys(lineMap).sort();
+  let total=0, ready=0, short=0;
+  for (const line of lines) {
+    const seen = new Set();
+    for (const row of lineMap[line]) {
+      const k = `${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`;
+      if (seen.has(k)) continue; seen.add(k); total++;
+      const e = mStatusMap[k];
+      if (e && e.status==='ok') ready++;
+      else if (e && e.status==='danger') short++;
+    }
+  }
+  document.getElementById('kb-total').textContent  = total;
+  document.getElementById('kb-ready').textContent  = ready;
+  document.getElementById('kb-ready-pct').textContent = total>0 ? `(${Math.round(ready/total*100)}%)` : '';
+  document.getElementById('kb-short').textContent  = short;
+
+  _kbRenderGantt(lines, lineMap, mStatusMap);
+  _kbRenderShortage(lines, lineMap, mStatusMap);
+}
+
+function _minToTime(min) {
+  const h = Math.floor(min/60), m = min%60;
+  return `${h}:${String(m).padStart(2,'0')}`;
+}
+
+function _kbRenderGantt(lines, lineMap, mStatusMap) {
+  const START = 8*60+30, END = 18*60+30, TOTAL = END-START;
+  const gantt = document.getElementById('kb-gantt');
+  gantt.innerHTML = '';
+
+  // 타임라인 헤더
+  const tlRow = document.createElement('div');
+  tlRow.className = 'kb-tl-header';
+  const tlLabel = document.createElement('div');
+  tlLabel.className = 'kb-line-label';
+  tlRow.appendChild(tlLabel);
+  const tlTrack = document.createElement('div');
+  tlTrack.className = 'kb-tl-track';
+  for (let h=9; h<=18; h++) {
+    const mk = document.createElement('div');
+    mk.className = 'kb-tl-mark';
+    mk.style.left = `${((h*60-START)/TOTAL*100).toFixed(2)}%`;
+    mk.textContent = `${h}:00`;
+    tlTrack.appendChild(mk);
+  }
+  tlRow.appendChild(tlTrack);
+  gantt.appendChild(tlRow);
+
+  for (const line of lines) {
+    const lineRows = lineMap[line];
+    // 모델별 블록 (순서 유지, 중복 키 합산)
+    const blockMap = new Map();
+    const blockOrder = [];
+    for (const row of lineRows) {
+      const k = `${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`;
+      if (!blockMap.has(k)) {
+        const e = mStatusMap[k];
+        const dispModel = row.model || row.pn;
+        blockMap.set(k, { key:k, model:dispModel, qty:0, takt:row.takt||0, status:e?e.status:'na' });
+        blockOrder.push(k);
+      }
+      blockMap.get(k).qty += row.qty;
+    }
+    const blocks = blockOrder.map(k => blockMap.get(k));
+
+    // 시간 계산
+    let cur = START;
+    for (const b of blocks) {
+      b.startMin = cur;
+      b.endMin   = cur + (b.takt||0);
+      cur = b.endMin;
+    }
+
+    const lineTotal = blocks.length;
+    const lineReady = blocks.filter(b=>b.status==='ok').length;
+
+    const rowEl = document.createElement('div');
+    rowEl.className = 'kb-row';
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'kb-line-label';
+    labelEl.innerHTML = `<div class="kb-ln">${line}</div><div class="kb-ln-sub">${lineReady}/${lineTotal}</div>`;
+    rowEl.appendChild(labelEl);
+
+    const trackEl = document.createElement('div');
+    trackEl.className = 'kb-track';
+
+    for (const b of blocks) {
+      const hasTakt = b.takt > 0;
+      const leftPct  = Math.max(0, (b.startMin-START)/TOTAL*100);
+      const widthPct = hasTakt
+        ? Math.min(100-leftPct, b.takt/TOTAL*100)
+        : (100/blocks.length);
+
+      const blk = document.createElement('div');
+      blk.className = `kb-block kb-block-${b.status}`;
+      blk.style.left  = `${leftPct.toFixed(2)}%`;
+      blk.style.width = `${Math.max(widthPct,1.5).toFixed(2)}%`;
+
+      const timeStr = hasTakt
+        ? `${b.qty.toLocaleString()}ea · ${_minToTime(b.startMin)}~${_minToTime(b.endMin)}`
+        : `${b.qty.toLocaleString()}ea`;
+      blk.innerHTML = `<div class="kb-block-name">${b.model}</div><div class="kb-block-time">${timeStr}</div>`;
+      trackEl.appendChild(blk);
+    }
+
+    rowEl.appendChild(trackEl);
+    gantt.appendChild(rowEl);
+  }
+}
+
+function _kbRenderShortage(lines, lineMap, mStatusMap) {
+  const container = document.getElementById('kb-shortage-body');
+  container.innerHTML = '';
+
+  // analysisResult 에서 조달/협력사 조회용 맵
+  const partInfoMap = {};
+  for (const r of analysisResult) partInfoMap[r.자품번] = r;
+
+  let totalCnt = 0;
+  for (const line of lines) {
+    const seenParts = new Set();
+    const lineShortages = [];
+    for (const row of lineMap[line]) {
+      const k = `${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`;
+      const e = mStatusMap[k];
+      if (!e || e.dangerParts.length===0) continue;
+      for (const part of e.dangerParts) {
+        if (seenParts.has(part.자품번)) continue;
+        seenParts.add(part.자품번);
+        lineShortages.push(part);
+      }
+    }
+    if (!lineShortages.length) continue;
+    totalCnt += lineShortages.length;
+
+    const hdr = document.createElement('div');
+    hdr.className = 'kb-st-line-hdr';
+    hdr.innerHTML = `Line ${line} <span class="kb-st-badge">${lineShortages.length}건 부족</span>`;
+    container.appendChild(hdr);
+
+    // 컬럼 헤더 행
+    const tbl = document.createElement('table');
+    tbl.className = 'kb-st-table';
+    tbl.innerHTML = `<thead><tr>
+      <th class="center">OK</th><th>부품번호</th><th>부품명</th><th>조달</th>
+      <th class="num">필요</th><th class="num">현재고</th><th class="num">부족</th>
+      <th>협력사</th><th>비고</th>
+    </tr></thead>`;
+    const tbody = document.createElement('tbody');
+
+    for (const part of lineShortages) {
+      const pi = partInfoMap[part.자품번] || {};
+      const 조달 = pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
+      const 협력사 = pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
+      const req = part.modelReq ?? part.totalGlobalReq ?? 0;
+      const stk = part.stock ?? 0;
+      const lack = (part.available??stk) - req;
+
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="center"><input type="checkbox" style="cursor:pointer;"></td>
+        <td style="font-family:monospace;font-size:11px;">${part.자품번}</td>
+        <td>${part.자품명}</td>
+        <td>${조달?`<span class="kb-proc-tag">${조달}</span>`:''}</td>
+        <td class="num">${req.toLocaleString()}</td>
+        <td class="num">${stk.toLocaleString()}</td>
+        <td class="num kb-shortage-neg">${lack.toLocaleString()}</td>
+        <td style="font-size:11px;color:#6b7280;">${협력사}</td>
+        <td><input type="text" class="kb-note-input" placeholder="공급일/수량 등..."></td>
+      `;
+      tbody.appendChild(tr);
+    }
+    tbl.appendChild(tbody);
+    container.appendChild(tbl);
+  }
+
+  document.getElementById('kb-shortage-cnt').textContent = totalCnt;
+  if (!totalCnt) {
+    container.innerHTML = `<div style="text-align:center;padding:36px;color:#16a34a;font-size:14px;font-weight:700;">✅ 부족자재 없음</div>`;
+    document.getElementById('kb-shortage-cnt').textContent = '0';
+  }
+}
+
 function downloadSetupBat() {
   // setup_url_protocol.bat 경로 안내 (로컬 파일 다운로드 불가 → 경로 복사 안내)
   const path = String.raw`C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\material-shortage-app\kitting_auto\setup_url_protocol.bat`;
