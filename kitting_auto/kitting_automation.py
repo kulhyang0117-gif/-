@@ -526,44 +526,44 @@ def _download_by_keyboard(win):
     log(f"  첫 번째 행 클릭: ({ROW_X}, {ROW_Y})")
     time.sleep(0.5)
 
+    # 화면 전체 높이를 동적으로 읽어 region 설정 (해상도 무관)
+    screen_w, screen_h = pyautogui.size()
+    region_top  = 140
+    region_h    = screen_h - region_top - 50   # 하단 태스크바(50px) 제외
+    grid_bottom = screen_h - 100
+    region = (ROW_X - 200, region_top, 500, region_h)
+    log(f"  스캔 region: y={region_top}~{region_top+region_h}  grid_bottom={grid_bottom}")
+
     downloaded = []
-    region = (ROW_X - 200, 140, 500, 900)   # y: 140~1040, 최대 40행 이상 커버
     same_count = 0   # 연속으로 화면 변화 없는 횟수 카운트
 
-    for i in range(500):   # 200 → 500으로 확장 (전 품목 완료 보장)
+    for i in range(500):
         log(f"  [{i+1}] Excel 다운로드 시도...")
         saved = _click_excel_download(win, i + 1, f"kitting_{i+1:03d}")
         if saved:
             downloaded.append(saved)
 
-        # ── Excel 닫힌 후 그리드 포커스 복원 ──────────────────────────────
-        # Excel 창 열기/닫기 후 MES 그리드 포커스가 해제되어 Down 키가 그리드에
-        # 전달되지 않는 문제 방지 → before 찍기 전에 반드시 그리드 클릭
         win.set_focus()
         time.sleep(0.4)
 
-        sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=1000, row_height=ROW_HEIGHT)
-        if sel_y is not None:
-            log(f"    선택 행 클릭(포커스 복원): ({ROW_X}, {sel_y})")
-            pyautogui.click(ROW_X, sel_y)
-        else:
-            # 색상 탐지 실패 → 그리드 중앙 클릭으로 포커스만 복원
-            fallback_y = 400
-            log(f"    선택 행 탐지 실패 → 그리드 중앙 클릭({ROW_X}, {fallback_y})으로 포커스 복원")
-            pyautogui.click(ROW_X, fallback_y)
-        time.sleep(0.3)
-
         before = pyautogui.screenshot(region=region)
 
+        # 선택 행 클릭 후 Down (원래 방식 — fallback 클릭 없음)
+        sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=grid_bottom, row_height=ROW_HEIGHT)
+        if sel_y is not None:
+            log(f"    현재 선택 행 클릭: ({ROW_X}, {sel_y}) → ↓")
+            pyautogui.click(ROW_X, sel_y)
+            time.sleep(0.2)
+
         pyautogui.press('down')   # 다음 품목으로 이동
-        time.sleep(0.6)
+        time.sleep(0.5)
         after = pyautogui.screenshot(region=region)
 
-        # 스크린샷이 동일 → 더 이상 내려갈 행 없음 확인 (3회 연속 동일 시 완료)
+        # 스크린샷이 동일 → 더 이상 내려갈 행 없음 확인 (5회 연속 동일 시 완료)
         if list(before.getdata()) == list(after.getdata()):
             same_count += 1
-            log(f"    화면 변화 없음 ({same_count}/3)")
-            if same_count >= 3:
+            log(f"    화면 변화 없음 ({same_count}/5)")
+            if same_count >= 5:
                 log(f"  ✅ 마지막 행 도달 — 전체 {len(downloaded)}개 다운로드 완료")
                 break
         else:
