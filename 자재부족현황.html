@@ -3905,11 +3905,19 @@ function emergencyStop() {
 let _kitBoardDates = [];
 
 function openKittingBoard() {
-  const planRows = window._kitBoardPlanRows || [];
-  if (!planRows.length) {
-    alert('먼저 생산계획 파일을 업로드하고 분석을 실행해주세요.');
+  if (!state.plan) {
+    alert('먼저 생산계획 파일을 업로드해주세요.');
     return;
   }
+  // buildPkgData와 동일하게 state.plan에서 직접 파싱 (D라인 포함)
+  const fromDateStr = document.getElementById('fromDate')?.value || '';
+  const fromSerial  = fromDateStr ? dateToSerial(fromDateStr) : 0;
+  const planRows = parsePlan(state.plan, fromSerial);
+  if (!planRows.length) {
+    alert('생산계획에서 읽을 수 있는 데이터가 없습니다.');
+    return;
+  }
+  window._kitBoardPlanRows = planRows;
   // 날짜 목록 구성
   const dateMap = {};
   for (const row of planRows) {
@@ -3920,10 +3928,8 @@ function openKittingBoard() {
     .map(([serial, str]) => ({ serial: Number(serial), str }));
   if (_kitBoardDateIdx >= _kitBoardDates.length) _kitBoardDateIdx = 0;
   // 파일 정보 표시
-  if (state.plan) {
-    const name = state.plan._fileName || '생산계획';
-    document.getElementById('kb-file-info').textContent = name;
-  }
+  const name = state.plan._fileName || '생산계획';
+  document.getElementById('kb-file-info').textContent = name;
   document.getElementById('kb-modal').classList.add('open');
   _kbRenderDate();
 }
@@ -3968,6 +3974,28 @@ function _kbRenderDate() {
   for (const e of modelResult) {
     const key = `${e.sheet}||${e.pn}||${e.model}||${e.lhrh}`;
     mStatusMap[key] = e;
+  }
+  // buildPkgData와 동일: D라인 도번 ↔ 시스템P/N 별칭 키 추가
+  if (state.plan) {
+    const dobnMap = buildDobnMapFromPlan(state.plan);
+    // 도번→시스템P/N: planRow의 pn이 도번인 경우 modelResult(시스템P/N 기준) 조회 가능하도록
+    Object.entries(dobnMap).forEach(([dbn, pn]) => {
+      for (const e of modelResult) {
+        if (e.pn === pn) {
+          const aliasKey = `${e.sheet}||${dbn}||${e.model}||${e.lhrh}`;
+          if (!mStatusMap[aliasKey]) mStatusMap[aliasKey] = e;
+        }
+      }
+    });
+    // 시스템P/N→도번: modelResult의 pn이 도번인 경우를 시스템P/N으로도 찾을 수 있도록
+    Object.entries(dobnMap).forEach(([dbn, pn]) => {
+      for (const e of modelResult) {
+        if (e.pn === dbn) {
+          const aliasKey = `${e.sheet}||${pn}||${e.model}||${e.lhrh}`;
+          if (!mStatusMap[aliasKey]) mStatusMap[aliasKey] = e;
+        }
+      }
+    });
   }
 
   // 통계
