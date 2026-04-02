@@ -4003,31 +4003,39 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
 
   for (const line of lines) {
     const lineRows = lineMap[line];
-    // 모델별 블록 (순서 유지, 중복 키 합산)
-    const blockMap = new Map();
-    const blockOrder = [];
-    for (const row of lineRows) {
-      const k = `${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`;
-      if (!blockMap.has(k)) {
-        const e = mStatusMap[k];
-        const dispModel = row.model || row.pn;
-        blockMap.set(k, { key:k, model:dispModel, qty:0, takt:row.takt||0, status:e?e.status:'na' });
-        blockOrder.push(k);
-      }
-      blockMap.get(k).qty += row.qty;
-    }
-    const blocks = blockOrder.map(k => blockMap.get(k));
 
-    // 시간 계산
+    // 각 행 = 독립 블록 (같은 모델이 여러 번 등장해도 각각 별도 블록으로 표시)
+    const blocks = lineRows.map(row => {
+      const k = `${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`;
+      const e = mStatusMap[k];
+      return {
+        model:  row.model || row.pn,
+        qty:    row.qty,
+        takt:   row.takt || 0,
+        status: e ? e.status : 'na',
+      };
+    });
+
+    // takt 데이터 존재 여부 확인
+    const hasTaktData = blocks.some(b => b.takt > 0);
+
+    // 시간 계산: 8:30 시작, 소요시간 누적
     let cur = START;
-    for (const b of blocks) {
-      b.startMin = cur;
-      b.endMin   = cur + (b.takt||0);
-      cur = b.endMin;
+    for (let idx = 0; idx < blocks.length; idx++) {
+      const b = blocks[idx];
+      if (hasTaktData) {
+        b.startMin = cur;
+        b.endMin   = cur + (b.takt || 0);
+        cur = b.endMin;
+      } else {
+        // 소요시간 없으면 균등 분배
+        b.startMin = START + (idx / blocks.length) * TOTAL;
+        b.endMin   = START + ((idx + 1) / blocks.length) * TOTAL;
+      }
     }
 
     const lineTotal = blocks.length;
-    const lineReady = blocks.filter(b=>b.status==='ok').length;
+    const lineReady = blocks.filter(b => b.status === 'ok').length;
 
     const rowEl = document.createElement('div');
     rowEl.className = 'kb-row';
@@ -4041,18 +4049,15 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
     trackEl.className = 'kb-track';
 
     for (const b of blocks) {
-      const hasTakt = b.takt > 0;
-      const leftPct  = Math.max(0, (b.startMin-START)/TOTAL*100);
-      const widthPct = hasTakt
-        ? Math.min(100-leftPct, b.takt/TOTAL*100)
-        : (100/blocks.length);
+      const leftPct  = Math.max(0, (b.startMin - START) / TOTAL * 100);
+      const widthPct = Math.min(100 - leftPct, (b.endMin - b.startMin) / TOTAL * 100);
 
       const blk = document.createElement('div');
       blk.className = `kb-block kb-block-${b.status}`;
       blk.style.left  = `${leftPct.toFixed(2)}%`;
-      blk.style.width = `${Math.max(widthPct,1.5).toFixed(2)}%`;
+      blk.style.width = `${Math.max(widthPct, 1.5).toFixed(2)}%`;
 
-      const timeStr = hasTakt
+      const timeStr = hasTaktData
         ? `${b.qty.toLocaleString()}ea · ${_minToTime(b.startMin)}~${_minToTime(b.endMin)}`
         : `${b.qty.toLocaleString()}ea`;
       blk.innerHTML = `<div class="kb-block-name">${b.model}</div><div class="kb-block-time">${timeStr}</div>`;
