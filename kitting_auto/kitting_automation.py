@@ -527,7 +527,7 @@ def _download_by_keyboard(win):
     time.sleep(0.5)
 
     downloaded = []
-    region = (ROW_X - 200, 140, 500, 300)
+    region = (ROW_X - 200, 140, 500, 700)
     same_count = 0   # 연속으로 화면 변화 없는 횟수 카운트
 
     for i in range(500):   # 200 → 500으로 확장 (전 품목 완료 보장)
@@ -543,7 +543,7 @@ def _download_by_keyboard(win):
         before = pyautogui.screenshot(region=region)
 
         # 현재 선택된 행에만 클릭 (색상 탐지 성공 시) — 실패 시 클릭 없이 Down만
-        sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=560, row_height=ROW_HEIGHT)
+        sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=840, row_height=ROW_HEIGHT)
         if sel_y is not None:
             log(f"    현재 선택 행 클릭: ({ROW_X}, {sel_y}) → ↓")
             pyautogui.click(ROW_X, sel_y)
