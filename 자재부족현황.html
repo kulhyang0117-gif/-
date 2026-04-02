@@ -3998,7 +3998,7 @@ function _minToTime(min) {
 }
 
 function _kbRenderGantt(lines, lineMap, mStatusMap) {
-  const START = 8*60+30, END = 18*60+30, TOTAL = END-START;
+  const START = 8*60+30, END = 22*60, TOTAL = END-START;
   const gantt = document.getElementById('kb-gantt');
   gantt.innerHTML = '';
 
@@ -4010,7 +4010,7 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
   tlRow.appendChild(tlLabel);
   const tlTrack = document.createElement('div');
   tlTrack.className = 'kb-tl-track';
-  for (let h=9; h<=18; h++) {
+  for (let h=9; h<=22; h++) {
     const mk = document.createElement('div');
     mk.className = 'kb-tl-mark';
     mk.style.left = `${((h*60-START)/TOTAL*100).toFixed(2)}%`;
