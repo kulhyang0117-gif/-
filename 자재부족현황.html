@@ -243,6 +243,40 @@
   .btn-admin-open { padding:5px 12px; border-radius:5px; background:#e67e22; border:none; color:white; font-size:11px; font-weight:700; cursor:pointer; }
   .btn-admin-open:hover { background:#d35400; }
 
+  /* ── 대시보드 ── */
+  .dashboard-overlay { position:fixed; inset:0; background:#0f172a; z-index:10000; display:flex; flex-direction:column; overflow:auto; }
+  .dashboard-overlay.hidden { display:none; }
+  .dash-header { background:linear-gradient(135deg,#1e3a5f 0%,#1e4d8c 100%); padding:40px 48px 32px; color:white; }
+  .dash-header h1 { font-size:28px; font-weight:800; letter-spacing:-0.5px; margin-bottom:6px; }
+  .dash-header p { font-size:14px; opacity:0.65; }
+  .dash-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; padding:40px 48px; max-width:1300px; margin:0 auto; width:100%; }
+  .dash-card { background:#1e293b; border:1px solid #334155; border-radius:16px; padding:32px 28px; cursor:pointer; transition:all 0.22s; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden; }
+  .dash-card::before { content:''; position:absolute; inset:0; opacity:0; transition:opacity 0.22s; }
+  .dash-card:hover { transform:translateY(-4px); box-shadow:0 16px 40px rgba(0,0,0,0.5); border-color:transparent; }
+  .dash-card:hover::before { opacity:1; }
+  .dash-card:active { transform:translateY(-1px); }
+  .dash-card.c-kb { }
+  .dash-card.c-kb::before { background:linear-gradient(135deg,rgba(15,118,110,0.15),rgba(13,148,136,0.1)); }
+  .dash-card.c-kb:hover { border-color:#0f766e; box-shadow:0 16px 40px rgba(15,118,110,0.3); }
+  .dash-card.c-mat::before { background:linear-gradient(135deg,rgba(30,58,95,0.2),rgba(44,82,130,0.1)); }
+  .dash-card.c-mat:hover { border-color:#3b82f6; box-shadow:0 16px 40px rgba(59,130,246,0.25); }
+  .dash-card.c-pkg::before { background:linear-gradient(135deg,rgba(142,68,173,0.15),rgba(108,52,131,0.1)); }
+  .dash-card.c-pkg:hover { border-color:#8e44ad; box-shadow:0 16px 40px rgba(142,68,173,0.3); }
+  .dash-card.c-prep::before { background:linear-gradient(135deg,rgba(234,88,12,0.15),rgba(194,65,12,0.1)); }
+  .dash-card.c-prep:hover { border-color:#ea580c; box-shadow:0 16px 40px rgba(234,88,12,0.25); }
+  .dash-card.c-insp::before { background:linear-gradient(135deg,rgba(220,38,38,0.12),rgba(185,28,28,0.08)); }
+  .dash-card.c-insp:hover { border-color:#dc2626; box-shadow:0 16px 40px rgba(220,38,38,0.25); }
+  .dash-card.coming { cursor:default; opacity:0.6; }
+  .dash-card.coming:hover { transform:none; box-shadow:none; }
+  .dash-icon { font-size:36px; line-height:1; }
+  .dash-title { font-size:17px; font-weight:700; color:#f1f5f9; }
+  .dash-desc { font-size:12px; color:#94a3b8; line-height:1.6; }
+  .dash-badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; background:#334155; color:#64748b; margin-top:4px; align-self:flex-start; }
+  .dash-arrow { position:absolute; bottom:20px; right:20px; font-size:18px; color:#475569; transition:transform 0.2s, color 0.2s; }
+  .dash-card:not(.coming):hover .dash-arrow { color:#94a3b8; transform:translateX(4px); }
+  .btn-home { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
+  .btn-home:hover { background:rgba(255,255,255,0.22); }
+
   /* ── Kitting Board 버튼 ── */
   .btn-kb { display:inline-flex; align-items:center; gap:8px; padding:9px 20px; background:linear-gradient(135deg,#0f766e,#0d9488); color:white; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(15,118,110,0.4); transition:all 0.2s; white-space:nowrap; }
   .btn-kb:hover { background:linear-gradient(135deg,#14b8a6,#0f766e); transform:translateY(-1px); box-shadow:0 4px 12px rgba(15,118,110,0.55); }
@@ -414,6 +448,51 @@
   </div>
 </div>
 
+<!-- ── 대시보드 ── -->
+<div class="dashboard-overlay" id="dashboard-overlay">
+  <div class="dash-header">
+    <h1>조립팀 자재현황 대시보드</h1>
+    <p>항목을 선택하여 바로 이동하세요</p>
+  </div>
+  <div class="dash-grid">
+    <!-- Kitting Board -->
+    <div class="dash-card c-kb" onclick="dashGoKittingBoard()">
+      <div class="dash-icon">📋</div>
+      <div class="dash-title">Kitting Board</div>
+      <div class="dash-desc">조립라인별 생산계획 및<br>자재 키팅 현황 보드</div>
+      <div class="dash-arrow">→</div>
+    </div>
+    <!-- 자재현황 -->
+    <div class="dash-card c-mat" onclick="dashGoMaterial()">
+      <div class="dash-icon">📊</div>
+      <div class="dash-title">자재현황</div>
+      <div class="dash-desc">생산계획 대비<br>자재부족현황 분석</div>
+      <div class="dash-arrow">→</div>
+    </div>
+    <!-- 포장재 필요수량 -->
+    <div class="dash-card c-pkg" onclick="dashGoPackaging()">
+      <div class="dash-icon">📦</div>
+      <div class="dash-title">포장재 필요수량</div>
+      <div class="dash-desc">모델별 포장재 소요량<br>자동 집계</div>
+      <div class="dash-arrow">→</div>
+    </div>
+    <!-- 준비작업 관리 -->
+    <div class="dash-card c-prep coming">
+      <div class="dash-icon">🔧</div>
+      <div class="dash-title">준비작업 관리</div>
+      <div class="dash-desc">라인 준비작업 현황<br>및 진행 관리</div>
+      <div class="dash-badge">준비 중</div>
+    </div>
+    <!-- 투입전 검사관리 -->
+    <div class="dash-card c-insp coming">
+      <div class="dash-icon">🔍</div>
+      <div class="dash-title">투입전 검사관리</div>
+      <div class="dash-desc">자재 투입 전<br>품질 검사 관리</div>
+      <div class="dash-badge">준비 중</div>
+    </div>
+  </div>
+</div>
+
 <!-- ── Kitting Board 모달 ── -->
 <div class="kb-modal" id="kb-modal">
   <div class="kb-wrap">
@@ -483,6 +562,7 @@
     <h1>생산계획 대비 자재부족현황</h1>
     <div class="sub">BOM × 생산계획 → 재고 + 키팅 비교 분석</div>
   </div>
+  <button class="btn-home" onclick="showDashboard()" title="대시보드 홈으로 이동">⌂ 홈</button>
   <button class="btn-auto-kit" onclick="openAutoKitModal()" title="sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다">
     🤖 키팅 자동화
   </button>
@@ -3977,6 +4057,28 @@ function emergencyStop() {
 }
 // ── Kitting Board ──────────────────────────────────────────────────────────
 let _kitBoardDates = [];
+
+// ── 대시보드 네비게이션 ──────────────────────────────
+function showDashboard() {
+  document.getElementById('dashboard-overlay').classList.remove('hidden');
+}
+function hideDashboard() {
+  document.getElementById('dashboard-overlay').classList.add('hidden');
+}
+function dashGoKittingBoard() {
+  hideDashboard();
+  openKittingBoard();
+}
+function dashGoMaterial() {
+  hideDashboard();
+  switchTab('parts');
+  document.getElementById('panel-parts').scrollIntoView({ behavior:'smooth' });
+}
+function dashGoPackaging() {
+  hideDashboard();
+  switchTab('pkg');
+  document.getElementById('panel-pkg').scrollIntoView({ behavior:'smooth' });
+}
 
 function openKittingBoard() {
   if (!state.plan) {
