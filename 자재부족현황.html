@@ -1237,6 +1237,32 @@ function parseProductCodeMap(wb) {
 }
 
 // ── BOM 파싱 ───────────────────────────────────────
+function parseSupplierMap(wb) {
+  // '품목코드' 시트에서 직접 품목코드 → 협력사명 매핑 구축
+  const sn = wb.SheetNames.find(n => n.includes('품목코드'));
+  if (!sn) return {};
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
+  if (rows.length < 2) return {};
+  // 헤더 행 탐지
+  let hIdx = -1, cCode = -1, cSupplier = -1;
+  for (let i = 0; i < Math.min(5, rows.length); i++) {
+    const r = rows[i].map(v => String(v).trim());
+    const ic = r.findIndex(v => v === '품목코드');
+    const is = r.findIndex(v => v === '협력사명' || (v.includes('협력사') && !v.includes('코드')));
+    if (ic >= 0) { hIdx = i; cCode = ic; cSupplier = is >= 0 ? is : 5; break; }
+  }
+  // 헤더 미발견 시 알려진 고정 인덱스 사용 (index 2=품목코드, index 5=협력사명)
+  if (hIdx < 0) { hIdx = 0; cCode = 2; cSupplier = 5; }
+  const map = {};
+  for (let i = hIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    const code = String(r[cCode] || '').trim();
+    const supplier = String(r[cSupplier] || '').trim();
+    if (code && supplier && !map[code]) map[code] = supplier;
+  }
+  return map;
+}
+
 function parseBOM(wb, levelFilter, partTypeFilter) {
   // BOM정보 시트 우선 (제품명·규격 포함), 없으면 BOM, 없으면 첫 시트
   const sn = wb.SheetNames.find(n=>n.includes('BOM정보'))
@@ -1606,8 +1632,8 @@ function runAnalysis() {
         if (productNameMap[pn] && !productNameMap[dbn]) productNameMap[dbn] = productNameMap[pn];
       });
       window._kbBomMap = bomMap;   // Kitting Board 자재현황 패널용
-      // 자품번 → 협력사명 맵 (BOM정보 협력사명 컬럼 기반)
-      const supplierMap = {};
+      // 자품번 → 협력사명 맵: '품목코드' 시트 마스터 우선, BOM 컴포넌트 보완
+      const supplierMap = parseSupplierMap(state.bom);
       for (const comps of Object.values(bomMap))
         for (const comp of comps)
           if (comp.협력사명 && !supplierMap[comp.자품번]) supplierMap[comp.자품번] = comp.협력사명;
