@@ -1297,7 +1297,7 @@ const PLAN_COL_KW = {
   date:  ['일자','날짜','DATE','일','생산일'],
   pn:    ['품목코드','시스템','제품번호','제품코드','품번','PART','PN','P/N'],
   qty:   ['계획수량','조립수량','계획Qty','Qty','QTY','QUANTITY','수량'],
-  model: ['MODEL','모델','모델명','MODELNO','MODEL NO'],
+  model: ['MODEL','모델','모델명','MODELNO','MODEL NO','모'],
   spec:  ['사양','SPEC','규격','제품사양','차종사양','사양명','형식','타입','TYPE'],
   lhrh:  ['LH/RH','LH-RH','LH_RH','LHRH','L/R','LH','RH','좌우','좌/우','Left/Right'],
   takt:  ['소요시간','소요(분)','소요시간(분)','작업소요시간','작업시간','TAKT TIME','TAKT','소요분','작업분'],
@@ -1629,7 +1629,7 @@ function runAnalysis() {
         if (!modelMap[key]) {
           const dispModel = row.model ? (row.lhrh ? `${row.model} ${row.lhrh}` : row.model)
                           : (row.lhrh || row.pn);
-          modelMap[key]={ model:dispModel, pn:row.pn, lhrh:row.lhrh,
+          modelMap[key]={ model:dispModel, rawModel:row.model, pn:row.pn, lhrh:row.lhrh,
             품목명:productNameMap[row.pn]||row.spec||'', spec:row.spec,
             sheet:row.sheet, totalQty:0, byDate:{}, byDateSerials:new Set(),
             hasBOM:!!bomMap[row.pn], dangerParts:[], warningParts:[] };
@@ -3969,10 +3969,12 @@ function _kbRenderDate() {
     lineMap[line].push(row);
   }
 
-  // modelResult 조회용 맵
+  // modelResult 조회용 맵 — rawModel(parsePlan 원본 model값) 기준 키 사용
+  // (dispModel은 표시용으로 model+lhrh를 합친 값 → planRow 키와 불일치 방지)
   const mStatusMap = {};
   for (const e of modelResult) {
-    const key = `${e.sheet}||${e.pn}||${e.model}||${e.lhrh}`;
+    const rm = e.rawModel !== undefined ? e.rawModel : e.model;
+    const key = `${e.sheet}||${e.pn}||${rm}||${e.lhrh}`;
     mStatusMap[key] = e;
   }
   // buildPkgData와 동일: D라인 도번 ↔ 시스템P/N 별칭 키 추가
@@ -3982,7 +3984,8 @@ function _kbRenderDate() {
     Object.entries(dobnMap).forEach(([dbn, pn]) => {
       for (const e of modelResult) {
         if (e.pn === pn) {
-          const aliasKey = `${e.sheet}||${dbn}||${e.model}||${e.lhrh}`;
+          const rm = e.rawModel !== undefined ? e.rawModel : e.model;
+          const aliasKey = `${e.sheet}||${dbn}||${rm}||${e.lhrh}`;
           if (!mStatusMap[aliasKey]) mStatusMap[aliasKey] = e;
         }
       }
@@ -3991,7 +3994,8 @@ function _kbRenderDate() {
     Object.entries(dobnMap).forEach(([dbn, pn]) => {
       for (const e of modelResult) {
         if (e.pn === dbn) {
-          const aliasKey = `${e.sheet}||${pn}||${e.model}||${e.lhrh}`;
+          const rm = e.rawModel !== undefined ? e.rawModel : e.model;
+          const aliasKey = `${e.sheet}||${pn}||${rm}||${e.lhrh}`;
           if (!mStatusMap[aliasKey]) mStatusMap[aliasKey] = e;
         }
       }
