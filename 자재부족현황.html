@@ -277,6 +277,23 @@
   .btn-home { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
   .btn-home:hover { background:rgba(255,255,255,0.22); }
 
+  /* ── 포장재 단독 모드 ── */
+  .pkg-only-mode #upload-section,
+  .pkg-only-mode #restore-notice,
+  .pkg-only-mode #cutoff-info,
+  .pkg-only-mode #summary-cards,
+  .pkg-only-mode .tab-row,
+  .pkg-only-mode #panel-parts,
+  .pkg-only-mode #panel-model,
+  .pkg-only-mode #panel-date,
+  .pkg-only-mode #panel-inv,
+  .pkg-only-mode #panel-modinv { display:none !important; }
+  .pkg-only-mode #panel-pkg { display:block !important; }
+  .dash-back-bar { display:none; align-items:center; gap:10px; padding:10px 0 6px; }
+  .pkg-only-mode .dash-back-bar { display:flex; }
+  .btn-dash-back { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; background:#1e3a5f; color:white; border:none; border-radius:7px; font-size:13px; font-weight:700; cursor:pointer; transition:background 0.18s; }
+  .btn-dash-back:hover { background:#2c5282; }
+
   /* ── Kitting Board 버튼 ── */
   .btn-kb { display:inline-flex; align-items:center; gap:8px; padding:9px 20px; background:linear-gradient(135deg,#0f766e,#0d9488); color:white; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(15,118,110,0.4); transition:all 0.2s; white-space:nowrap; }
   .btn-kb:hover { background:linear-gradient(135deg,#14b8a6,#0f766e); transform:translateY(-1px); box-shadow:0 4px 12px rgba(15,118,110,0.55); }
@@ -597,7 +614,11 @@
   </div>
 </div>
 
-<div class="container">
+<div class="container" id="main-container">
+  <div class="dash-back-bar">
+    <button class="btn-dash-back" onclick="showDashboard()">← 대시보드</button>
+    <span style="font-size:14px;font-weight:700;color:#1e3a5f;">📦 포장재 필요수량</span>
+  </div>
   <div class="restore-notice" id="restore-notice">💾 이전에 업로드된 파일이 복원되었습니다. 새 파일을 선택하면 덮어씁니다.</div>
 
   <!-- 파일 업로드 -->
@@ -4061,6 +4082,7 @@ let _kitBoardDates = [];
 // ── 대시보드 네비게이션 ──────────────────────────────
 function showDashboard() {
   document.getElementById('dashboard-overlay').classList.remove('hidden');
+  document.getElementById('main-container').classList.remove('pkg-only-mode');
 }
 function hideDashboard() {
   document.getElementById('dashboard-overlay').classList.add('hidden');
@@ -4076,8 +4098,9 @@ function dashGoMaterial() {
 }
 function dashGoPackaging() {
   hideDashboard();
+  document.getElementById('main-container').classList.add('pkg-only-mode');
   switchTab('pkg');
-  document.getElementById('panel-pkg').scrollIntoView({ behavior:'smooth' });
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function openKittingBoard() {
