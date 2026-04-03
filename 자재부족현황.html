@@ -20,9 +20,6 @@
   .btn-emergency-stop:hover { background: linear-gradient(135deg,#ec6557,#d44235); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(231,76,60,0.6); }
   .btn-emergency-stop:active { transform: scale(0.96); }
   @keyframes pulse-red { 0%,100% { box-shadow: 0 2px 8px rgba(231,76,60,0.4); } 50% { box-shadow: 0 2px 16px rgba(231,76,60,0.8); } }
-  .btn-dashboard { display: inline-flex; align-items: center; gap: 8px; padding: 9px 20px; background: linear-gradient(135deg,#4f46e5,#3730a3); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 8px rgba(79,70,229,0.4); transition: all 0.2s; white-space: nowrap; }
-  .btn-dashboard:hover { background: linear-gradient(135deg,#6366f1,#4338ca); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(79,70,229,0.55); }
-  .btn-dashboard:active { transform: translateY(0); }
   .auto-kit-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9999; align-items:center; justify-content:center; }
   .auto-kit-modal.open { display:flex; }
   .auto-kit-box { background:white; border-radius:16px; padding:32px 40px; max-width:480px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.4); }
@@ -312,9 +309,6 @@
   </button>
   <button class="btn-emergency-stop" onclick="emergencyStop()" title="실행 중인 키팅 자동화를 즉시 중단합니다">
     🛑 긴급정지
-  </button>
-  <button class="btn-dashboard" onclick="openUnifiedDashboard()" title="신성오토텍 통합 대시보드 열기">
-    📊 통합 대시보드
   </button>
   <div class="header-user" id="header-user" style="display:none;">
     <span class="hdr-uname" id="hdr-uname"></span>
@@ -2312,35 +2306,21 @@ function buildPkgData() {
   const specWs = state.pkg.Sheets['grdList'];
   if (!specWs) return;
   const specMap = {};
-  // 그룹 헤더행(P/N 비어있음)의 박스유형·패드 값을 이하 제품행에 전파
-  const grp = { 박스유형: '', 박스소요량_개: 0, 패드: '', 패드소요량_개: 0 };
   XLSX.utils.sheet_to_json(specWs, { header: 1, defval: '' }).slice(3).forEach(r => {
     const pn = String(r[3] || '').trim();
-    const 박스유형Raw    = String(r[10] || '').trim();
-    const 박스장입수     = Number(r[11]) || 0;
-    const 박스소요량_개Raw = Number(r[12]) || (박스장입수 > 0 ? 1 / 박스장입수 : 0);
-    const 패드Raw        = String(r[20] || '').trim();
-    const 패드장입수     = Number(r[21]) || 0;
-    const 패드소요량_개Raw = Number(r[22]) || (패드장입수 > 0 ? 1 / 패드장입수 : 0);
-
-    if (!pn) {
-      // 그룹 헤더행: 값이 있는 필드만 grp 갱신
-      if (박스유형Raw)       { grp.박스유형      = 박스유형Raw;       grp.박스소요량_개 = 박스소요량_개Raw; }
-      if (패드Raw)           { grp.패드           = 패드Raw;           grp.패드소요량_개  = 패드소요량_개Raw; }
-      return;
-    }
+    if (!pn) return;
     specMap[pn] = {
       제품명:           String(r[5]  || ''),
       규격:             String(r[6]  || ''),
-      박스유형:         박스유형Raw    || grp.박스유형,
-      박스소요량_개:    박스소요량_개Raw || grp.박스소요량_개,
+      박스유형:         String(r[10] || '').trim(),
+      박스소요량_개:    Number(r[12]) || 0,
       포장지:           String(r[13] || '').trim(),
       포장지색상:       String(r[14] || '').trim(),
       포장지소요량_개:  Number(r[16]) || 0,
       발포지:           String(r[17] || '').trim(),
       발포지소요량_개:  Number(r[19]) || 0,
-      패드:             패드Raw        || grp.패드,
-      패드소요량_개:    패드소요량_개Raw  || grp.패드소요량_개,
+      패드:             String(r[20] || '').trim(),
+      패드소요량_개:    Number(r[22]) || 0,
     };
   });
 
@@ -3431,15 +3411,11 @@ async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = fals
     }
   }
 
-  // 키팅 파일: 타임스탬프 OR 파일 목록이 다르면 전체 갱신
-  const serverKitTs    = Number(logs['kit']?.uploaded_at || 0);
-  const localKitTs     = Number(localStorage.getItem('ms_uptime_kit') || 0);
-  const serverKitNames = logs['kit']?.file_names || [];
-  const localKitNames  = state.kitFiles.map(f => f.name);
-  const kitNamesMatch  = serverKitNames.length === localKitNames.length &&
-                         serverKitNames.every(n => localKitNames.includes(n));
-  if (serverKitTs > localKitTs || state.kitFiles.length === 0 || !kitNamesMatch) {
-    const names = serverKitNames;
+  // 키팅 파일: 서버 목록과 로컬 목록이 다르면 전체 갱신
+  const serverKitTs = Number(logs['kit']?.uploaded_at || 0);
+  const localKitTs  = Number(localStorage.getItem('ms_uptime_kit') || 0);
+  if (serverKitTs > localKitTs || state.kitFiles.length === 0) {
+    const names = logs['kit']?.file_names || [];
     if (names.length > 0) {
       const newKitFiles = [];
       for (const name of names) {
@@ -3451,30 +3427,15 @@ async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = fals
           newKitFiles.push({ wb, name, rawData: arr });
         } catch(e) {}
       }
-      // 다운로드 성공한 경우에만 로컬 상태 & 타임스탬프 갱신
       if (newKitFiles.length > 0) {
         state.kitFiles = newKitFiles;
-        dbPut('kit_list', newKitFiles.map(f => ({ data: f.rawData, name: f.name })));
-        localStorage.setItem('ms_uptime_kit', String(serverKitTs));
-        const kitUploader = logs['kit']?.uploader_name || '';
-        if (kitUploader) localStorage.setItem('ms_uploader_kit', kitUploader);
-        document.getElementById('uptime-kit').textContent = fmtUpTime(String(serverKitTs), kitUploader);
         renderKitChips(); checkReady();
       }
-    } else if (names.length === 0 && serverKitTs > 0) {
-      // 서버에서 키팅 초기화된 경우 로컬도 초기화
-      state.kitFiles = [];
-      dbPut('kit_list', []);
-      localStorage.setItem('ms_uptime_kit', String(serverKitTs));
-      localStorage.removeItem('ms_uploader_kit');
-      document.getElementById('uptime-kit').textContent = '';
-      renderKitChips(); checkReady();
     }
   }
 
-  // 업로드 시각·업로더 표시 — kit 제외(위에서 처리), 나머지는 서버 기준으로 갱신
+  // 업로드 시각·업로더 표시 — 항상 서버(Supabase) 기준으로 갱신
   Object.values(logs).forEach(row => {
-    if (row.file_type === 'kit') return; // kit은 위 블록에서 직접 처리
     const el = document.getElementById('uptime-' + row.file_type);
     if (!el) return;
     el.textContent = fmtUpTime(row.uploaded_at, row.uploader_name);
@@ -3772,9 +3733,6 @@ function emergencyStop() {
       btn.style.animation = '';
     }, 3000);
   }
-}
-function openUnifiedDashboard() {
-  window.open('https://ssat-unified-dashboard.vercel.app/', '_blank');
 }
 function downloadSetupBat() {
   // setup_url_protocol.bat 경로 안내 (로컬 파일 다운로드 불가 → 경로 복사 안내)
