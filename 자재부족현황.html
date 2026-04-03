@@ -325,6 +325,13 @@
   .kb-note-input:focus { outline:none; border-color:#1e3a5f; }
   .kb-empty-state { text-align:center; padding:60px 20px; color:#9ca3af; }
   .kb-empty-icon { font-size:40px; margin-bottom:12px; }
+  /* OK 체크 해제 행 */
+  .kb-row-ok { background:#f0fdf4 !important; }
+  .kb-row-ok td { color:#b0bec5 !important; }
+  .kb-row-ok .kb-st-pn, .kb-row-ok .kb-st-name { text-decoration:line-through; color:#b0bec5 !important; }
+  .kb-row-ok .kb-proc-tag { opacity:0.4; }
+  .kb-row-ok .kb-note-input { background:#f0fdf4; border-color:#d1fae5; color:#6b7280; }
+  .kb-st-ok-cnt { color:#16a34a; font-size:11px; font-weight:600; margin-left:6px; }
 
   /* 모델 클릭 자재현황 패널 */
   .kb-detail-panel { background:white; border-radius:12px; box-shadow:0 2px 12px rgba(0,0,0,0.12); overflow:hidden; margin-bottom:20px; border:1px solid #e5e7eb; }
@@ -4200,8 +4207,9 @@ function _kbRenderShortage(lines, lineMap, mStatusMap) {
 
     const hdr = document.createElement('div');
     hdr.className = 'kb-st-line-hdr';
-    hdr.innerHTML = `Line ${line} <span class="kb-st-badge">${lineShortages.length}건 부족</span>`;
+    hdr.innerHTML = `Line ${line} <span class="kb-st-badge">${lineShortages.length}건 부족</span><span class="kb-st-ok-cnt" style="display:none;"></span>`;
     container.appendChild(hdr);
+    const okCntEl = hdr.querySelector('.kb-st-ok-cnt');
 
     // 컬럼 헤더 행
     const tbl = document.createElement('table');
@@ -4220,19 +4228,37 @@ function _kbRenderShortage(lines, lineMap, mStatusMap) {
       const req = part.modelReq ?? part.totalGlobalReq ?? 0;
       const stk = part.stock ?? 0;
       const lack = (part.available??stk) - req;
+      const lackStr = lack.toLocaleString();
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
-        <td class="center"><input type="checkbox" style="cursor:pointer;"></td>
-        <td style="font-family:monospace;font-size:11px;">${part.자품번}</td>
-        <td>${part.자품명}</td>
+        <td class="center"><input type="checkbox" class="kb-ok-chk" style="cursor:pointer;width:15px;height:15px;"></td>
+        <td class="kb-st-pn" style="font-family:monospace;font-size:11px;">${part.자품번}</td>
+        <td class="kb-st-name">${part.자품명}</td>
         <td>${조달?`<span class="kb-proc-tag">${조달}</span>`:''}</td>
         <td class="num">${req.toLocaleString()}</td>
         <td class="num">${stk.toLocaleString()}</td>
-        <td class="num kb-shortage-neg">${lack.toLocaleString()}</td>
+        <td class="num kb-lack-cell kb-shortage-neg">${lackStr}</td>
         <td style="font-size:11px;color:#6b7280;">${협력사}</td>
         <td><input type="text" class="kb-note-input" placeholder="공급일/수량 등..."></td>
       `;
+
+      const chk = tr.querySelector('.kb-ok-chk');
+      const lackCell = tr.querySelector('.kb-lack-cell');
+      chk.onchange = () => {
+        if (chk.checked) {
+          tr.classList.add('kb-row-ok');
+          lackCell.innerHTML = '<span style="color:#16a34a;font-weight:700;">OK</span>';
+        } else {
+          tr.classList.remove('kb-row-ok');
+          lackCell.className = 'num kb-lack-cell kb-shortage-neg';
+          lackCell.textContent = lackStr;
+        }
+        const cnt = tbody.querySelectorAll('.kb-ok-chk:checked').length;
+        okCntEl.textContent = `${cnt}건 해제`;
+        okCntEl.style.display = cnt > 0 ? '' : 'none';
+      };
+
       tbody.appendChild(tr);
     }
     tbl.appendChild(tbody);
