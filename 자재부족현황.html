@@ -243,56 +243,50 @@
   .btn-admin-open { padding:5px 12px; border-radius:5px; background:#e67e22; border:none; color:white; font-size:11px; font-weight:700; cursor:pointer; }
   .btn-admin-open:hover { background:#d35400; }
 
-  /* ── 대시보드 ── */
-  .dashboard-overlay { position:fixed; inset:0; background:#0f172a; z-index:10000; display:flex; flex-direction:column; overflow:auto; }
-  .dashboard-overlay.hidden { display:none; }
-  .dash-header { background:linear-gradient(135deg,#1e3a5f 0%,#1e4d8c 100%); padding:40px 48px 32px; color:white; }
-  .dash-header h1 { font-size:28px; font-weight:800; letter-spacing:-0.5px; margin-bottom:6px; }
-  .dash-header p { font-size:14px; opacity:0.65; }
-  .dash-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:20px; padding:40px 48px; max-width:1300px; margin:0 auto; width:100%; }
-  .dash-card { background:#1e293b; border:1px solid #334155; border-radius:16px; padding:32px 28px; cursor:pointer; transition:all 0.22s; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden; }
-  .dash-card::before { content:''; position:absolute; inset:0; opacity:0; transition:opacity 0.22s; }
-  .dash-card:hover { transform:translateY(-4px); box-shadow:0 16px 40px rgba(0,0,0,0.5); border-color:transparent; }
-  .dash-card:hover::before { opacity:1; }
-  .dash-card:active { transform:translateY(-1px); }
-  .dash-card.c-kb { }
-  .dash-card.c-kb::before { background:linear-gradient(135deg,rgba(15,118,110,0.15),rgba(13,148,136,0.1)); }
-  .dash-card.c-kb:hover { border-color:#0f766e; box-shadow:0 16px 40px rgba(15,118,110,0.3); }
-  .dash-card.c-mat::before { background:linear-gradient(135deg,rgba(30,58,95,0.2),rgba(44,82,130,0.1)); }
-  .dash-card.c-mat:hover { border-color:#3b82f6; box-shadow:0 16px 40px rgba(59,130,246,0.25); }
-  .dash-card.c-pkg::before { background:linear-gradient(135deg,rgba(142,68,173,0.15),rgba(108,52,131,0.1)); }
-  .dash-card.c-pkg:hover { border-color:#8e44ad; box-shadow:0 16px 40px rgba(142,68,173,0.3); }
-  .dash-card.c-prep::before { background:linear-gradient(135deg,rgba(234,88,12,0.15),rgba(194,65,12,0.1)); }
-  .dash-card.c-prep:hover { border-color:#ea580c; box-shadow:0 16px 40px rgba(234,88,12,0.25); }
-  .dash-card.c-insp::before { background:linear-gradient(135deg,rgba(220,38,38,0.12),rgba(185,28,28,0.08)); }
-  .dash-card.c-insp:hover { border-color:#dc2626; box-shadow:0 16px 40px rgba(220,38,38,0.25); }
-  .dash-card.coming { cursor:default; opacity:0.6; }
-  .dash-card.coming:hover { transform:none; box-shadow:none; }
-  .dash-icon { font-size:36px; line-height:1; }
-  .dash-title { font-size:17px; font-weight:700; color:#f1f5f9; }
-  .dash-desc { font-size:12px; color:#94a3b8; line-height:1.6; }
-  .dash-badge { display:inline-block; font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; background:#334155; color:#64748b; margin-top:4px; align-self:flex-start; }
-  .dash-arrow { position:absolute; bottom:20px; right:20px; font-size:18px; color:#475569; transition:transform 0.2s, color 0.2s; }
-  .dash-card:not(.coming):hover .dash-arrow { color:#94a3b8; transform:translateX(4px); }
-  .btn-home { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; background:rgba(255,255,255,0.12); color:white; border:1px solid rgba(255,255,255,0.2); border-radius:7px; font-size:12px; font-weight:700; cursor:pointer; transition:all 0.2s; white-space:nowrap; }
-  .btn-home:hover { background:rgba(255,255,255,0.22); }
+  /* ── 사이드바 ── */
+  .side-nav { position:fixed; left:0; top:0; bottom:0; width:190px; background:#151e2b; z-index:500; display:flex; flex-direction:column; overflow:hidden; border-right:1px solid #1e2d3d; }
+  .side-logo { padding:18px 16px 14px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px; }
+  .side-logo-icon { font-size:20px; }
+  .side-logo-text { font-size:12px; font-weight:700; color:#e2e8f0; line-height:1.35; }
+  .side-menu { flex:1; overflow-y:auto; padding:6px 0; }
+  .side-item { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; transition:background 0.15s; border-left:3px solid transparent; position:relative; }
+  .side-item:hover { background:rgba(255,255,255,0.07); }
+  .side-item.active { background:rgba(56,189,248,0.1); border-left-color:#38bdf8; }
+  .side-item.disabled { cursor:default; }
+  .side-item.disabled:hover { background:none; }
+  .side-item-icon { font-size:17px; flex-shrink:0; }
+  .side-item-label { font-size:12px; font-weight:600; color:#cbd5e1; line-height:1.3; }
+  .side-item.active .side-item-label { color:#e2e8f0; }
+  .side-item.disabled .side-item-label { color:#475569; }
+  .side-coming { font-size:9px; background:#1e293b; color:#475569; padding:1px 5px; border-radius:8px; white-space:nowrap; flex-shrink:0; }
 
-  /* ── 포장재 단독 모드 ── */
-  .pkg-only-mode #upload-section,
-  .pkg-only-mode #restore-notice,
-  .pkg-only-mode #cutoff-info,
-  .pkg-only-mode #summary-cards,
-  .pkg-only-mode #main-tab-row,
-  .pkg-only-mode #panel-parts,
-  .pkg-only-mode #panel-model,
-  .pkg-only-mode #panel-date,
-  .pkg-only-mode #panel-inv,
-  .pkg-only-mode #panel-modinv { display:none !important; }
-  .pkg-only-mode #panel-pkg { display:block !important; }
-  .dash-back-bar { display:none; align-items:center; gap:10px; padding:10px 0 6px; }
-  .pkg-only-mode .dash-back-bar { display:flex; }
-  .btn-dash-back { display:inline-flex; align-items:center; gap:6px; padding:7px 16px; background:#1e3a5f; color:white; border:none; border-radius:7px; font-size:13px; font-weight:700; cursor:pointer; transition:background 0.18s; }
-  .btn-dash-back:hover { background:#2c5282; }
+  /* ── 앱 레이아웃 (사이드바 오른쪽) ── */
+  .app-layout { margin-left:190px; display:flex; flex-direction:column; min-height:100vh; }
+
+  /* ── 뷰 전환 ── */
+  /* KB 뷰: kb-modal을 인라인 블록으로 표시 */
+  body[data-view=kb] #kb-modal { display:block; position:static; background:none; padding:0; z-index:1; overflow:visible; }
+  body[data-view=kb] .kb-wrap { width:100%; border-radius:0; box-shadow:none; min-height:calc(100vh - 56px); }
+  body[data-view=kb] .kb-close { display:none; }
+  body[data-view=kb] .kb-btn-back-dash { display:none; }
+  /* 자재현황 뷰 */
+  body:not([data-view=material]) #main-container { display:none; }
+  /* 포장재 뷰 */
+  body[data-view=pkg] #main-container { display:block; }
+  body[data-view=pkg] #upload-section,
+  body[data-view=pkg] #restore-notice,
+  body[data-view=pkg] #cutoff-info,
+  body[data-view=pkg] #summary-cards,
+  body[data-view=pkg] #main-tab-row,
+  body[data-view=pkg] #panel-parts,
+  body[data-view=pkg] #panel-model,
+  body[data-view=pkg] #panel-date,
+  body[data-view=pkg] #panel-inv,
+  body[data-view=pkg] #panel-modinv { display:none !important; }
+  body[data-view=pkg] #panel-pkg { display:block !important; }
+  /* 준비작업/투입전 뷰 */
+  body[data-view=prep] #view-coming,
+  body[data-view=insp] #view-coming { display:flex; }
 
   /* ── Kitting Board 버튼 ── */
   .btn-kb { display:inline-flex; align-items:center; gap:8px; padding:9px 20px; background:linear-gradient(135deg,#0f766e,#0d9488); color:white; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; box-shadow:0 2px 8px rgba(15,118,110,0.4); transition:all 0.2s; white-space:nowrap; }
@@ -302,13 +296,7 @@
   .kb-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9998; align-items:flex-start; justify-content:center; overflow-y:auto; padding:20px; }
   .kb-modal.open { display:flex; }
   .kb-wrap { background:#f5f7fa; border-radius:16px; width:min(1300px,98vw); min-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.4); overflow:hidden; }
-  /* 전체화면 단독 모드 */
-  .kb-modal.kb-fullscreen { background:none; padding:0; z-index:10001; overflow-y:auto; }
-  .kb-modal.kb-fullscreen .kb-wrap { width:100%; min-height:100vh; border-radius:0; box-shadow:none; }
-  .kb-btn-back-dash { display:none; align-items:center; gap:6px; padding:7px 16px; background:#1e3a5f; color:white; border:none; border-radius:7px; font-size:13px; font-weight:700; cursor:pointer; transition:background 0.18s; white-space:nowrap; }
-  .kb-btn-back-dash:hover { background:#2c5282; }
-  .kb-modal.kb-fullscreen .kb-btn-back-dash { display:inline-flex; }
-  .kb-modal.kb-fullscreen .kb-close { display:none; }
+  .kb-btn-back-dash { display:none; }
   .kb-head { background:white; padding:20px 28px 14px; border-bottom:1px solid #e5e7eb; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
   .kb-head-left h2 { font-size:22px; font-weight:800; color:#111827; margin-bottom:3px; }
   .kb-head-left p { font-size:12px; color:#6b7280; }
@@ -472,55 +460,61 @@
   </div>
 </div>
 
-<!-- ── 대시보드 ── -->
-<div class="dashboard-overlay" id="dashboard-overlay">
-  <div class="dash-header">
-    <h1>조립팀 자재현황 대시보드</h1>
-    <p>항목을 선택하여 바로 이동하세요</p>
+<!-- ── 사이드바 ── -->
+<nav class="side-nav">
+  <div class="side-logo">
+    <div class="side-logo-icon">⚙️</div>
+    <div class="side-logo-text">조립팀<br>자재현황</div>
   </div>
-  <div class="dash-grid">
-    <!-- Kitting Board -->
-    <div class="dash-card c-kb" onclick="dashGoKittingBoard()">
-      <div class="dash-icon">📋</div>
-      <div class="dash-title">Kitting Board</div>
-      <div class="dash-desc">조립라인별 생산계획 및<br>자재 키팅 현황 보드</div>
-      <div class="dash-arrow">→</div>
+  <div class="side-menu">
+    <div class="side-item active" id="snav-kb" onclick="switchView('kb')">
+      <span class="side-item-icon">📋</span>
+      <span class="side-item-label">Kitting Board</span>
     </div>
-    <!-- 자재현황 -->
-    <div class="dash-card c-mat" onclick="dashGoMaterial()">
-      <div class="dash-icon">📊</div>
-      <div class="dash-title">자재현황</div>
-      <div class="dash-desc">생산계획 대비<br>자재부족현황 분석</div>
-      <div class="dash-arrow">→</div>
+    <div class="side-item" id="snav-material" onclick="switchView('material')">
+      <span class="side-item-icon">📊</span>
+      <span class="side-item-label">자재현황</span>
     </div>
-    <!-- 포장재 필요수량 -->
-    <div class="dash-card c-pkg" onclick="dashGoPackaging()">
-      <div class="dash-icon">📦</div>
-      <div class="dash-title">포장재 필요수량</div>
-      <div class="dash-desc">모델별 포장재 소요량<br>자동 집계</div>
-      <div class="dash-arrow">→</div>
+    <div class="side-item" id="snav-pkg" onclick="switchView('pkg')">
+      <span class="side-item-icon">📦</span>
+      <span class="side-item-label">포장재 필요수량</span>
     </div>
-    <!-- 준비작업 관리 -->
-    <div class="dash-card c-prep coming">
-      <div class="dash-icon">🔧</div>
-      <div class="dash-title">준비작업 관리</div>
-      <div class="dash-desc">라인 준비작업 현황<br>및 진행 관리</div>
-      <div class="dash-badge">준비 중</div>
+    <div class="side-item disabled" id="snav-prep" onclick="switchView('prep')">
+      <span class="side-item-icon">🔧</span>
+      <span class="side-item-label">준비작업 관리</span>
+      <span class="side-coming">준비중</span>
     </div>
-    <!-- 투입전 검사관리 -->
-    <div class="dash-card c-insp coming">
-      <div class="dash-icon">🔍</div>
-      <div class="dash-title">투입전 검사관리</div>
-      <div class="dash-desc">자재 투입 전<br>품질 검사 관리</div>
-      <div class="dash-badge">준비 중</div>
+    <div class="side-item disabled" id="snav-insp" onclick="switchView('insp')">
+      <span class="side-item-icon">🔍</span>
+      <span class="side-item-label">투입전 검사관리</span>
+      <span class="side-coming">준비중</span>
     </div>
+  </div>
+</nav>
+
+<div class="app-layout">
+<div class="header">
+  <div style="font-size:22px;">📦</div>
+  <div>
+    <h1>조립팀 자재현황</h1>
+    <div class="sub">생산계획 × BOM × 재고 통합 분석</div>
+  </div>
+  <button class="btn-auto-kit" onclick="openAutoKitModal()" title="sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다">
+    🤖 키팅 자동화
+  </button>
+  <button class="btn-emergency-stop" onclick="emergencyStop()" title="실행 중인 키팅 자동화를 즉시 중단합니다">
+    🛑 긴급정지
+  </button>
+  <div class="header-user" id="header-user" style="display:none;">
+    <span class="hdr-uname" id="hdr-uname"></span>
+    <button class="btn-admin-open" id="btn-admin-open" onclick="openAdminPanel()" style="display:none;">👥 회원관리</button>
+    <button class="btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
 </div>
 
-<!-- ── Kitting Board 모달 ── -->
+<!-- ── Kitting Board (view-kb에서 인라인 표시, 모달로도 사용) ── -->
 <div class="kb-modal" id="kb-modal">
   <div class="kb-wrap">
-    <!-- 헤더 -->
     <div class="kb-head">
       <div class="kb-head-left">
         <h2>📋 Kitting Board</h2>
@@ -528,11 +522,9 @@
       </div>
       <div class="kb-head-right">
         <div id="kb-file-info" class="kb-file-info"></div>
-        <button class="kb-btn-back-dash" onclick="closeKittingBoard()">← 대시보드</button>
         <button class="kb-close" onclick="closeKittingBoard()">✕</button>
       </div>
     </div>
-    <!-- 날짜 네비 + 통계 -->
     <div class="kb-nav-bar">
       <div class="kb-date-nav">
         <button class="kb-nav-btn" onclick="kbPrevDate()">&#8249;</button>
@@ -545,9 +537,7 @@
         <div class="kb-stat short"><span class="kb-dot short"></span>부족 <span class="kb-stat-val" id="kb-short">0</span></div>
       </div>
     </div>
-    <!-- 본문 -->
     <div class="kb-body">
-      <!-- Gantt -->
       <div class="kb-gantt">
         <div class="kb-gantt-inner" id="kb-gantt"></div>
         <div class="kb-legend">
@@ -558,13 +548,10 @@
           <div id="kb-takt-warn" style="display:none;margin-left:auto;font-size:11px;color:#b45309;background:#fef3c7;padding:2px 10px;border-radius:4px;">⚠️ 소요시간 컬럼 미감지 — 균등 배분 표시 중</div>
         </div>
       </div>
-      <!-- 모델 클릭 자재현황 패널 -->
       <div class="kb-detail-panel" id="kb-detail-panel" style="display:none;">
         <div class="kb-detail-head" id="kb-detail-head"></div>
         <div class="kb-detail-body" id="kb-detail-body"></div>
       </div>
-
-      <!-- 부족자재 현황 -->
       <div class="kb-shortage-section">
         <div class="kb-st-header">
           <div class="kb-st-title">
@@ -578,29 +565,6 @@
         </div>
       </div>
     </div>
-  </div>
-</div>
-
-<div class="header">
-  <div style="font-size:22px;">📦</div>
-  <div>
-    <h1>생산계획 대비 자재부족현황</h1>
-    <div class="sub">BOM × 생산계획 → 재고 + 키팅 비교 분석</div>
-  </div>
-  <button class="btn-home" onclick="showDashboard()" title="대시보드 홈으로 이동">⌂ 홈</button>
-  <button class="btn-auto-kit" onclick="openAutoKitModal()" title="sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다">
-    🤖 키팅 자동화
-  </button>
-  <button class="btn-emergency-stop" onclick="emergencyStop()" title="실행 중인 키팅 자동화를 즉시 중단합니다">
-    🛑 긴급정지
-  </button>
-  <button class="btn-kb" onclick="openKittingBoard()" title="조립라인별 키팅 현황 보드">
-    📋 Kitting Board
-  </button>
-  <div class="header-user" id="header-user" style="display:none;">
-    <span class="hdr-uname" id="hdr-uname"></span>
-    <button class="btn-admin-open" id="btn-admin-open" onclick="openAdminPanel()" style="display:none;">👥 회원관리</button>
-    <button class="btn-logout" onclick="doLogout()">로그아웃</button>
   </div>
 </div>
 
@@ -623,10 +587,7 @@
 </div>
 
 <div class="container" id="main-container">
-  <div class="dash-back-bar">
-    <button class="btn-dash-back" onclick="showDashboard()">← 대시보드</button>
-    <span style="font-size:14px;font-weight:700;color:#1e3a5f;">📦 포장재 필요수량</span>
-  </div>
+  <div style="display:none"><!-- 이전 대시보드 뒤로가기 제거됨 --></div>
   <div class="restore-notice" id="restore-notice">💾 이전에 업로드된 파일이 복원되었습니다. 새 파일을 선택하면 덮어씁니다.</div>
 
   <!-- 파일 업로드 -->
@@ -919,6 +880,14 @@
     </div>
   </div>
 </div>
+
+<!-- ── 준비중 뷰 ── -->
+<div id="view-coming" style="display:none; flex:1; align-items:center; justify-content:center; flex-direction:column; gap:16px; flex-grow:1; background:#f8fafc; padding:80px 0;">
+  <div style="font-size:48px;">🚧</div>
+  <div style="font-size:18px; font-weight:700; color:#374151;">준비 중입니다</div>
+  <div style="font-size:13px; color:#9ca3af;">해당 기능은 곧 추가될 예정입니다.</div>
+</div>
+</div><!-- /app-layout -->
 
 <script>
 // ── 전역 상태 ──────────────────────────────────────
@@ -4088,47 +4057,42 @@ function emergencyStop() {
 let _kitBoardDates = [];
 
 // ── 대시보드 네비게이션 ──────────────────────────────
-function showDashboard() {
-  document.getElementById('dashboard-overlay').classList.remove('hidden');
-  document.getElementById('main-container').classList.remove('pkg-only-mode');
-}
-function hideDashboard() {
-  document.getElementById('dashboard-overlay').classList.add('hidden');
-}
-function dashGoKittingBoard() {
-  hideDashboard();
-  document.getElementById('kb-modal').classList.add('kb-fullscreen');
-  openKittingBoard();
-}
-function dashGoMaterial() {
-  hideDashboard();
-  switchTab('parts');
-  document.getElementById('panel-parts').scrollIntoView({ behavior:'smooth' });
-}
-function dashGoPackaging() {
-  hideDashboard();
-  document.getElementById('main-container').classList.add('pkg-only-mode');
-  switchTab('pkg');
-  // 서브탭 행 강제 표시 (pkg-only 모드에서는 항상 보여야 함)
-  if (pkgResult && pkgResult.length > 0) {
-    document.getElementById('pkg-subtab-row').style.display = '';
+// ── 사이드바 뷰 전환 ──────────────────────────────
+function switchView(v) {
+  document.body.setAttribute('data-view', v);
+  ['kb','material','pkg','prep','insp'].forEach(id => {
+    const el = document.getElementById('snav-'+id);
+    if (el) el.classList.toggle('active', id === v);
+  });
+  const coming = document.getElementById('view-coming');
+  if (coming) coming.style.display = (v === 'prep' || v === 'insp') ? 'flex' : 'none';
+  if (v === 'kb') {
+    if (state.plan) {
+      openKittingBoard();
+    } else {
+      // 데이터 없을 때 안내 메시지 표시
+      document.getElementById('kb-shortage-body').innerHTML =
+        '<div class="kb-empty-state"><div class="kb-empty-icon">📂</div>생산계획 파일을 업로드하고 분석을 실행하면 표시됩니다.</div>';
+    }
   }
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (v === 'pkg') {
+    switchTab('pkg');
+    if (pkgResult && pkgResult.length > 0) {
+      document.getElementById('pkg-subtab-row').style.display = '';
+    }
+  }
+  if (v === 'material') {
+    switchTab('parts');
+  }
+  window.scrollTo({ top: 0 });
 }
 
 function openKittingBoard() {
-  if (!state.plan) {
-    alert('먼저 생산계획 파일을 업로드해주세요.');
-    return;
-  }
-  // buildPkgData와 동일하게 state.plan에서 직접 파싱 (D라인 포함)
+  if (!state.plan) return;
   const fromDateStr = document.getElementById('fromDate')?.value || '';
   const fromSerial  = fromDateStr ? dateToSerial(fromDateStr) : 0;
   const planRows = parsePlan(state.plan, fromSerial);
-  if (!planRows.length) {
-    alert('생산계획에서 읽을 수 있는 데이터가 없습니다.');
-    return;
-  }
+  if (!planRows.length) return;
   window._kitBoardPlanRows = planRows;
   // 날짜 목록 구성
   const dateMap = {};
@@ -4142,15 +4106,14 @@ function openKittingBoard() {
   // 파일 정보 표시
   const name = state.plan._fileName || '생산계획';
   document.getElementById('kb-file-info').textContent = name;
-  document.getElementById('kb-modal').classList.add('open');
+  if (document.body.getAttribute('data-view') !== 'kb') {
+    document.getElementById('kb-modal').classList.add('open');
+  }
   _kbRenderDate();
 }
 
 function closeKittingBoard() {
-  const modal = document.getElementById('kb-modal');
-  const isFullscreen = modal.classList.contains('kb-fullscreen');
-  modal.classList.remove('open', 'kb-fullscreen');
-  if (isFullscreen) showDashboard();
+  document.getElementById('kb-modal').classList.remove('open');
 }
 
 function kbPrevDate() {
@@ -4553,6 +4516,7 @@ function downloadSetupBat() {
 document.getElementById('auto-kit-modal').addEventListener('click', function(e) {
   if (e.target === this) closeAutoKitModal();
 });
+document.addEventListener('DOMContentLoaded', () => switchView('kb'));
 </script>
 </body>
 </html>
