@@ -248,7 +248,7 @@
   .side-logo { padding:18px 16px 14px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px; }
   .side-logo-icon { font-size:20px; }
   .side-logo-text { font-size:12px; font-weight:700; color:#e2e8f0; line-height:1.35; }
-  .side-menu { flex:1; overflow-y:auto; padding:6px 0; }
+  .side-menu { flex:1; overflow-y:auto; padding:6px 0; display:flex; flex-direction:column; }
   .side-item { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; transition:background 0.15s; border-left:3px solid transparent; position:relative; }
   .side-item:hover { background:rgba(255,255,255,0.07); }
   .side-item.active { background:rgba(56,189,248,0.1); border-left-color:#38bdf8; }
@@ -505,11 +505,6 @@
     <div class="side-logo-text">조립팀<br>자재현황</div>
   </div>
   <div class="side-menu">
-    <div class="side-item" id="snav-manual" onclick="switchView('manual')">
-      <span class="side-item-icon">📖</span>
-      <span class="side-item-label">메뉴얼</span>
-    </div>
-    <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 12px;"></div>
     <div class="side-item active" id="snav-kb" onclick="switchView('kb')">
       <span class="side-item-icon">📋</span>
       <span class="side-item-label">Kitting Board</span>
@@ -531,6 +526,11 @@
       <span class="side-item-icon">🔍</span>
       <span class="side-item-label">투입전 검사관리</span>
       <span class="side-coming">준비중</span>
+    </div>
+    <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 12px;flex-shrink:0;margin-top:auto;"></div>
+    <div class="side-item" id="snav-manual" onclick="switchView('manual')">
+      <span class="side-item-icon">📖</span>
+      <span class="side-item-label">메뉴얼</span>
     </div>
   </div>
 </nav>
