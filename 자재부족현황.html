@@ -302,6 +302,13 @@
   .kb-modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:9998; align-items:flex-start; justify-content:center; overflow-y:auto; padding:20px; }
   .kb-modal.open { display:flex; }
   .kb-wrap { background:#f5f7fa; border-radius:16px; width:min(1300px,98vw); min-height:80vh; display:flex; flex-direction:column; box-shadow:0 24px 80px rgba(0,0,0,0.4); overflow:hidden; }
+  /* 전체화면 단독 모드 */
+  .kb-modal.kb-fullscreen { background:none; padding:0; z-index:10001; overflow-y:auto; }
+  .kb-modal.kb-fullscreen .kb-wrap { width:100%; min-height:100vh; border-radius:0; box-shadow:none; }
+  .kb-btn-back-dash { display:none; align-items:center; gap:6px; padding:7px 16px; background:#1e3a5f; color:white; border:none; border-radius:7px; font-size:13px; font-weight:700; cursor:pointer; transition:background 0.18s; white-space:nowrap; }
+  .kb-btn-back-dash:hover { background:#2c5282; }
+  .kb-modal.kb-fullscreen .kb-btn-back-dash { display:inline-flex; }
+  .kb-modal.kb-fullscreen .kb-close { display:none; }
   .kb-head { background:white; padding:20px 28px 14px; border-bottom:1px solid #e5e7eb; display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; }
   .kb-head-left h2 { font-size:22px; font-weight:800; color:#111827; margin-bottom:3px; }
   .kb-head-left p { font-size:12px; color:#6b7280; }
@@ -521,6 +528,7 @@
       </div>
       <div class="kb-head-right">
         <div id="kb-file-info" class="kb-file-info"></div>
+        <button class="kb-btn-back-dash" onclick="closeKittingBoard()">← 대시보드</button>
         <button class="kb-close" onclick="closeKittingBoard()">✕</button>
       </div>
     </div>
@@ -4089,6 +4097,7 @@ function hideDashboard() {
 }
 function dashGoKittingBoard() {
   hideDashboard();
+  document.getElementById('kb-modal').classList.add('kb-fullscreen');
   openKittingBoard();
 }
 function dashGoMaterial() {
@@ -4134,7 +4143,10 @@ function openKittingBoard() {
 }
 
 function closeKittingBoard() {
-  document.getElementById('kb-modal').classList.remove('open');
+  const modal = document.getElementById('kb-modal');
+  const isFullscreen = modal.classList.contains('kb-fullscreen');
+  modal.classList.remove('open', 'kb-fullscreen');
+  if (isFullscreen) showDashboard();
 }
 
 function kbPrevDate() {
