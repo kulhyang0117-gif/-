@@ -282,7 +282,7 @@
   .pkg-only-mode #restore-notice,
   .pkg-only-mode #cutoff-info,
   .pkg-only-mode #summary-cards,
-  .pkg-only-mode .tab-row,
+  .pkg-only-mode #main-tab-row,
   .pkg-only-mode #panel-parts,
   .pkg-only-mode #panel-model,
   .pkg-only-mode #panel-date,
@@ -746,7 +746,7 @@
 
   <!-- 결과 탭 -->
   <div class="result-section">
-    <div class="tab-row">
+    <div class="tab-row" id="main-tab-row">
       <div class="tab active" id="tab-parts" onclick="switchTab('parts')">📊 자재별 부족현황</div>
       <div class="tab" id="tab-model" onclick="switchTab('model')">🏭 모델별 부족현황</div>
       <div class="tab" id="tab-date" onclick="switchTab('date')">📅 일자별 부족현황</div>
@@ -4109,6 +4109,10 @@ function dashGoPackaging() {
   hideDashboard();
   document.getElementById('main-container').classList.add('pkg-only-mode');
   switchTab('pkg');
+  // 서브탭 행 강제 표시 (pkg-only 모드에서는 항상 보여야 함)
+  if (pkgResult && pkgResult.length > 0) {
+    document.getElementById('pkg-subtab-row').style.display = '';
+  }
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
