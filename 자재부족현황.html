@@ -270,7 +270,16 @@
   body[data-view=kb] .kb-close { display:none; }
   body[data-view=kb] .kb-btn-back-dash { display:none; }
   /* 자재현황 뷰 */
-  body:not([data-view=material]) #main-container { display:none; }
+  body:not([data-view=material]):not([data-view=upload]):not([data-view=pkg]) #main-container { display:none; }
+  body[data-view=material] #restore-notice,
+  body[data-view=material] #upload-section,
+  body[data-view=material] #plan-col-map-panel,
+  body[data-view=material] .settings-section { display:none !important; }
+  /* 파일 업로드 뷰 */
+  body[data-view=upload] #main-container { display:block; }
+  body[data-view=upload] #cutoff-info,
+  body[data-view=upload] #summary-cards,
+  body[data-view=upload] .result-section { display:none !important; }
   /* 포장재 뷰 */
   body[data-view=pkg] #main-container { display:block; }
   body[data-view=pkg] #upload-section,
@@ -526,6 +535,10 @@
       <span class="side-item-icon">🔍</span>
       <span class="side-item-label">투입전 검사관리</span>
       <span class="side-coming">준비중</span>
+    </div>
+    <div class="side-item" id="snav-upload" onclick="switchView('upload')">
+      <span class="side-item-icon">📂</span>
+      <span class="side-item-label">파일 업로드</span>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 12px;flex-shrink:0;margin-top:auto;"></div>
     <div class="side-item" id="snav-manual" onclick="switchView('manual')">
@@ -4293,7 +4306,7 @@ let _kitBoardDates = [];
 // ── 사이드바 뷰 전환 ──────────────────────────────
 function switchView(v) {
   document.body.setAttribute('data-view', v);
-  ['manual','kb','material','pkg','prep','insp'].forEach(id => {
+  ['manual','kb','material','pkg','prep','insp','upload'].forEach(id => {
     const el = document.getElementById('snav-'+id);
     if (el) el.classList.toggle('active', id === v);
   });
