@@ -1255,6 +1255,7 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
         자품번:r.findIndex(v=>v==='자품번'), 자품명:r.findIndex(v=>v.includes('자품명')),
         규격:r.findIndex(v=>v==='규격'), 부품유형:r.findIndex(v=>v.includes('부품유형')),
         단위:r.findIndex(v=>v==='단위'), 소요량:r.findIndex(v=>v==='소요량'),
+        협력사명:r.findIndex(v=>v==='협력사명'||(v.includes('협력사')&&!v.includes('코드'))),
         // 고객사 PART NO 컬럼 (조립_D의 P/N 컬럼값과 매칭)
         고객사PARTNO:r.findIndex(v=>v==='고객사 PART NO'||v==='고객사PARTNO'||
           v==='고객사P/N'||v==='고객사PN'||
@@ -1262,7 +1263,7 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
       break;
     }
   }
-  if (hRow<0) { c={제품번호:2,제품명:6,레벨:8,모품번:9,자품번:10,자품명:12,규격:13,부품유형:14,단위:15,소요량:16,고객사PARTNO:-1}; hRow=0; }
+  if (hRow<0) { c={제품번호:2,제품명:6,레벨:8,모품번:9,자품번:10,자품명:12,규격:13,부품유형:14,단위:15,소요량:16,협력사명:17,고객사PARTNO:-1}; hRow=0; }
   const bomMap={};
   const productNameMap={}; // pn → 제품명
   const custPartMap={};    // 고객사 PART NO → 품목코드(시스템 P/N)
@@ -1292,7 +1293,8 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
     if (!bomMap[cur]) bomMap[cur]=[];
     bomMap[cur].push({ 자품번:jp, 자품명:String(r[c.자품명]||'').trim(),
       규격:String(r[c.규격]||'').trim(), 부품유형:bt,
-      단위:String(r[c.단위]||'').trim(), 소요량:qty });
+      단위:String(r[c.단위]||'').trim(), 소요량:qty,
+      협력사명: c.협력사명>=0 ? String(r[c.협력사명]||'').trim() : '' });
   }
   return { bomMap, productNameMap, custPartMap };
 }
@@ -1604,6 +1606,12 @@ function runAnalysis() {
         if (productNameMap[pn] && !productNameMap[dbn]) productNameMap[dbn] = productNameMap[pn];
       });
       window._kbBomMap = bomMap;   // Kitting Board 자재현황 패널용
+      // 자품번 → 협력사명 맵 (BOM정보 협력사명 컬럼 기반)
+      const supplierMap = {};
+      for (const comps of Object.values(bomMap))
+        for (const comp of comps)
+          if (comp.협력사명 && !supplierMap[comp.자품번]) supplierMap[comp.자품번] = comp.협력사명;
+      window._kbSupplierMap = supplierMap;
       const hasKit=Object.keys(kitMap).length>0;
       globalHasKit=hasKit;
 
@@ -4184,9 +4192,10 @@ function _kbRenderShortage(lines, lineMap, mStatusMap) {
   const container = document.getElementById('kb-shortage-body');
   container.innerHTML = '';
 
-  // analysisResult 에서 조달/협력사 조회용 맵
+  // analysisResult 에서 조달 조회용 맵, BOM 협력사명 맵
   const partInfoMap = {};
   for (const r of analysisResult) partInfoMap[r.자품번] = r;
+  const supplierMap = window._kbSupplierMap || {};
 
   let totalCnt = 0;
   for (const line of lines) {
@@ -4224,7 +4233,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap) {
     for (const part of lineShortages) {
       const pi = partInfoMap[part.자품번] || {};
       const 조달 = pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
-      const 협력사 = pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
+      const 협력사 = supplierMap[part.자품번] || pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
       const req = part.modelReq ?? part.totalGlobalReq ?? 0;
       const stk = part.stock ?? 0;
       const lack = (part.available??stk) - req;
@@ -4304,10 +4313,11 @@ function openKbDetail(row, entry, line, startMin, endMin) {
   [badge, pnEl, modelEl, specEl, rightEl].forEach(el => headEl.appendChild(el));
 
   // ── 자재 테이블 ──
-  const bomMap   = window._kbBomMap || {};
-  const comps    = bomMap[row.pn] || [];
-  const partMap  = {};
+  const bomMap      = window._kbBomMap || {};
+  const comps       = bomMap[row.pn] || [];
+  const partMap     = {};
   for (const r of analysisResult) partMap[r.자품번] = r;
+  const supplierMap = window._kbSupplierMap || {};
 
   if (!comps.length) {
     bodyEl.innerHTML = `<div class="kb-detail-empty">BOM 데이터 없음 (분석 실행 후 다시 시도)</div>`;
@@ -4328,8 +4338,8 @@ function openKbDetail(row, entry, line, startMin, endMin) {
     const diffStr   = diff === null ? '-' : (diff >= 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString());
     const diffStyle = diff === null ? '' : (diff >= 0 ? 'color:#16a34a' : 'color:#dc2626;font-weight:700');
     const stockStyle= avail > 0 ? 'color:#16a34a' : avail === 0 ? 'color:#dc2626' : '';
-    const 조달 = pr ? (pr.조달||pr.조달구분||pr['조달방법']||pr['구매구분']||'') : '';
-    const 협력사 = pr ? (pr.협력사||pr['거래처']||pr['공급업체']||pr['벤더']||'') : '';
+    const 조달   = comp.부품유형 || (pr ? (pr.조달||pr.조달구분||pr['조달방법']||pr['구매구분']||'') : '');
+    const 협력사 = comp.협력사명 || supplierMap[comp.자품번] || (pr ? (pr.협력사||pr['거래처']||pr['공급업체']||pr['벤더']||'') : '');
     const procTag = 조달 ? `<span class="kb-proc-tag">${조달}</span>` : '';
     const kitBadge = kit > 0 ? ` <span style="font-size:9px;background:#ede9fe;color:#6d28d9;padding:1px 5px;border-radius:3px;">키팅+${kit.toLocaleString()}</span>` : '';
     return `<tr>
