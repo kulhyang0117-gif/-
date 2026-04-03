@@ -2026,6 +2026,11 @@ function runAnalysis() {
       renderModelInvTable(filteredModelInvResult);
       if (state.pkg) { buildPkgData(); renderPkgTable(pkgResult); }
 
+      // 분석 완료 후 현재 뷰가 KB이면 자동으로 KB 렌더링
+      if (document.body.getAttribute('data-view') === 'kb') {
+        openKittingBoard();
+      }
+
     } catch(err) {
       const e=`<div class="empty"><div class="icon">❌</div><div>오류: ${err.message}</div><pre style="font-size:10px;color:#999;text-align:left;margin-top:8px;">${err.stack}</pre></div>`;
       document.getElementById('result-body').innerHTML=e;
