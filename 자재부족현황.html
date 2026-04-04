@@ -4444,6 +4444,51 @@ function _kbRenderDate() {
     lineMap[line].push(row);
   }
 
+  // ── 날짜별 자재 상태 계산 (선택 날짜 소요량 vs 현재 가용재고) ──
+  // 전체 기간 누적 소요량 기준 mStatusMap 대신, 해당 날짜 당일 소요량만 비교
+  const _bomMapKb = window._kbBomMap || {};
+  const _partAvailMap = {};
+  for (const r of analysisResult) {
+    if (r.available !== null) _partAvailMap[r.자품번] = r;
+  }
+  // 시작일부터 해당 날짜까지 누적 자품 소요량 합산 (전일 소요량 감안)
+  const _dateCompReq = {};
+  const _cumulRows = planRows.filter(r => r.dateSerial <= ds);
+  for (const row of _cumulRows) {
+    for (const comp of (_bomMapKb[row.pn] || [])) {
+      _dateCompReq[comp.자품번] = (_dateCompReq[comp.자품번] || 0) + row.qty * comp.소요량;
+    }
+  }
+  // 부족/위험 자품 Set
+  const _dateDangerSet = new Set();
+  const _dateWarnSet   = new Set();
+  for (const [pn, req] of Object.entries(_dateCompReq)) {
+    const p = _partAvailMap[pn];
+    if (!p) continue;
+    if (p.available < req)            _dateDangerSet.add(pn);
+    else if (p.available < req * 1.2) _dateWarnSet.add(pn);
+  }
+  // planRow → 날짜 기준 status
+  const getDateStatus = (row) => {
+    const comps = _bomMapKb[row.pn] || [];
+    if (!comps.length) return 'na';
+    if (comps.some(c => _dateDangerSet.has(c.자품번))) return 'danger';
+    if (comps.some(c => _dateWarnSet.has(c.자품번)))   return 'warning';
+    return 'ok';
+  };
+  // planRow → 날짜 기준 부족 자품 목록
+  const getDateDangerParts = (row) => {
+    return (_bomMapKb[row.pn] || [])
+      .filter(c => _dateDangerSet.has(c.자품번))
+      .map(c => {
+        const p = _partAvailMap[c.자품번] || {};
+        return { 자품번:c.자품번, 자품명:c.자품명, 소요량:c.소요량,
+                 stock:p.stock||0, kitTotal:p.kitTotal||0,
+                 available:p.available||0,
+                 modelReq:_dateCompReq[c.자품번]||0 };
+      });
+  };
+
   // modelResult 조회용 맵 — rawModel(parsePlan 원본 model값) 기준 키 사용
   // (dispModel은 표시용으로 model+lhrh를 합친 값 → planRow 키와 불일치 방지)
   const mStatusMap = {};
@@ -4485,9 +4530,9 @@ function _kbRenderDate() {
     for (const row of lineMap[line]) {
       const k = `${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`;
       if (seen.has(k)) continue; seen.add(k); total++;
-      const e = mStatusMap[k];
-      if (e && e.status==='ok') ready++;
-      else if (e && e.status==='danger') short++;
+      const ds2 = getDateStatus(row);
+      if (ds2==='ok') ready++;
+      else if (ds2==='danger') short++;
     }
   }
   document.getElementById('kb-total').textContent  = total;
@@ -4495,8 +4540,8 @@ function _kbRenderDate() {
   document.getElementById('kb-ready-pct').textContent = total>0 ? `(${Math.round(ready/total*100)}%)` : '';
   document.getElementById('kb-short').textContent  = short;
 
-  _kbRenderGantt(lines, lineMap, mStatusMap);
-  _kbRenderShortage(lines, lineMap, mStatusMap);
+  _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus);
+  _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts);
 }
 
 // ── 휴식/식사 시간 정의 (분, 자정 기준) ──────────────────────────────────────
@@ -4534,7 +4579,7 @@ function _minToTime(min) {
   return `${h}:${String(m).padStart(2,'0')}`;
 }
 
-function _kbRenderGantt(lines, lineMap, mStatusMap) {
+function _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus) {
   const START = 8*60+30, END = 22*60, TOTAL = END-START;
   const gantt = document.getElementById('kb-gantt');
   gantt.innerHTML = '';
@@ -4585,7 +4630,7 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
         model:  row.model || row.pn,
         qty:    row.qty,
         takt:   row.takt || 0,
-        status: e ? e.status : 'na',
+        status: getDateStatus ? getDateStatus(row) : (e ? e.status : 'na'),
         _row:   row,
         _entry: e || null,
       };
@@ -4682,7 +4727,7 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
   }
 }
 
-function _kbRenderShortage(lines, lineMap, mStatusMap) {
+function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
   const container = document.getElementById('kb-shortage-body');
   container.innerHTML = '';
 
@@ -4696,10 +4741,10 @@ function _kbRenderShortage(lines, lineMap, mStatusMap) {
     const seenParts = new Set();
     const lineShortages = [];
     for (const row of lineMap[line]) {
-      const k = `${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`;
-      const e = mStatusMap[k];
-      if (!e || e.dangerParts.length===0) continue;
-      for (const part of e.dangerParts) {
+      const dangerParts = getDateDangerParts
+        ? getDateDangerParts(row)
+        : ((mStatusMap[`${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`] || {}).dangerParts || []);
+      for (const part of dangerParts) {
         if (seenParts.has(part.자품번)) continue;
         seenParts.add(part.자품번);
         lineShortages.push(part);
