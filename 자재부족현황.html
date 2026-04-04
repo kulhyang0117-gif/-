@@ -1566,8 +1566,8 @@ function parseProductCodeMap(wb) {
 
 // ── BOM 파싱 ───────────────────────────────────────
 function parseSupplierMap(wb) {
-  // '품목코드' 시트에서 직접 품목코드 → 협력사명 매핑 구축
-  const sn = wb.SheetNames.find(n => n.includes('품목코드'));
+  // '품목코드' 또는 '기준정보' 시트에서 품목코드 → 협력업체 매핑 구축
+  const sn = wb.SheetNames.find(n => n.includes('품목코드') || n.includes('기준정보'));
   if (!sn) return {};
   const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
   if (rows.length < 2) return {};
@@ -1576,11 +1576,10 @@ function parseSupplierMap(wb) {
   for (let i = 0; i < Math.min(5, rows.length); i++) {
     const r = rows[i].map(v => String(v).trim());
     const ic = r.findIndex(v => v === '품목코드');
-    const is = r.findIndex(v => v === '협력사명' || (v.includes('협력사') && !v.includes('코드')));
-    if (ic >= 0) { hIdx = i; cCode = ic; cSupplier = is >= 0 ? is : 5; break; }
+    const is = r.findIndex(v => v === '협력업체' || v === '협력사명' || (v.includes('협력') && !v.includes('코드')));
+    if (ic >= 0) { hIdx = i; cCode = ic; cSupplier = is >= 0 ? is : -1; break; }
   }
-  // 헤더 미발견 시 알려진 고정 인덱스 사용 (index 2=품목코드, index 5=협력사명)
-  if (hIdx < 0) { hIdx = 0; cCode = 2; cSupplier = 5; }
+  if (hIdx < 0 || cCode < 0 || cSupplier < 0) return {};
   const map = {};
   for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
@@ -1609,7 +1608,7 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
         자품번:r.findIndex(v=>v==='자품번'), 자품명:r.findIndex(v=>v.includes('자품명')),
         규격:r.findIndex(v=>v==='규격'), 부품유형:r.findIndex(v=>v.includes('부품유형')),
         단위:r.findIndex(v=>v==='단위'), 소요량:r.findIndex(v=>v==='소요량'),
-        협력사명:r.findIndex(v=>v==='협력사명'||(v.includes('협력사')&&!v.includes('코드'))),
+        협력사명:r.findIndex(v=>v==='협력업체'||v==='협력사명'||(v.includes('협력')&&!v.includes('코드'))),
         // 고객사 PART NO 컬럼 (조립_D의 P/N 컬럼값과 매칭)
         고객사PARTNO:r.findIndex(v=>v==='고객사 PART NO'||v==='고객사PARTNO'||
           v==='고객사P/N'||v==='고객사PN'||
