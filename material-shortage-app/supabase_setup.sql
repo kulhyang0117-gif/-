@@ -46,6 +46,10 @@ CREATE POLICY "profiles_write" ON profiles
 CREATE POLICY "upload_logs_all" ON upload_logs
   FOR ALL USING (auth.role() = 'authenticated');
 
+-- 통합 대시보드 게스트(비로그인)도 파일 메타/데이터 읽기 허용
+CREATE POLICY "upload_logs_read_anon" ON upload_logs
+  FOR SELECT USING (true);
+
 -- ── 6. 관리자 계정 초기 설정 ────────────────────────────────────
 -- 아래 단계를 따르세요:
 --
@@ -68,6 +72,11 @@ CREATE POLICY "upload_logs_all" ON upload_logs
 CREATE POLICY "storage_read_authenticated" ON storage.objects
   FOR SELECT
   USING (bucket_id = 'ms-files' AND auth.role() = 'authenticated');
+
+-- 통합 대시보드 게스트(비로그인)도 파일 읽기 허용
+CREATE POLICY "storage_read_anon" ON storage.objects
+  FOR SELECT
+  USING (bucket_id = 'ms-files');
 
 -- 인증된 회원은 파일 업로드/덮어쓰기 가능 (upsert)
 CREATE POLICY "storage_insert_authenticated" ON storage.objects
@@ -109,6 +118,10 @@ ALTER TABLE kb_ok_checks ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "kb_ok_checks_all" ON kb_ok_checks
   FOR ALL USING (auth.role() = 'authenticated');
+
+-- 통합 대시보드 게스트도 OK 체크/비고 읽기 허용
+CREATE POLICY "kb_ok_checks_read_anon" ON kb_ok_checks
+  FOR SELECT USING (true);
 
 -- Realtime 활성화 (Supabase 대시보드 → Database → Replication 에서도 테이블 추가 필요)
 ALTER PUBLICATION supabase_realtime ADD TABLE kb_ok_checks;

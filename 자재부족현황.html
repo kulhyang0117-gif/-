@@ -4221,22 +4221,13 @@ function resetKitNotice(){
 
 // ── 앱 초기화 ──
 async function initAuth(){
-  // 통합 대시보드에서 접근 시 익명 로그인으로 바이패스
+  // 통합 대시보드에서 접근 시 게스트 바이패스
   const _urlFrom = new URLSearchParams(window.location.search).get('from');
   const _fromDashboard = _urlFrom === 'ssat' ||
     document.referrer.includes('ssat-unified-dashboard.vercel.app');
 
   const { data: { session } } = await sb.auth.getSession();
-  if (session && session.user) {
-    if (session.user.is_anonymous) {
-      // 기존 익명 세션 — 대시보드 게스트로 처리
-      currentUser = { id: session.user.id, email: '', displayName: '대시보드 뷰어',
-        isAdmin: false, permissions: { read: true, upload: false, modify: false },
-        status: 'approved', isGuest: true };
-      hideAuthOverlay(); renderUserHeader(currentUser); applyPermissions(currentUser.permissions);
-      syncFilesFromSupabase();
-      return;
-    }
+  if (session && session.user && !session.user.is_anonymous) {
     const profile = await getProfile(session.user.id);
     if (profile && profile.status === 'approved') {
       currentUser = { id: session.user.id, email: session.user.email,
@@ -4249,17 +4240,20 @@ async function initAuth(){
   }
 
   if (_fromDashboard) {
-    // 익명 로그인 시도 (Supabase Anonymous Auth 활성화 필요)
-    const { data: anonData, error: anonErr } = await sb.auth.signInAnonymously();
-    if (!anonErr && anonData?.user) {
-      currentUser = { id: anonData.user.id, email: '', displayName: '대시보드 뷰어',
-        isAdmin: false, permissions: { read: true, upload: false, modify: false },
-        status: 'approved', isGuest: true };
-      hideAuthOverlay(); renderUserHeader(currentUser); applyPermissions(currentUser.permissions);
-      syncFilesFromSupabase();
-      return;
-    }
-    // 익명 인증 미지원 시 로그인 화면 표시
+    // 익명 로그인 시도 (Anonymous Auth 활성화 시 RLS도 통과)
+    const { data: anonData } = await sb.auth.signInAnonymously().catch(() => ({ data: null }));
+    currentUser = {
+      id: anonData?.user?.id || null,
+      email: '',
+      displayName: '대시보드 뷰어',
+      isAdmin: false,
+      permissions: { read: true, upload: false, modify: false },
+      status: 'approved',
+      isGuest: true
+    };
+    hideAuthOverlay(); renderUserHeader(currentUser); applyPermissions(currentUser.permissions);
+    syncFilesFromSupabase();
+    return;
   }
 
   showAuthOverlay();
