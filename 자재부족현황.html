@@ -4551,6 +4551,10 @@ function _kbRenderDate() {
 
   _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus, getDateDangerParts);
   _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts);
+  // 날짜 변경 시 Realtime 구독 갱신 + 저장된 체크 로드
+  _kbCurrentDateSerial = ds;
+  _kbSetupOkSync(ds);
+  _kbLoadOkChecks(ds);
 }
 
 // ── 휴식/식사 시간 정의 (분, 자정 기준) ──────────────────────────────────────
@@ -4813,14 +4817,15 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
              <td class="num" style="${remainStyle}">${Math.round(remaining).toLocaleString()}</td>
              <td class="num" style="font-weight:700;">${Math.round(dayReq).toLocaleString()}</td>`
           : `<td class="num">${Math.round(dayReq).toLocaleString()}</td>`}
-        <td class="num kb-lack-cell kb-shortage-neg">${lackStr}</td>
+        <td class="num kb-lack-cell kb-shortage-neg" data-orig-lack="${lackStr}">${lackStr}</td>
         <td style="font-size:11px;color:#6b7280;">${협력사}</td>
         <td><input type="text" class="kb-note-input" placeholder="공급일/수량 등..."></td>
       `;
 
       tr.dataset.partno = part.자품번;
-      const chk = tr.querySelector('.kb-ok-chk');
+      const chk      = tr.querySelector('.kb-ok-chk');
       const lackCell = tr.querySelector('.kb-lack-cell');
+      const noteInput = tr.querySelector('.kb-note-input');
       chk.onchange = () => {
         if (chk.checked) {
           tr.classList.add('kb-row-ok');
@@ -4828,12 +4833,20 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         } else {
           tr.classList.remove('kb-row-ok');
           lackCell.className = 'num kb-lack-cell kb-shortage-neg';
-          lackCell.textContent = lackStr;
+          lackCell.textContent = lackCell.dataset.origLack || lackStr;
         }
         const cnt = tbody.querySelectorAll('.kb-ok-chk:checked').length;
         okCntEl.textContent = `${cnt}건 해제`;
         okCntEl.style.display = cnt > 0 ? '' : 'none';
         _kbRefreshBlockColors();
+        _kbSaveOkCheck(_kbCurrentDateSerial, part.자품번, chk.checked, noteInput?.value || '');
+      };
+      // 비고 입력 debounce 저장
+      noteInput.oninput = () => {
+        clearTimeout(_kbNoteTimers[part.자품번]);
+        _kbNoteTimers[part.자품번] = setTimeout(() => {
+          _kbSaveOkCheck(_kbCurrentDateSerial, part.자품번, chk.checked, noteInput.value);
+        }, 800);
       };
 
       tbody.appendChild(tr);
@@ -4847,6 +4860,75 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
     container.innerHTML = `<div style="text-align:center;padding:36px;color:#16a34a;font-size:14px;font-weight:700;">✅ 부족자재 없음</div>`;
     document.getElementById('kb-shortage-cnt').textContent = '0';
   }
+}
+
+// ── Kitting Board OK/비고 Supabase 동기화 ──────────────────────────────────
+let _kbOkChannel = null;
+let _kbCurrentDateSerial = 0;
+const _kbNoteTimers = {};
+
+async function _kbSaveOkCheck(dateSerial, partNo, checked, note) {
+  try {
+    const updatedBy = currentUser ? currentUser.displayName : '';
+    await sb.from('kb_ok_checks').upsert(
+      { date_serial: dateSerial, part_no: partNo, checked, note,
+        updated_at: new Date().toISOString(), updated_by: updatedBy },
+      { onConflict: 'date_serial,part_no' }
+    );
+  } catch(e) { console.warn('OK 체크 저장 실패:', e); }
+}
+
+function _kbApplyOkRow(partNo, checked, note) {
+  const tr = Array.from(document.querySelectorAll('#kb-shortage-body tr[data-partno]'))
+    .find(t => t.dataset.partno === partNo);
+  if (!tr) return;
+  const chk       = tr.querySelector('.kb-ok-chk');
+  const lackCell  = tr.querySelector('.kb-lack-cell');
+  const noteInput = tr.querySelector('.kb-note-input');
+  if (chk) {
+    chk.checked = checked;
+    if (checked) {
+      tr.classList.add('kb-row-ok');
+      if (lackCell) lackCell.innerHTML = '<span style="color:#16a34a;font-weight:700;">OK</span>';
+    } else {
+      tr.classList.remove('kb-row-ok');
+      if (lackCell) {
+        lackCell.className = 'num kb-lack-cell kb-shortage-neg';
+        lackCell.textContent = lackCell.dataset.origLack || '';
+      }
+    }
+    // OK 해제 카운터 갱신
+    const tbody = tr.closest('tbody');
+    const hdr   = tr.closest('table')?.previousElementSibling;
+    if (tbody && hdr) {
+      const cnt = tbody.querySelectorAll('.kb-ok-chk:checked').length;
+      const okCntEl = hdr.querySelector('.kb-st-ok-cnt');
+      if (okCntEl) { okCntEl.textContent = `${cnt}건 해제`; okCntEl.style.display = cnt > 0 ? '' : 'none'; }
+    }
+  }
+  if (noteInput && note !== undefined && noteInput.value !== note) noteInput.value = note;
+}
+
+async function _kbLoadOkChecks(dateSerial) {
+  try {
+    const { data } = await sb.from('kb_ok_checks')
+      .select('part_no,checked,note').eq('date_serial', dateSerial);
+    if (!data) return;
+    for (const row of data) _kbApplyOkRow(row.part_no, row.checked, row.note || '');
+    _kbRefreshBlockColors();
+  } catch(e) { console.warn('OK 체크 로드 실패:', e); }
+}
+
+function _kbSetupOkSync(dateSerial) {
+  if (_kbOkChannel) { _kbOkChannel.unsubscribe(); _kbOkChannel = null; }
+  _kbOkChannel = sb.channel('kb-ok-' + dateSerial)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'kb_ok_checks',
+      filter: `date_serial=eq.${dateSerial}` }, payload => {
+      const row = payload.new || {}, old = payload.old || {};
+      if (payload.eventType === 'DELETE') _kbApplyOkRow(old.part_no, false, '');
+      else _kbApplyOkRow(row.part_no, row.checked, row.note || '');
+      _kbRefreshBlockColors();
+    }).subscribe();
 }
 
 // ── OK 체크박스 반영: 간트 블록 색상 갱신 ──────────────────────────────────

@@ -93,3 +93,22 @@ CREATE POLICY "storage_delete_authenticated" ON storage.objects
 -- Authentication → Settings 에서:
 --   - "Enable email confirmations" → OFF (내부 앱이므로 이메일 확인 불필요)
 --   - "Allow new users to sign up" → ON
+
+-- ── 9. Kitting Board OK 체크 / 비고 동기화 테이블 ──────────────────
+CREATE TABLE IF NOT EXISTS kb_ok_checks (
+  date_serial  INTEGER  NOT NULL,
+  part_no      TEXT     NOT NULL,
+  checked      BOOLEAN  NOT NULL DEFAULT false,
+  note         TEXT     NOT NULL DEFAULT '',
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by   TEXT     NOT NULL DEFAULT '',
+  PRIMARY KEY (date_serial, part_no)
+);
+
+ALTER TABLE kb_ok_checks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "kb_ok_checks_all" ON kb_ok_checks
+  FOR ALL USING (auth.role() = 'authenticated');
+
+-- Realtime 활성화 (Supabase 대시보드 → Database → Replication 에서도 테이블 추가 필요)
+ALTER PUBLICATION supabase_realtime ADD TABLE kb_ok_checks;
