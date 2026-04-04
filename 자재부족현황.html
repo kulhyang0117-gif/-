@@ -1696,12 +1696,14 @@ const PLAN_COL_KW = {
   spec:  ['사양','SPEC','규격','제품사양','차종사양','사양명','형식','타입','TYPE'],
   lhrh:  ['LH/RH','LH-RH','LH_RH','LHRH','L/R','LH','RH','좌우','좌/우','Left/Right'],
   takt:  ['소요시간','소요(분)','소요시간(분)','작업소요시간','작업시간','TAKT TIME','TAKT','소요분','작업분',
-           'CT','C/T','CYCLE TIME','사이클타임','공정시간','소요시간(hr)','소요(hr)','작업시간(hr)','T/T','TAKTTIME','작업(hr)','작업(분)'],
+           'CT','C/T','CYCLE TIME','사이클타임','공정시간','소요시간(hr)','소요(hr)','작업시간(hr)','T/T','TAKTTIME','작업(hr)','작업(분)',
+           '소요비율'],  // D라인: 소요비율 컬럼(시간 단위)
 };
 
 // 헤더 행에서 컬럼 인덱스 매핑을 반환
 function detectPlanColIdx(headerRow) {
-  const r = headerRow.map(v => String(v).trim());
+  // 셀 내 줄바꿈(\r\n) 제거 후 정규화 — D라인 헤더 "소요\r\n비율" 등 대응
+  const r = headerRow.map(v => String(v).replace(/[\r\n]+/g, '').trim());
   const find = (kws) => {
     // 키워드 순서 우선: 각 키워드별로 완전일치 → 포함일치 순으로 시도
     // (기존 방식의 문제: 모든 키워드 완전일치 후 포함일치 시도 → 낮은 우선순위 키워드 P/N이
