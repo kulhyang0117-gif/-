@@ -4549,7 +4549,7 @@ function _kbRenderDate() {
   document.getElementById('kb-ready-pct').textContent = total>0 ? `(${Math.round(ready/total*100)}%)` : '';
   document.getElementById('kb-short').textContent  = short;
 
-  _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus);
+  _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus, getDateDangerParts);
   _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts);
 }
 
@@ -4588,7 +4588,7 @@ function _minToTime(min) {
   return `${h}:${String(m).padStart(2,'0')}`;
 }
 
-function _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus) {
+function _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus, getDateDangerParts) {
   const START = 8*60+30, END = 22*60, TOTAL = END-START;
   const gantt = document.getElementById('kb-gantt');
   gantt.innerHTML = '';
@@ -4713,6 +4713,14 @@ function _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus) {
       blk.className = `kb-block kb-block-${b.status}`;
       blk.style.left  = `${leftPct.toFixed(2)}%`;
       blk.style.width = `${Math.max(widthPct, 1.5).toFixed(2)}%`;
+      // OK 체크박스 연동용: 부족 자품번 목록 저장
+      if ((b.status === 'danger' || b.status === 'warning') && getDateDangerParts) {
+        const dp = getDateDangerParts(b._row).map(p => p.자품번);
+        if (dp.length) {
+          blk.dataset.dangerParts = dp.join(',');
+          blk.dataset.origStatus  = b.status;
+        }
+      }
 
       const timeStr = `${b.qty.toLocaleString()}ea · ${_minToTime(Math.round(b.startMin))}~${_minToTime(Math.round(b.endMin))}`;
       // 고객사 PART NO 조회: 시스템P/N → 고객사PARTNO, D라인은 pn 자체가 고객사PARTNO
@@ -4810,6 +4818,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         <td><input type="text" class="kb-note-input" placeholder="공급일/수량 등..."></td>
       `;
 
+      tr.dataset.partno = part.자품번;
       const chk = tr.querySelector('.kb-ok-chk');
       const lackCell = tr.querySelector('.kb-lack-cell');
       chk.onchange = () => {
@@ -4824,6 +4833,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         const cnt = tbody.querySelectorAll('.kb-ok-chk:checked').length;
         okCntEl.textContent = `${cnt}건 해제`;
         okCntEl.style.display = cnt > 0 ? '' : 'none';
+        _kbRefreshBlockColors();
       };
 
       tbody.appendChild(tr);
@@ -4837,6 +4847,25 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
     container.innerHTML = `<div style="text-align:center;padding:36px;color:#16a34a;font-size:14px;font-weight:700;">✅ 부족자재 없음</div>`;
     document.getElementById('kb-shortage-cnt').textContent = '0';
   }
+}
+
+// ── OK 체크박스 반영: 간트 블록 색상 갱신 ──────────────────────────────────
+function _kbRefreshBlockColors() {
+  // 현재 체크된 자품번 Set 수집
+  const okParts = new Set(
+    Array.from(document.querySelectorAll('#kb-shortage-body tr[data-partno] .kb-ok-chk:checked'))
+      .map(chk => chk.closest('tr').dataset.partno)
+  );
+  // 부족 블록별로 모든 danger parts가 OK 체크됐는지 확인 → 녹색 전환
+  document.querySelectorAll('.kb-block[data-danger-parts]').forEach(blk => {
+    const parts = blk.dataset.dangerParts.split(',').filter(Boolean);
+    const origStatus = blk.dataset.origStatus || 'danger';
+    if (parts.length > 0 && parts.every(p => okParts.has(p))) {
+      blk.className = 'kb-block kb-block-ok';
+    } else {
+      blk.className = `kb-block kb-block-${origStatus}`;
+    }
+  });
 }
 
 // ── Kitting Board 모델 클릭 자재현황 패널 ─────────────────────────────────
