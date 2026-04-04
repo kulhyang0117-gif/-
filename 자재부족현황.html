@@ -209,6 +209,26 @@
   .auth-link a { color:#1e3a5f; font-weight:700; cursor:pointer; text-decoration:underline; }
   .auth-pending-box { text-align:center; padding:10px 0; }
   .auth-pending-box .big-icon { font-size:52px; margin-bottom:14px; }
+  /* ── 앱 설정 모달 ── */
+  .app-settings-overlay { position:fixed; inset:0; background:rgba(10,20,40,0.85); z-index:2000; display:none; align-items:center; justify-content:center; }
+  .app-settings-overlay.open { display:flex; }
+  .app-settings-box { background:white; border-radius:12px; padding:32px 36px; width:480px; max-width:94vw; box-shadow:0 8px 40px rgba(0,0,0,0.5); max-height:90vh; overflow-y:auto; }
+  .app-settings-box h2 { font-size:16px; font-weight:700; color:#1e3a5f; margin-bottom:6px; }
+  .app-settings-box .cfg-sub { font-size:11px; color:#888; margin-bottom:20px; }
+  .cfg-section { margin-bottom:20px; padding-bottom:20px; border-bottom:1px solid #eee; }
+  .cfg-section:last-of-type { border-bottom:none; margin-bottom:0; }
+  .cfg-section-title { font-size:12px; font-weight:700; color:#1e3a5f; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+  .cfg-field { margin-bottom:10px; }
+  .cfg-field label { display:block; font-size:11px; font-weight:700; color:#555; margin-bottom:3px; }
+  .cfg-field input { width:100%; border:1px solid #ddd; border-radius:6px; padding:8px 10px; font-size:12px; outline:none; box-sizing:border-box; font-family:monospace; }
+  .cfg-field input:focus { border-color:#1e3a5f; box-shadow:0 0 0 2px rgba(30,58,95,0.12); }
+  .cfg-field .cfg-hint { font-size:10px; color:#aaa; margin-top:3px; }
+  .cfg-btns { display:flex; gap:10px; margin-top:22px; }
+  .cfg-btns .btn-cfg-save { flex:1; padding:10px; background:#1e3a5f; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; }
+  .cfg-btns .btn-cfg-save:hover { background:#2952a3; }
+  .cfg-btns .btn-cfg-reset { padding:10px 14px; background:#f5f5f5; color:#777; border:none; border-radius:6px; font-size:12px; cursor:pointer; }
+  .cfg-btns .btn-cfg-reset:hover { background:#eee; }
+  .cfg-btns .btn-cfg-cancel { padding:10px 14px; background:#f5f5f5; color:#777; border:none; border-radius:6px; font-size:12px; cursor:pointer; }
 
   /* ── 관리자 패널 ── */
   .admin-modal { position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:900; display:none; align-items:center; justify-content:center; }
@@ -478,6 +498,9 @@
     <button class="btn-auth" onclick="doLogin()">로그인</button>
     <div class="auth-err" id="login-err"></div>
     <div class="auth-link">계정이 없으신가요? <a onclick="showRegister()">회원가입 신청</a></div>
+    <div style="text-align:center;margin-top:10px;">
+      <a onclick="openAppSettings()" style="font-size:11px;color:#aaa;cursor:pointer;text-decoration:none;">⚙️ 연결 설정</a>
+    </div>
   </div>
   <!-- 회원가입 -->
   <div id="auth-register" class="auth-box" style="display:none;">
@@ -572,7 +595,54 @@
   <div class="header-user" id="header-user" style="display:none;">
     <span class="hdr-uname" id="hdr-uname"></span>
     <button class="btn-admin-open" id="btn-admin-open" onclick="openAdminPanel()" style="display:none;">👥 회원관리</button>
+    <button class="btn-logout" onclick="openAppSettings()" style="background:rgba(255,255,255,0.12);">⚙️ 설정</button>
     <button class="btn-logout" onclick="doLogout()">로그아웃</button>
+  </div>
+</div>
+
+<!-- ── 앱 설정 모달 ── -->
+<div class="app-settings-overlay" id="app-settings-overlay">
+  <div class="app-settings-box">
+    <h2>⚙️ 연결 설정</h2>
+    <div class="cfg-sub">각 컴퓨터별로 저장됩니다 (브라우저 로컬 저장소). 변경 후 페이지가 자동으로 새로고침됩니다.</div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-title">🔌 Supabase 연결</div>
+      <div class="cfg-field">
+        <label>프로젝트 URL</label>
+        <input type="url" id="cfg-sb-url" placeholder="https://xxxx.supabase.co">
+        <div class="cfg-hint">Supabase 대시보드 → Project Settings → API → Project URL</div>
+      </div>
+      <div class="cfg-field">
+        <label>Anon Key (공개 API 키)</label>
+        <input type="password" id="cfg-sb-key" placeholder="eyJhbGciOi...">
+        <div class="cfg-hint">Supabase 대시보드 → Project Settings → API → anon public 키</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-title">👤 관리자 설정</div>
+      <div class="cfg-field">
+        <label>관리자 이메일</label>
+        <input type="email" id="cfg-admin-email" placeholder="admin@example.com">
+        <div class="cfg-hint">최초 가입 시 자동으로 관리자 권한이 부여되는 이메일</div>
+      </div>
+    </div>
+
+    <div class="cfg-section">
+      <div class="cfg-section-title">🤖 sMES 키팅 자동화 경로</div>
+      <div class="cfg-field">
+        <label>setup_url_protocol.bat 파일 경로</label>
+        <input type="text" id="cfg-kit-path" placeholder="C:\경로\kitting_auto\setup_url_protocol.bat">
+        <div class="cfg-hint">이 컴퓨터에서 setup_url_protocol.bat 파일이 있는 전체 경로</div>
+      </div>
+    </div>
+
+    <div class="cfg-btns">
+      <button class="btn-cfg-save" onclick="saveAppSettings()">💾 저장 후 새로고침</button>
+      <button class="btn-cfg-reset" onclick="resetAppSettings()">초기화</button>
+      <button class="btn-cfg-cancel" onclick="closeAppSettings()">취소</button>
+    </div>
   </div>
 </div>
 
@@ -3809,8 +3879,10 @@ function printPkgDateTable() {
 // ── 인증 시스템 ─────────────────────────────────────
 // ═══════════════════════════════════════════════════
 // ── Supabase 연결 ──────────────────────────────────
-const _SB_URL = 'https://tpqgdaasporsmpuvtaee.supabase.co';
-const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwcWdkYWFzcG9yc21wdXZ0YWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NTcwODgsImV4cCI6MjA4OTAzMzA4OH0.JhrkWhrz4VnwUvzMIrDX5QgKFGQr485USo-NIpq1zDk';
+const _SB_URL_DEFAULT = 'https://tpqgdaasporsmpuvtaee.supabase.co';
+const _SB_KEY_DEFAULT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRwcWdkYWFzcG9yc21wdXZ0YWVlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NTcwODgsImV4cCI6MjA4OTAzMzA4OH0.JhrkWhrz4VnwUvzMIrDX5QgKFGQr485USo-NIpq1zDk';
+const _SB_URL = localStorage.getItem('ms_cfg_sb_url') || _SB_URL_DEFAULT;
+const _SB_KEY = localStorage.getItem('ms_cfg_sb_key') || _SB_KEY_DEFAULT;
 const sb = window.supabase.createClient(_SB_URL, _SB_KEY);
 
 let currentUser = null;
@@ -3823,7 +3895,7 @@ async function getProfile(userId) {
   return data;
 }
 
-const ADMIN_EMAIL = 'kulhyang0117@gmail.com';
+const ADMIN_EMAIL = localStorage.getItem('ms_cfg_admin_email') || 'kulhyang0117@gmail.com';
 const ADMIN_PERMS = { read: true, upload: true, modify: true };
 
 // ─── 관리자 프로필 자동 생성/복구 ────────────────────
@@ -5070,21 +5142,72 @@ function openKbDetail(row, entry, line, startMin, endMin) {
 }
 
 function downloadSetupBat() {
-  // setup_url_protocol.bat 경로 안내 (로컬 파일 다운로드 불가 → 경로 복사 안내)
-  const path = String.raw`C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\material-shortage-app\kitting_auto\setup_url_protocol.bat`;
+  const savedPath = localStorage.getItem('ms_cfg_kit_path') || '';
+  if (!savedPath) {
+    if (confirm('sMES 키팅 자동화 경로가 설정되지 않았습니다.\n설정 창을 여시겠습니까?')) {
+      openAppSettings();
+    }
+    return;
+  }
   alert(
     '최초 1회 설정 방법:\n\n' +
     '1. 아래 경로의 파일을 마우스 우클릭\n' +
     '2. "관리자로 실행" 선택\n\n' +
-    path
+    savedPath
   );
-  // 경로를 클립보드에 복사
-  try { navigator.clipboard.writeText(path); } catch(e) {}
+  try { navigator.clipboard.writeText(savedPath); } catch(e) {}
 }
 document.getElementById('auto-kit-modal').addEventListener('click', function(e) {
   if (e.target === this) closeAutoKitModal();
 });
 document.addEventListener('DOMContentLoaded', () => switchView('kb'));
+
+// ── 앱 설정 모달 ──────────────────────────────────
+function openAppSettings() {
+  const overlay = document.getElementById('app-settings-overlay');
+  if (!overlay) return;
+  // 현재 설정값 로드 (저장된 값 또는 현재 사용 중인 값)
+  document.getElementById('cfg-sb-url').value   = localStorage.getItem('ms_cfg_sb_url')   || _SB_URL_DEFAULT;
+  document.getElementById('cfg-sb-key').value   = localStorage.getItem('ms_cfg_sb_key')   || '';
+  document.getElementById('cfg-admin-email').value = localStorage.getItem('ms_cfg_admin_email') || (localStorage.getItem('ms_cfg_admin_email') === null ? 'kulhyang0117@gmail.com' : '');
+  document.getElementById('cfg-kit-path').value = localStorage.getItem('ms_cfg_kit_path') || '';
+  overlay.classList.add('open');
+}
+
+function closeAppSettings() {
+  document.getElementById('app-settings-overlay')?.classList.remove('open');
+}
+
+function saveAppSettings() {
+  const url   = document.getElementById('cfg-sb-url').value.trim();
+  const key   = document.getElementById('cfg-sb-key').value.trim();
+  const email = document.getElementById('cfg-admin-email').value.trim();
+  const path  = document.getElementById('cfg-kit-path').value.trim();
+
+  if (url)   localStorage.setItem('ms_cfg_sb_url', url);
+  else       localStorage.removeItem('ms_cfg_sb_url');
+
+  if (key)   localStorage.setItem('ms_cfg_sb_key', key);
+  else       localStorage.removeItem('ms_cfg_sb_key');
+
+  if (email) localStorage.setItem('ms_cfg_admin_email', email);
+  else       localStorage.removeItem('ms_cfg_admin_email');
+
+  if (path)  localStorage.setItem('ms_cfg_kit_path', path);
+  else       localStorage.removeItem('ms_cfg_kit_path');
+
+  location.reload();
+}
+
+function resetAppSettings() {
+  if (!confirm('모든 설정을 기본값으로 초기화하시겠습니까?')) return;
+  ['ms_cfg_sb_url','ms_cfg_sb_key','ms_cfg_admin_email','ms_cfg_kit_path'].forEach(k => localStorage.removeItem(k));
+  location.reload();
+}
+
+document.getElementById('app-settings-overlay')?.addEventListener('click', function(e) {
+  if (e.target === this) closeAppSettings();
+});
 </script>
 </body>
 </html>
