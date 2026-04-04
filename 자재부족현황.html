@@ -354,6 +354,10 @@
   .kb-close { background:none; border:none; font-size:20px; color:#9ca3af; cursor:pointer; padding:4px 8px; border-radius:6px; }
   .kb-close:hover { background:#f3f4f6; color:#374151; }
   .kb-nav-bar { background:white; border-bottom:1px solid #e5e7eb; padding:12px 28px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  .kb-now-clock { display:flex; align-items:center; gap:6px; font-size:14px; font-weight:700; color:#0f766e; background:#f0fdfa; padding:5px 14px; border-radius:20px; border:1.5px solid #99f6e4; letter-spacing:0.5px; white-space:nowrap; }
+  .kb-now-clock .kb-clock-icon { font-size:15px; }
+  .kb-now-line { position:absolute; top:0; bottom:0; width:2px; background:rgba(239,68,68,0.9); z-index:20; pointer-events:none; box-shadow:0 0 6px rgba(239,68,68,0.5); }
+  .kb-now-line::before { content:'▼'; position:absolute; top:-14px; left:50%; transform:translateX(-50%); font-size:10px; color:#ef4444; line-height:1; }
   .kb-date-nav { display:flex; align-items:center; gap:12px; }
   .kb-nav-btn { background:none; border:1px solid #d1d5db; border-radius:6px; padding:5px 10px; cursor:pointer; font-size:14px; color:#374151; }
   .kb-nav-btn:hover { background:#f3f4f6; }
@@ -587,6 +591,7 @@
         <div class="kb-date-label" id="kb-date-label">—</div>
         <button class="kb-nav-btn" onclick="kbNextDate()">&#8250;</button>
       </div>
+      <div id="kb-now-clock" class="kb-now-clock"><span class="kb-clock-icon">🕐</span><span id="kb-clock-text">--:--:--</span></div>
       <div class="kb-stats">
         <div class="kb-stat total">전체 <span class="kb-stat-val" id="kb-total">0</span></div>
         <div class="kb-stat ready"><span class="kb-dot ready"></span>준비완료 <span class="kb-stat-val" id="kb-ready">0</span> <span class="kb-stat-pct" id="kb-ready-pct"></span></div>
@@ -1783,8 +1788,7 @@ function parseTaktMin(raw) {
   if (raw === '' || raw === null || raw === undefined) return 0;
   const n = parseFloat(raw);
   if (!isNaN(n) && n > 0) {
-    if (n < 1)   return Math.round(n * 1440);  // Excel 시간 분수
-    if (n <= 24) return Math.round(n * 60);    // 시간 단위
+    if (n <= 24) return Math.round(n * 60);    // 시간 단위 (소수점 포함: 0.4hr=24분)
     return Math.round(n);                       // 분 단위
   }
   const m = String(raw).match(/^(\d{1,2}):(\d{2})/);
@@ -4301,6 +4305,27 @@ function emergencyStop() {
 }
 // ── Kitting Board ──────────────────────────────────────────────────────────
 let _kitBoardDates = [];
+let _kbNowTimer = null;
+
+// 현재시각 클록 & 간트 현재시각 선 업데이트
+function kbUpdateNow() {
+  const now = new Date();
+  const h = now.getHours(), mi = now.getMinutes(), s = now.getSeconds();
+  const clockEl = document.getElementById('kb-clock-text');
+  if (clockEl) clockEl.textContent = `${String(h).padStart(2,'0')}:${String(mi).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+
+  const START = 8*60+30, END = 22*60, TOTAL = END - START;
+  const nowMin = h * 60 + mi;
+  const leftPct = (nowMin - START) / TOTAL * 100;
+  document.querySelectorAll('[data-nowline]').forEach(el => {
+    if (leftPct < 0 || leftPct > 100) {
+      el.style.display = 'none';
+    } else {
+      el.style.display = 'block';
+      el.style.left = leftPct.toFixed(2) + '%';
+    }
+  });
+}
 
 // ── 대시보드 네비게이션 ──────────────────────────────
 // ── 사이드바 뷰 전환 ──────────────────────────────
@@ -4312,6 +4337,7 @@ function switchView(v) {
   });
   const coming = document.getElementById('view-coming');
   if (coming) coming.style.display = (v === 'prep' || v === 'insp') ? 'flex' : 'none';
+  if (v !== 'kb' && _kbNowTimer) { clearInterval(_kbNowTimer); _kbNowTimer = null; }
   if (v === 'kb') {
     if (state.plan) {
       openKittingBoard();
@@ -4356,10 +4382,15 @@ function openKittingBoard() {
     document.getElementById('kb-modal').classList.add('open');
   }
   _kbRenderDate();
+  // 현재시각 클록 시작
+  kbUpdateNow();
+  if (_kbNowTimer) clearInterval(_kbNowTimer);
+  _kbNowTimer = setInterval(kbUpdateNow, 1000);
 }
 
 function closeKittingBoard() {
   document.getElementById('kb-modal').classList.remove('open');
+  if (_kbNowTimer) { clearInterval(_kbNowTimer); _kbNowTimer = null; }
 }
 
 function kbPrevDate() {
@@ -4535,6 +4566,12 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
     trackEl.className = 'kb-track';
     // 빈 트랙 클릭 → 자재현황 패널 닫기
     trackEl.onclick = () => { document.getElementById('kb-detail-panel').style.display='none'; };
+
+    // 현재시각 표시선 추가
+    const nowLine = document.createElement('div');
+    nowLine.className = 'kb-now-line';
+    nowLine.setAttribute('data-nowline', '1');
+    trackEl.appendChild(nowLine);
 
     for (const b of blocks) {
       const leftPct  = Math.max(0, (b.startMin - START) / TOTAL * 100);
