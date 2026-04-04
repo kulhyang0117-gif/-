@@ -4586,18 +4586,24 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
     const hasTaktData = blocks.some(b => b.takt > 0);
 
     // 시간 계산: 8:30 시작, 휴식·식사시간 제외, 모델변경 10분 포함
+    // 순 작업시간 = 810분(8:30~22:00) - 휴식 100분 = 710분
+    const NET_WORK = 710;
     let cur = START;
-    for (let idx = 0; idx < blocks.length; idx++) {
-      const b = blocks[idx];
-      if (hasTaktData) {
+    if (hasTaktData) {
+      for (const b of blocks) {
         b.startMin = cur;
         b.endMin   = advanceWorkTime(cur, b.takt || 0);
-        // 다음 모델: 모델변경 준비시간 KB_CHANGEOVER분 후 시작
         cur = advanceWorkTime(b.endMin, KB_CHANGEOVER);
-      } else {
-        // 소요시간 없으면 균등 분배 (휴식시간 무시)
-        b.startMin = START + (idx / blocks.length) * TOTAL;
-        b.endMin   = START + ((idx + 1) / blocks.length) * TOTAL;
+      }
+    } else {
+      // takt 없으면 순 작업시간을 균등 분배 + 휴식·변경시간 제외 적용
+      const n = blocks.length;
+      const changeoverTotal = n > 1 ? (n - 1) * KB_CHANGEOVER : 0;
+      const taktPerBlock = n > 0 ? Math.max(1, Math.floor((NET_WORK - changeoverTotal) / n)) : 0;
+      for (const b of blocks) {
+        b.startMin = cur;
+        b.endMin   = advanceWorkTime(cur, taktPerBlock);
+        cur = advanceWorkTime(b.endMin, KB_CHANGEOVER);
       }
     }
 
