@@ -4652,7 +4652,8 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
       blk.style.width = `${Math.max(widthPct, 1.5).toFixed(2)}%`;
 
       const timeStr = `${b.qty.toLocaleString()}ea · ${_minToTime(Math.round(b.startMin))}~${_minToTime(Math.round(b.endMin))}`;
-      blk.innerHTML = `<div class="kb-block-name">${b.model}</div><div class="kb-block-time">${timeStr}</div>`;
+      const pnLabel = (b._row.pn && b._row.model && b._row.pn !== b._row.model) ? ` (${b._row.pn})` : '';
+      blk.innerHTML = `<div class="kb-block-name">${b.model}${pnLabel}</div><div class="kb-block-time">${timeStr}</div>`;
 
       // 블록 클릭 → 자재현황 패널 열기
       blk.onclick = (ev) => {
