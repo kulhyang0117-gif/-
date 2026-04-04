@@ -2897,14 +2897,14 @@ function buildPkgData() {
       제품명:           String(r[5]  || ''),
       규격:             String(r[6]  || ''),
       박스유형:         String(r[10] || '').trim(),
-      박스소요량_개:    Number(r[12]) || 0,
+      박스소요량_개:    Number(r[12]) || (Number(r[11]) > 0 ? 1 / Number(r[11]) : 0),
       포장지:           String(r[13] || '').trim(),
       포장지색상:       String(r[14] || '').trim(),
-      포장지소요량_개:  Number(r[16]) || 0,
+      포장지소요량_개:  Number(r[16]) || (Number(r[15]) > 0 ? 1 / Number(r[15]) : 0),
       발포지:           String(r[17] || '').trim(),
-      발포지소요량_개:  Number(r[19]) || 0,
+      발포지소요량_개:  Number(r[19]) || (Number(r[18]) > 0 ? 1 / Number(r[18]) : 0),
       패드:             String(r[20] || '').trim(),
-      패드소요량_개:    Number(r[22]) || 0,
+      패드소요량_개:    Number(r[22]) || (Number(r[21]) > 0 ? 1 / Number(r[21]) : 0),
     };
   });
 
@@ -3236,15 +3236,16 @@ function buildPkgDateDetailHtml(d) {
     const cardDetailId = `pkg-card-${d.일자시리얼}-${idx}`;
 
     // 모델별 상세 테이블 행 생성
-    const detailRows = item.detail.map(x =>
-      `<tr>
-        <td style="padding:3px 6px;font-size:11px;">${x.라인}</td>
-        <td style="padding:3px 6px;font-size:11px;font-weight:600;">${x.MODEL}</td>
+    const detailRows = item.detail.map((x, ri) => {
+      const rowBg = ri % 2 === 0 ? 'white' : '#f5f7fa';
+      return `<tr style="background:${rowBg};">
+        <td style="padding:3px 6px;font-size:11px;color:#333;">${x.라인}</td>
+        <td style="padding:3px 6px;font-size:11px;font-weight:600;color:#222;">${x.MODEL}</td>
         <td style="padding:3px 6px;font-size:11px;color:#555;">${x.사양||''}</td>
-        <td style="padding:3px 6px;font-size:11px;text-align:right;">${Number(Math.round(x.계획수량)).toLocaleString()}</td>
+        <td style="padding:3px 6px;font-size:11px;text-align:right;color:#1e3a5f;font-weight:600;">${Number(Math.round(x.계획수량)).toLocaleString()}</td>
         <td style="padding:3px 6px;font-size:11px;text-align:right;font-weight:700;color:${col.bg};">${Number(x.소요량.toFixed(2)).toLocaleString()}</td>
-      </tr>`
-    ).join('');
+      </tr>`;
+    }).join('');
 
     html += `<div style="border-radius:8px;background:${col.light};border:1px solid ${col.bg}50;min-width:160px;max-width:340px;overflow:hidden;">
       <div style="padding:10px 14px;">
@@ -3259,12 +3260,12 @@ function buildPkgDateDetailHtml(d) {
       <div id="${cardDetailId}" style="display:none;border-top:1px solid ${col.bg}30;">
         <table style="width:100%;border-collapse:collapse;background:white;">
           <thead>
-            <tr style="background:${col.bg}15;">
-              <th style="padding:4px 6px;font-size:10px;text-align:left;color:${col.bg};">라인</th>
-              <th style="padding:4px 6px;font-size:10px;text-align:left;color:${col.bg};">MODEL</th>
-              <th style="padding:4px 6px;font-size:10px;text-align:left;color:${col.bg};">사양</th>
-              <th style="padding:4px 6px;font-size:10px;text-align:right;color:${col.bg};">계획수량</th>
-              <th style="padding:4px 6px;font-size:10px;text-align:right;color:${col.bg};">필요수량</th>
+            <tr style="background:${col.bg};">
+              <th style="padding:4px 6px;font-size:10px;text-align:left;color:white;">라인</th>
+              <th style="padding:4px 6px;font-size:10px;text-align:left;color:white;">MODEL</th>
+              <th style="padding:4px 6px;font-size:10px;text-align:left;color:white;">사양</th>
+              <th style="padding:4px 6px;font-size:10px;text-align:right;color:white;">계획수량</th>
+              <th style="padding:4px 6px;font-size:10px;text-align:right;color:white;">필요수량</th>
             </tr>
           </thead>
           <tbody>${detailRows}</tbody>
