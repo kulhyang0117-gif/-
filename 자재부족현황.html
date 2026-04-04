@@ -1962,6 +1962,13 @@ function runAnalysis() {
         if (productNameMap[pn] && !productNameMap[dbn]) productNameMap[dbn] = productNameMap[pn];
       });
       window._kbBomMap = bomMap;   // Kitting Board 자재현황 패널용
+      // 시스템P/N → 고객사 PART NO 역방향 맵 (Kitting Board 도번 표시용)
+      const pnToCustPart = {};
+      Object.entries(custPartMap).forEach(([custPn, internalPn]) => {
+        if (!pnToCustPart[internalPn]) pnToCustPart[internalPn] = custPn;
+      });
+      window._kbPnToCustPart = pnToCustPart;
+      window._kbCustPartMap  = custPartMap; // 고객사PARTNO→시스템P/N (D라인 확인용)
       // 자품번 → 협력사명 맵: '품목코드' 시트 마스터 우선, BOM 컴포넌트 보완
       const supplierMap = parseSupplierMap(state.bom);
       for (const comps of Object.values(bomMap))
@@ -4652,7 +4659,11 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
       blk.style.width = `${Math.max(widthPct, 1.5).toFixed(2)}%`;
 
       const timeStr = `${b.qty.toLocaleString()}ea · ${_minToTime(Math.round(b.startMin))}~${_minToTime(Math.round(b.endMin))}`;
-      const pnLabel = (b._row.pn && b._row.model && b._row.pn !== b._row.model) ? ` (${b._row.pn})` : '';
+      // 고객사 PART NO 조회: 시스템P/N → 고객사PARTNO, D라인은 pn 자체가 고객사PARTNO
+      const _p2c = window._kbPnToCustPart || {};
+      const _c2p = window._kbCustPartMap  || {};
+      const custPn = _p2c[b._row.pn] || (_c2p[b._row.pn] ? b._row.pn : '');
+      const pnLabel = (custPn && custPn !== b.model) ? ` (${custPn})` : '';
       blk.innerHTML = `<div class="kb-block-name">${b.model}${pnLabel}</div><div class="kb-block-time">${timeStr}</div>`;
 
       // 블록 클릭 → 자재현황 패널 열기
