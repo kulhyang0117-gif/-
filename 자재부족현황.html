@@ -396,7 +396,7 @@
   .kb-block:hover { opacity:0.85; z-index:10; }
   .kb-block-ok      { background:#16a34a; color:white; }
   .kb-block-danger  { background:#dc2626; color:white; }
-  .kb-block-warning { background:#ea580c; color:white; }
+  .kb-block-warning { background:#d97706; color:white; }
   .kb-block-na      { background:#9ca3af; color:white; }
   .kb-block-name { font-size:11px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .kb-block-time { font-size:10px; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -608,7 +608,7 @@
         <div class="kb-legend">
           <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#16a34a"></div>준비완료</div>
           <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#dc2626"></div>자재부족</div>
-          <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#ea580c"></div>위험</div>
+          <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#d97706"></div>위험</div>
           <div class="kb-legend-item"><div class="kb-legend-dot" style="background:#9ca3af"></div>BOM없음</div>
           <div id="kb-takt-warn" style="display:none;margin-left:auto;font-size:11px;color:#b45309;background:#fef3c7;padding:2px 10px;border-radius:4px;">⚠️ 소요시간 컬럼 미감지 — 균등 배분 표시 중</div>
         </div>
@@ -973,7 +973,7 @@
     </div>
     <div class="man-status-row" style="margin-top:16px;">
       <div class="man-status"><div class="man-dot" style="background:#16a34a"></div>준비완료 — 재고가 필요량 이상</div>
-      <div class="man-status"><div class="man-dot" style="background:#ea580c"></div>위험 — 재고가 필요량의 120% 미만</div>
+      <div class="man-status"><div class="man-dot" style="background:#d97706"></div>위험 — 재고가 필요량의 120% 미만</div>
       <div class="man-status"><div class="man-dot" style="background:#dc2626"></div>부족 — 재고가 필요량 미달</div>
       <div class="man-status"><div class="man-dot" style="background:#9ca3af"></div>BOM 없음 — 해당 모델 BOM 미등록</div>
     </div>
@@ -4845,7 +4845,7 @@ function openKbDetail(row, entry, line, startMin, endMin) {
   const headEl = document.getElementById('kb-detail-head');
   const bodyEl = document.getElementById('kb-detail-body');
 
-  const statusColor = { ok:'#16a34a', danger:'#dc2626', warning:'#ea580c', na:'#9ca3af' };
+  const statusColor = { ok:'#16a34a', danger:'#dc2626', warning:'#d97706', na:'#9ca3af' };
   const color = statusColor[entry ? entry.status : 'na'] || '#9ca3af';
   const dangerCnt = entry ? entry.dangerParts.length : 0;
   const warnCnt   = entry ? entry.warningParts.length : 0;
@@ -4865,7 +4865,7 @@ function openKbDetail(row, entry, line, startMin, endMin) {
     <span class="kb-detail-qty">${row.qty.toLocaleString()} ea</span>
     ${timeStr ? `<span class="kb-detail-time">${timeStr}</span>` : ''}
     ${dangerCnt > 0 ? `<span class="kb-detail-short-badge">부족 ${dangerCnt}건</span>` : ''}
-    ${warnCnt > 0 && dangerCnt === 0 ? `<span class="kb-detail-short-badge" style="background:#ea580c;">위험 ${warnCnt}건</span>` : ''}
+    ${warnCnt > 0 && dangerCnt === 0 ? `<span class="kb-detail-short-badge" style="background:#d97706;">위험 ${warnCnt}건</span>` : ''}
     <button class="kb-detail-close" onclick="document.getElementById('kb-detail-panel').style.display='none'">✕</button>
   `;
   [badge, pnEl, modelEl, specEl, rightEl].forEach(el => headEl.appendChild(el));
@@ -4892,7 +4892,7 @@ function openKbDetail(row, entry, line, startMin, endMin) {
     const avail = stock + kit;
     const diff  = pr ? avail - req : null;
     const st    = pr ? pr.status : 'na';
-    const dotC  = { danger:'#dc2626', warning:'#ea580c', ok:'#16a34a', na:'#d1d5db' }[st] || '#d1d5db';
+    const dotC  = { danger:'#dc2626', warning:'#d97706', ok:'#16a34a', na:'#d1d5db' }[st] || '#d1d5db';
     const diffStr   = diff === null ? '-' : (diff >= 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString());
     const diffStyle = diff === null ? '' : (diff >= 0 ? 'color:#16a34a' : 'color:#dc2626;font-weight:700');
     const stockStyle= avail > 0 ? 'color:#16a34a' : avail === 0 ? 'color:#dc2626' : '';
