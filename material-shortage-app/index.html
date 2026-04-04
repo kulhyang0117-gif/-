@@ -752,6 +752,7 @@ window.addEventListener('load', async () => {
     if (state.incomingFiles.length > 0) renderIncomingChips();
   }
   if (restored > 0) document.getElementById('restore-notice').style.display = 'block';
+  syncKitFilesFromStorage();
   // 업로드 타임스탬프 복원
   ['bom', 'plan', 'inv'].forEach(type => {
     const ts = localStorage.getItem('ms_uptime_' + type);
@@ -808,13 +809,16 @@ function handleFile(type, input) { _processFile(type, input.files[0]); }
 function _processKitFiles(files) {
   if (!files.length) return;
   let remaining = files.length;
+  const newFiles = [];
   files.forEach(file => {
     const reader = new FileReader();
     reader.onload = e => {
       try {
         const ab = e.target.result;
         const wb = XLSX.read(ab, { type: 'array' });
-        state.kitFiles.push({ wb, name: file.name, rawData: ab });
+        const fileData = { wb, name: file.name, rawData: ab };
+        state.kitFiles.push(fileData);
+        newFiles.push(fileData);
       } catch(err) { console.warn('키팅 파일 오류:', file.name); }
       remaining--;
       if (remaining === 0) {
@@ -825,10 +829,20 @@ function _processKitFiles(files) {
         if (uname) localStorage.setItem('ms_uploader_kit', uname);
         document.getElementById('uptime-kit').textContent = fmtUpTime(ts, uname);
         syncUploadLog('kit', ts, uname);
+        uploadKitFilesToStorage(newFiles);
       }
     };
     reader.readAsArrayBuffer(file);
   });
+}
+
+async function uploadKitFilesToStorage(files) {
+  try {
+    for (const f of files) {
+      const blob = new Blob([f.rawData]);
+      await sb.storage.from('ms-files').upload(`kit/${f.name}`, blob, { upsert: true });
+    }
+  } catch(e) { console.warn('스토리지 업로드 실패:', e); }
 }
 function handleKitFiles(input) { _processKitFiles(Array.from(input.files)); input.value = ''; }
 
@@ -946,8 +960,12 @@ function initDragDrop() {
 }
 
 function removeKitFile(idx) {
+  const removed = state.kitFiles[idx];
   state.kitFiles.splice(idx, 1);
   saveKitList(); renderKitChips(); checkReady();
+  if (removed) {
+    sb.storage.from('ms-files').remove([`kit/${removed.name}`]).catch(e => console.warn('스토리지 삭제 실패:', e));
+  }
 }
 
 function clearKitFiles() {
@@ -956,6 +974,16 @@ function clearKitFiles() {
   localStorage.removeItem('ms_uptime_kit');
   localStorage.removeItem('ms_uploader_kit');
   document.getElementById('uptime-kit').textContent = '';
+  clearKitFilesFromStorage();
+}
+
+async function clearKitFilesFromStorage() {
+  try {
+    const { data: files } = await sb.storage.from('ms-files').list('kit');
+    if (files && files.length > 0) {
+      await sb.storage.from('ms-files').remove(files.map(f => `kit/${f.name}`));
+    }
+  } catch(e) { console.warn('스토리지 초기화 실패:', e); }
 }
 
 function saveKitList() {
@@ -2534,6 +2562,36 @@ async function dbUpdateUser(user) {
     status: user.status, is_admin: user.isAdmin, permissions: user.permissions,
     approved_at: user.status === 'approved' ? new Date().toISOString() : null
   }).eq('id', user.id);
+}
+
+// ─── Supabase Storage 키팅 파일 동기화 ──────────────
+async function syncKitFilesFromStorage() {
+  try {
+    const { data: files, error } = await sb.storage.from('ms-files').list('kit');
+    if (error || !files || files.length === 0) return;
+    const localNames = new Set(state.kitFiles.map(f => f.name));
+    const storageNames = new Set(files.map(f => f.name));
+    const toDownload = files.filter(f => !localNames.has(f.name));
+    const toRemove = state.kitFiles.filter(f => !storageNames.has(f.name));
+    if (toDownload.length === 0 && toRemove.length === 0) return;
+    if (toRemove.length > 0) {
+      state.kitFiles = state.kitFiles.filter(f => storageNames.has(f.name));
+    }
+    for (const file of toDownload) {
+      try {
+        const { data: blob } = await sb.storage.from('ms-files').download(`kit/${file.name}`);
+        if (!blob) continue;
+        const ab = await blob.arrayBuffer();
+        const arr = new Uint8Array(ab);
+        const wb = XLSX.read(arr, { type: 'array' });
+        state.kitFiles.push({ wb, name: file.name, rawData: arr });
+      } catch(e) { console.warn('스토리지 다운로드 실패:', file.name, e); }
+    }
+    saveKitList();
+    renderKitChips();
+    checkReady();
+    if (state.kitFiles.length > 0) document.getElementById('restore-notice').style.display = 'block';
+  } catch(e) { console.warn('스토리지 동기화 실패:', e); }
 }
 
 // ─── 업로드 이력 동기화 ──────────────────────────────
