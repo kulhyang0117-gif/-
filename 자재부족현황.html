@@ -4451,10 +4451,16 @@ function _kbRenderDate() {
   for (const r of analysisResult) {
     if (r.available !== null) _partAvailMap[r.자품번] = r;
   }
+  // 이전 날짜까지 누적 자품 소요량 (선택 날짜 미포함)
+  const _prevCompReq = {};
+  for (const row of planRows.filter(r => r.dateSerial < ds)) {
+    for (const comp of (_bomMapKb[row.pn] || [])) {
+      _prevCompReq[comp.자품번] = (_prevCompReq[comp.자품번] || 0) + row.qty * comp.소요량;
+    }
+  }
   // 시작일부터 해당 날짜까지 누적 자품 소요량 합산 (전일 소요량 감안)
   const _dateCompReq = {};
-  const _cumulRows = planRows.filter(r => r.dateSerial <= ds);
-  for (const row of _cumulRows) {
+  for (const row of planRows.filter(r => r.dateSerial <= ds)) {
     for (const comp of (_bomMapKb[row.pn] || [])) {
       _dateCompReq[comp.자품번] = (_dateCompReq[comp.자품번] || 0) + row.qty * comp.소요량;
     }
@@ -4476,16 +4482,20 @@ function _kbRenderDate() {
     if (comps.some(c => _dateWarnSet.has(c.자품번)))   return 'warning';
     return 'ok';
   };
-  // planRow → 날짜 기준 부족 자품 목록
+  // planRow → 날짜 기준 부족 자품 목록 (이전일 누적소비 포함)
   const getDateDangerParts = (row) => {
     return (_bomMapKb[row.pn] || [])
       .filter(c => _dateDangerSet.has(c.자품번))
       .map(c => {
-        const p = _partAvailMap[c.자품번] || {};
+        const p          = _partAvailMap[c.자품번] || {};
+        const cumConsumed = _prevCompReq[c.자품번] || 0;
+        const available   = p.available || 0;
+        const remaining   = available - cumConsumed;
+        const dayReq      = (_dateCompReq[c.자품번] || 0) - cumConsumed; // 당일 소요량
         return { 자품번:c.자품번, 자품명:c.자품명, 소요량:c.소요량,
                  stock:p.stock||0, kitTotal:p.kitTotal||0,
-                 available:p.available||0,
-                 modelReq:_dateCompReq[c.자품번]||0 };
+                 available, cumConsumed, remaining, dayReq,
+                 modelReq: dayReq };  // 부족 계산용 (remaining - dayReq)
       });
   };
 
@@ -4762,9 +4772,12 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
     // 컬럼 헤더 행
     const tbl = document.createElement('table');
     tbl.className = 'kb-st-table';
+    const hasCumul = lineShortages.some(p => p.cumConsumed !== undefined);
     tbl.innerHTML = `<thead><tr>
       <th class="center">OK</th><th>부품번호</th><th>부품명</th><th>조달</th>
-      <th class="num">필요</th><th class="num">현재고</th><th class="num">부족</th>
+      <th class="num">가용재고</th>
+      ${hasCumul ? '<th class="num" style="color:#888;">이전일누적</th><th class="num">잔여재고</th><th class="num">당일소요</th>' : '<th class="num">필요</th>'}
+      <th class="num">부족</th>
       <th>협력사</th><th>비고</th>
     </tr></thead>`;
     const tbody = document.createElement('tbody');
@@ -4773,10 +4786,13 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       const pi = partInfoMap[part.자품번] || {};
       const 조달 = pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
       const 협력사 = supplierMap[part.자품번] || pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
-      const req = part.modelReq ?? part.totalGlobalReq ?? 0;
-      const stk = part.stock ?? 0;
-      const lack = (part.available??stk) - req;
-      const lackStr = lack.toLocaleString();
+      const available = part.available ?? (part.stock ?? 0);
+      const cumConsumed = part.cumConsumed ?? 0;
+      const remaining   = part.remaining  ?? available;
+      const dayReq      = part.dayReq     ?? (part.modelReq ?? part.totalGlobalReq ?? 0);
+      const lack = remaining - dayReq;
+      const lackStr = Math.round(lack).toLocaleString();
+      const remainStyle = lack < 0 ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -4784,8 +4800,12 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         <td class="kb-st-pn" style="font-family:monospace;font-size:11px;">${part.자품번}</td>
         <td class="kb-st-name">${part.자품명}</td>
         <td>${조달?`<span class="kb-proc-tag">${조달}</span>`:''}</td>
-        <td class="num">${req.toLocaleString()}</td>
-        <td class="num">${stk.toLocaleString()}</td>
+        <td class="num">${Math.round(available).toLocaleString()}</td>
+        ${hasCumul
+          ? `<td class="num" style="color:#888;">${Math.round(cumConsumed).toLocaleString()}</td>
+             <td class="num" style="${remainStyle}">${Math.round(remaining).toLocaleString()}</td>
+             <td class="num" style="font-weight:700;">${Math.round(dayReq).toLocaleString()}</td>`
+          : `<td class="num">${Math.round(dayReq).toLocaleString()}</td>`}
         <td class="num kb-lack-cell kb-shortage-neg">${lackStr}</td>
         <td style="font-size:11px;color:#6b7280;">${협력사}</td>
         <td><input type="text" class="kb-note-input" placeholder="공급일/수량 등..."></td>
