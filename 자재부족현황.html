@@ -1691,7 +1691,8 @@ const PLAN_COL_KW = {
   model: ['MODEL','모델','모델명','MODELNO','MODEL NO','모'],
   spec:  ['사양','SPEC','규격','제품사양','차종사양','사양명','형식','타입','TYPE'],
   lhrh:  ['LH/RH','LH-RH','LH_RH','LHRH','L/R','LH','RH','좌우','좌/우','Left/Right'],
-  takt:  ['소요시간','소요(분)','소요시간(분)','작업소요시간','작업시간','TAKT TIME','TAKT','소요분','작업분'],
+  takt:  ['소요시간','소요(분)','소요시간(분)','작업소요시간','작업시간','TAKT TIME','TAKT','소요분','작업분',
+           'CT','C/T','CYCLE TIME','사이클타임','공정시간','소요시간(hr)','소요(hr)','작업시간(hr)','T/T','TAKTTIME','작업(hr)','작업(분)'],
 };
 
 // 헤더 행에서 컬럼 인덱스 매핑을 반환
@@ -1780,16 +1781,18 @@ function showPlanColMap(wb) {
 }
 
 // 소요시간 → 분(숫자) 변환
-// · Excel 시간 분수 (0 < n < 1): 0.0993... → 143분
-// · 시간 단위 소수 (1 ≤ n ≤ 24): 2.38 → 143분
-// · 이미 분 단위 정수 (n > 24): 143 → 143분
+// 소요시간 → 분(숫자) 변환
+// · 소수점 또는 n<10: 시간 단위 (0.4hr=24분, 1.5hr=90분)
+// · 정수 n≥10: 분 단위 (24→24분, 90→90분)
+// · 정수 n<10: 시간 단위 (1→60분, 4→240분)
 // · "H:MM" 문자열: "2:23" → 143분
 function parseTaktMin(raw) {
   if (raw === '' || raw === null || raw === undefined) return 0;
   const n = parseFloat(raw);
   if (!isNaN(n) && n > 0) {
-    if (n <= 24) return Math.round(n * 60);    // 시간 단위 (소수점 포함: 0.4hr=24분)
-    return Math.round(n);                       // 분 단위
+    // 소수점 포함 or 10 미만이면 시간 단위로 해석 (0.4hr→24분, 1.5hr→90분)
+    if (n !== Math.floor(n) || n < 10) return Math.round(n * 60);
+    return Math.round(n);   // 정수 10 이상 → 분 단위 (24분, 45분, 90분 ...)
   }
   const m = String(raw).match(/^(\d{1,2}):(\d{2})/);
   if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
@@ -4484,7 +4487,8 @@ function _kbRenderDate() {
 }
 
 function _minToTime(min) {
-  const h = Math.floor(min/60), m = min%60;
+  const t = Math.round(min);
+  const h = Math.floor(t/60), m = t%60;
   return `${h}:${String(m).padStart(2,'0')}`;
 }
 
@@ -4582,9 +4586,7 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
       blk.style.left  = `${leftPct.toFixed(2)}%`;
       blk.style.width = `${Math.max(widthPct, 1.5).toFixed(2)}%`;
 
-      const timeStr = hasTaktData
-        ? `${b.qty.toLocaleString()}ea · ${_minToTime(b.startMin)}~${_minToTime(b.endMin)}`
-        : `${b.qty.toLocaleString()}ea`;
+      const timeStr = `${b.qty.toLocaleString()}ea · ${_minToTime(Math.round(b.startMin))}~${_minToTime(Math.round(b.endMin))}`;
       blk.innerHTML = `<div class="kb-block-name">${b.model}</div><div class="kb-block-time">${timeStr}</div>`;
 
       // 블록 클릭 → 자재현황 패널 열기
