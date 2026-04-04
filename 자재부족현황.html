@@ -358,6 +358,10 @@
   .kb-now-clock .kb-clock-icon { font-size:15px; }
   .kb-now-line { position:absolute; top:0; bottom:0; width:2px; background:rgba(239,68,68,0.9); z-index:20; pointer-events:none; box-shadow:0 0 6px rgba(239,68,68,0.5); }
   .kb-now-line::before { content:'▼'; position:absolute; top:-14px; left:50%; transform:translateX(-50%); font-size:10px; color:#ef4444; line-height:1; }
+  .kb-break-zone { position:absolute; top:0; bottom:0; background:repeating-linear-gradient(45deg,rgba(156,163,175,0.18),rgba(156,163,175,0.18) 3px,transparent 3px,transparent 7px); border-left:1px dashed #9ca3af; z-index:1; pointer-events:none; }
+  .kb-tl-break { position:absolute; top:0; bottom:0; background:rgba(156,163,175,0.22); border-left:1px dashed #9ca3af; display:flex; align-items:flex-end; justify-content:center; padding-bottom:1px; }
+  .kb-tl-break span { font-size:9px; color:#6b7280; white-space:nowrap; writing-mode:initial; }
+  .kb-block { z-index:2; }
   .kb-date-nav { display:flex; align-items:center; gap:12px; }
   .kb-nav-btn { background:none; border:1px solid #d1d5db; border-radius:6px; padding:5px 10px; cursor:pointer; font-size:14px; color:#374151; }
   .kb-nav-btn:hover { background:#f3f4f6; }
@@ -4486,6 +4490,35 @@ function _kbRenderDate() {
   _kbRenderShortage(lines, lineMap, mStatusMap);
 }
 
+// ── 휴식/식사 시간 정의 (분, 자정 기준) ──────────────────────────────────────
+const KB_BREAKS = [
+  { s: 10*60+30, e: 10*60+40, label: '휴식' },   // 10:30~10:40
+  { s: 12*60+20, e: 13*60+0,  label: '점심' },   // 12:20~13:00
+  { s: 15*60+0,  e: 15*60+10, label: '휴식' },   // 15:00~15:10
+  { s: 17*60+30, e: 18*60+0,  label: '저녁' },   // 17:30~18:00
+  { s: 20*60+0,  e: 20*60+10, label: '휴식' },   // 20:00~20:10
+];
+const KB_CHANGEOVER = 10; // 모델 변경 준비시간 (분)
+
+// clockMin 시점에서 workMin 분 작업 후 실제 시계 시간 반환 (휴식시간 제외)
+function advanceWorkTime(clockMin, workMin) {
+  // 현재 시점이 휴식 구간 안이면 휴식 끝으로 이동
+  for (const br of KB_BREAKS) {
+    if (clockMin >= br.s && clockMin < br.e) { clockMin = br.e; break; }
+  }
+  let rem = workMin;
+  while (rem > 0) {
+    const nextBr = KB_BREAKS.find(br => br.s >= clockMin);
+    if (!nextBr || clockMin + rem <= nextBr.s) {
+      clockMin += rem; rem = 0;
+    } else {
+      rem -= (nextBr.s - clockMin);
+      clockMin = nextBr.e;
+    }
+  }
+  return clockMin;
+}
+
 function _minToTime(min) {
   const t = Math.round(min);
   const h = Math.floor(t/60), m = t%60;
@@ -4511,6 +4544,18 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
     mk.style.left = `${((h*60-START)/TOTAL*100).toFixed(2)}%`;
     mk.textContent = `${h}:00`;
     tlTrack.appendChild(mk);
+  }
+  // 타임라인에 휴식 구역 표시
+  for (const br of KB_BREAKS) {
+    const bL = ((br.s - START) / TOTAL * 100);
+    const bW = ((br.e - br.s)  / TOTAL * 100);
+    if (bL < 0 || bL > 100) continue;
+    const brDiv = document.createElement('div');
+    brDiv.className = 'kb-tl-break';
+    brDiv.style.left  = bL.toFixed(2) + '%';
+    brDiv.style.width = bW.toFixed(2) + '%';
+    brDiv.innerHTML = `<span>${br.label}</span>`;
+    tlTrack.appendChild(brDiv);
   }
   tlRow.appendChild(tlTrack);
   gantt.appendChild(tlRow);
@@ -4540,16 +4585,17 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
     // takt 데이터 존재 여부 확인
     const hasTaktData = blocks.some(b => b.takt > 0);
 
-    // 시간 계산: 8:30 시작, 소요시간 누적
+    // 시간 계산: 8:30 시작, 휴식·식사시간 제외, 모델변경 10분 포함
     let cur = START;
     for (let idx = 0; idx < blocks.length; idx++) {
       const b = blocks[idx];
       if (hasTaktData) {
         b.startMin = cur;
-        b.endMin   = cur + (b.takt || 0);
-        cur = b.endMin;
+        b.endMin   = advanceWorkTime(cur, b.takt || 0);
+        // 다음 모델: 모델변경 준비시간 KB_CHANGEOVER분 후 시작
+        cur = advanceWorkTime(b.endMin, KB_CHANGEOVER);
       } else {
-        // 소요시간 없으면 균등 분배
+        // 소요시간 없으면 균등 분배 (휴식시간 무시)
         b.startMin = START + (idx / blocks.length) * TOTAL;
         b.endMin   = START + ((idx + 1) / blocks.length) * TOTAL;
       }
@@ -4570,6 +4616,19 @@ function _kbRenderGantt(lines, lineMap, mStatusMap) {
     trackEl.className = 'kb-track';
     // 빈 트랙 클릭 → 자재현황 패널 닫기
     trackEl.onclick = () => { document.getElementById('kb-detail-panel').style.display='none'; };
+
+    // 휴식·식사 구역 표시
+    for (const br of KB_BREAKS) {
+      const bL = ((br.s - START) / TOTAL * 100);
+      const bW = ((br.e - br.s)  / TOTAL * 100);
+      if (bL < 0 || bL > 100) continue;
+      const brDiv = document.createElement('div');
+      brDiv.className = 'kb-break-zone';
+      brDiv.style.left  = bL.toFixed(2) + '%';
+      brDiv.style.width = bW.toFixed(2) + '%';
+      brDiv.title = `${br.label} ${_minToTime(br.s)}~${_minToTime(br.e)}`;
+      trackEl.appendChild(brDiv);
+    }
 
     // 현재시각 표시선 추가
     const nowLine = document.createElement('div');
