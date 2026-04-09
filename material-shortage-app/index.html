@@ -1961,7 +1961,7 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
         제품명:r.findIndex(v=>v==='제품명'||v.includes('제품명')),
         레벨:r.findIndex(v=>v==='레벨'), 모품번:r.findIndex(v=>v==='모품번'),
         자품번:r.findIndex(v=>v==='자품번'), 자품명:r.findIndex(v=>v.includes('자품명')),
-        규격:r.findIndex(v=>v==='규격'), 부품유형:r.findIndex(v=>v.includes('부품유형')),
+        규격:r.findIndex(v=>v==='규격'), 부품유형:r.findIndex(v=>v.includes('부품유형')||v==='조달'||v==='조달구분'||v==='구매구분'||v.includes('구매/제조')),
         단위:r.findIndex(v=>v==='단위'), 소요량:r.findIndex(v=>v==='소요량'),
         협력사명:r.findIndex(v=>v==='협력업체'||v==='협력사명'||(v.includes('협력')&&!v.includes('코드'))),
         // 고객사 PART NO 컬럼 (조립_D의 P/N 컬럼값과 매칭)
@@ -2153,12 +2153,19 @@ function parseTaktMin(raw, unitHint) {
     const hint = (unitHint || '').toUpperCase();
     // 컬럼 헤더에 분 단위 명시 → 항상 분으로 해석
     if (hint.includes('분') || hint.includes('MIN')) return Math.round(n);
-    // 컬럼 헤더에 시간 단위 명시 → 항상 시간으로 해석
-    if (hint.includes('HR') || hint.includes('(H)') || hint.includes('비율')) return Math.round(n * 60);
-    // 단위 불명: 소수점 포함 or 24 이하이면 시간 단위 (하루 24시간 초과 불가)
-    // ※ n=10 → 10시간(600분), n=25 → 25분 으로 처리
-    if (n !== Math.floor(n) || n <= 24) return Math.round(n * 60);
-    return Math.round(n);   // 정수 25 이상 → 분 단위 (25분, 45분, 90분 ...)
+    // 컬럼 헤더에 시간 단위 명시
+    if (hint.includes('HR') || hint.includes('(H)') || hint.includes('비율')) {
+      // Excel이 "10:00" 시간형식을 day분수(10/24≈0.4167)로 저장한 경우
+      if (n < 1) return Math.round(n * 24 * 60);
+      return Math.round(n * 60);
+    }
+    // 단위 불명:
+    // · 0 < n < 1 → Excel 시간 day분수 (예: "10:00" = 10/24 ≈ 0.4167 → 600분)
+    if (n < 1) return Math.round(n * 24 * 60);
+    // · 1 ≤ n ≤ 24 → 시간 단위 (10 → 600분)
+    if (n <= 24) return Math.round(n * 60);
+    // · 25 이상 → 분 단위 (30분, 45분, 90분 ...)
+    return Math.round(n);
   }
   const m = String(raw).match(/^(\d{1,2}):(\d{2})/);
   if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
@@ -5242,8 +5249,8 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
 
     for (const part of lineShortages) {
       const pi = partInfoMap[part.자품번] || {};
-      // BOM 부품유형 우선 → analysisResult 조달 구분 순으로 조회
-      const 조달 = part.부품유형 || pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
+      // BOM 부품유형 우선 → analysisResult 부품유형/조달 구분 순으로 조회
+      const 조달 = part.부품유형 || pi.부품유형 || pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
       const 협력사 = supplierMap[part.자품번] || pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
       const available = part.available ?? (part.stock ?? 0);
       const cumConsumed = part.cumConsumed ?? 0;
