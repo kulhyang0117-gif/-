@@ -8875,7 +8875,7 @@ function timePickerShow(input) {
   const cur = input.value;
   const items = [];
   for (let h = 0; h < 24; h++) {
-    for (let m = 0; m < 60; m += 30) {
+    for (let m = 0; m < 60; m += 1) {
       items.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
     }
   }
