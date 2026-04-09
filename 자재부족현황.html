@@ -5033,8 +5033,9 @@ async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = fals
   const localKitTs  = Number(localStorage.getItem('ms_uptime_kit') || 0);
   if (serverKitTs > localKitTs || state.kitFiles.length === 0) {
     const names = logs['kit']?.file_names || [];
+    const newKitFiles = [];
+    // Storage 다운로드 시도 (file_names 있을 때)
     if (names.length > 0) {
-      const newKitFiles = [];
       for (const name of names) {
         const ab = await downloadFileFromStorage('kit/' + name);
         if (!ab) continue;
@@ -5044,29 +5045,29 @@ async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = fals
           newKitFiles.push({ wb, name, rawData: arr });
         } catch(e) {}
       }
-      // Storage 접근 실패(익명/RLS 차단) 시 DB fallback
-      if (newKitFiles.length === 0) {
-        try {
-          const { data: kitRow } = await sb.from('upload_logs')
-            .select('file_data').eq('file_type', 'kit').single();
-          if (kitRow?.file_data) {
-            const kitDataArr = JSON.parse(kitRow.file_data);
-            for (const item of kitDataArr) {
-              try {
-                const arr = base64ToUint8Array(item.data);
-                const wb = XLSX.read(arr, { type: 'array' });
-                newKitFiles.push({ wb, name: item.name, rawData: arr });
-              } catch(e) {}
-            }
+    }
+    // DB fallback: Storage 실패 또는 file_names 없을 때 항상 시도
+    if (newKitFiles.length === 0) {
+      try {
+        const { data: kitRow } = await sb.from('upload_logs')
+          .select('file_data').eq('file_type', 'kit').single();
+        if (kitRow?.file_data) {
+          const kitDataArr = JSON.parse(kitRow.file_data);
+          for (const item of kitDataArr) {
+            try {
+              const arr = base64ToUint8Array(item.data);
+              const wb = XLSX.read(arr, { type: 'array' });
+              newKitFiles.push({ wb, name: item.name, rawData: arr });
+            } catch(e) {}
           }
-        } catch(e) {}
-      }
-      if (newKitFiles.length > 0) {
-        state.kitFiles = newKitFiles;
-        renderKitChips(); checkReady();
-        // kit 파일이 분석 이후에 도착한 경우 재분석 (타이밍 문제 해결)
-        if (state.bom && state.plan && state.inv && _analysisRanOnce) runAnalysis();
-      }
+        }
+      } catch(e) {}
+    }
+    if (newKitFiles.length > 0) {
+      state.kitFiles = newKitFiles;
+      saveKitList(); renderKitChips(); checkReady();
+      // kit 파일이 분석 이후에 도착한 경우 재분석
+      if (state.bom && state.plan && state.inv && _analysisRanOnce) runAnalysis();
     }
   }
 
@@ -6444,12 +6445,14 @@ function prepGetRecords() {
 }
 function prepSaveRecords(arr) {
   localStorage.setItem(PREP_STORAGE_KEY, JSON.stringify(arr));
+  _sbPushRecords('prep_records', arr);
 }
 function outgoingGetRecords() {
   try { return JSON.parse(localStorage.getItem(OUTGOING_STORAGE_KEY) || '[]'); } catch { return []; }
 }
 function outgoingSaveRecords(arr) {
   localStorage.setItem(OUTGOING_STORAGE_KEY, JSON.stringify(arr));
+  _sbPushRecords('prep_outgoing', arr);
 }
 
 function prepFormatDate(d) {
@@ -6625,13 +6628,17 @@ function prepBuildBomMap() {
 }
 
 // ── 뷰 초기화 (switchView('prep') 시 호출) ──
-function prepInitView() {
+async function prepInitView() {
   prepRenderMonthLabel();
-  // 캐시된 마스터 복원 + UI 반영
   prepRestoreMasterUI();
-  // BOM 맵 구성
   prepBuildBomMap();
-  prepGotoHome();
+  prepGotoHome(); // 홈 먼저 표시
+  // Supabase에서 최신 레코드 동기화 (다른 사용자가 저장한 데이터 반영)
+  const sbPrep = await _sbPullRecords('prep_records', PREP_STORAGE_KEY);
+  const sbOg   = await _sbPullRecords('prep_outgoing', OUTGOING_STORAGE_KEY);
+  if (sbPrep !== null || sbOg !== null) {
+    prepUpdateHomeCounts(); // 카운트 갱신
+  }
 }
 
 // ── 서브뷰 네비게이션 ──
@@ -6643,7 +6650,7 @@ function prepGotoHome() {
   prepUpdateHomeCounts();
 }
 
-function prepGotoSubview(name) {
+async function prepGotoSubview(name) {
   document.getElementById('prep-home').style.display = 'none';
   document.getElementById('prep-subview-inventory').style.display = 'none';
   document.getElementById('prep-subview-list').style.display = 'none';
@@ -6654,11 +6661,17 @@ function prepGotoSubview(name) {
     prepRenderMonthLabel();
     prepRenderTable();
     prepUpdateStats();
+    // Supabase 최신 데이터 반영 후 재렌더
+    const sb = await _sbPullRecords('prep_records', PREP_STORAGE_KEY);
+    if (sb !== null) { prepRenderTable(); prepUpdateStats(); }
   } else if (name === 'inventory') {
     prepRenderInvMonthLabel();
+    const sbP = await _sbPullRecords('prep_records', PREP_STORAGE_KEY);
+    const sbO = await _sbPullRecords('prep_outgoing', OUTGOING_STORAGE_KEY);
     prepRenderInventory();
   } else if (name === 'outgoing') {
     prepRenderOgMonthLabel();
+    const sbO = await _sbPullRecords('prep_outgoing', OUTGOING_STORAGE_KEY);
     outgoingRenderTable();
   }
 }
@@ -7798,6 +7811,39 @@ document.getElementById('outgoing-modal')?.addEventListener('click', function(e)
   if (e.target === this) outgoingCloseModal();
 });
 
+// ── Supabase 레코드 동기화 헬퍼 ──────────────────────────────
+// upload_logs 테이블을 레코드 저장소로 활용 (file_data 컬럼에 JSON)
+async function _sbPushRecords(fileType, records) {
+  try {
+    const userName = prepGetCurrentUser();
+    await sb.from('upload_logs').upsert({
+      file_type: fileType,
+      uploaded_at: String(Date.now()),
+      uploader_name: userName || '',
+      file_data: JSON.stringify(records)
+    }, { onConflict: 'file_type' });
+  } catch(e) {
+    console.warn('[Supabase] 레코드 저장 실패:', fileType, e);
+  }
+}
+
+async function _sbPullRecords(fileType, storageKey) {
+  try {
+    const { data: row } = await sb.from('upload_logs')
+      .select('file_data').eq('file_type', fileType).single();
+    if (row?.file_data) {
+      const records = JSON.parse(row.file_data);
+      if (Array.isArray(records)) {
+        localStorage.setItem(storageKey, JSON.stringify(records));
+        return records;
+      }
+    }
+  } catch(e) {
+    console.warn('[Supabase] 레코드 조회 실패:', fileType, e);
+  }
+  return null;
+}
+
 // ── 끝: 준비작업 관리 ─────────────────────────────────────────
 
 // ══════════════════════════════════════════════════════════════
@@ -7822,12 +7868,14 @@ function inspGetRecords() {
 }
 function inspSaveRecords(arr) {
   localStorage.setItem(INSP_STORAGE_KEY, JSON.stringify(arr));
+  _sbPushRecords('insp_records', arr);
 }
 function inspOutgoingGetRecords() {
   try { return JSON.parse(localStorage.getItem(INSP_OUTGOING_STORAGE_KEY) || '[]'); } catch { return []; }
 }
 function inspOutgoingSaveRecords(arr) {
   localStorage.setItem(INSP_OUTGOING_STORAGE_KEY, JSON.stringify(arr));
+  _sbPushRecords('insp_outgoing', arr);
 }
 
 function inspMonthKey() {
@@ -7927,11 +7975,17 @@ function inspRestoreMasterUI() {
 }
 
 // ── 뷰 초기화 ──
-function inspInitView() {
+async function inspInitView() {
   inspRenderMonthLabel();
   inspRestoreMasterUI();
   inspBuildBomMap();
   inspGotoHome();
+  // Supabase에서 최신 레코드 동기화
+  const sbInsp = await _sbPullRecords('insp_records', INSP_STORAGE_KEY);
+  const sbOg   = await _sbPullRecords('insp_outgoing', INSP_OUTGOING_STORAGE_KEY);
+  if (sbInsp !== null || sbOg !== null) {
+    inspUpdateHomeCounts();
+  }
 }
 
 function inspGotoHome() {
@@ -7942,15 +7996,26 @@ function inspGotoHome() {
   inspUpdateHomeCounts();
 }
 
-function inspGotoSubview(name) {
+async function inspGotoSubview(name) {
   document.getElementById('insp-home').style.display = 'none';
   document.getElementById('insp-subview-inventory').style.display = 'none';
   document.getElementById('insp-subview-list').style.display = 'none';
   document.getElementById('insp-subview-outgoing').style.display = 'none';
   document.getElementById('insp-subview-' + name).style.display = '';
-  if (name === 'list') { inspRenderMonthLabel(); inspRenderTable(); inspUpdateStats(); }
-  else if (name === 'inventory') { inspRenderMonthLabel(); inspRenderInventory(); }
-  else if (name === 'outgoing') { inspRenderMonthLabel(); inspOutgoingRenderTable(); }
+  if (name === 'list') {
+    inspRenderMonthLabel(); inspRenderTable(); inspUpdateStats();
+    const sb = await _sbPullRecords('insp_records', INSP_STORAGE_KEY);
+    if (sb !== null) { inspRenderTable(); inspUpdateStats(); }
+  } else if (name === 'inventory') {
+    inspRenderMonthLabel();
+    await _sbPullRecords('insp_records', INSP_STORAGE_KEY);
+    await _sbPullRecords('insp_outgoing', INSP_OUTGOING_STORAGE_KEY);
+    inspRenderInventory();
+  } else if (name === 'outgoing') {
+    inspRenderMonthLabel();
+    await _sbPullRecords('insp_outgoing', INSP_OUTGOING_STORAGE_KEY);
+    inspOutgoingRenderTable();
+  }
 }
 
 function inspUpdateHomeCounts() {
