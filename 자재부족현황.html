@@ -1428,21 +1428,13 @@
         <span class="prep-cur-month" id="prep-inv-curMonth"></span>
         <button onclick="prepChangeMonth(1);prepRenderInventory()">▶</button>
       </div>
-      <div class="prep-filter-line">
-        <button class="prep-filter-btn active" id="inv-filter-all" onclick="prepInvSetFilter('all',this)">전체</button>
-        <button class="prep-filter-btn" onclick="prepInvSetFilter('A',this)">A라인</button>
-        <button class="prep-filter-btn" onclick="prepInvSetFilter('B',this)">B라인</button>
-        <button class="prep-filter-btn" onclick="prepInvSetFilter('C',this)">C라인</button>
-        <button class="prep-filter-btn" onclick="prepInvSetFilter('D',this)">D라인</button>
-        <button class="prep-filter-btn" onclick="prepInvSetFilter('박스담당',this)">박스담당</button>
-      </div>
     </div>
     <div class="prep-inv-table-wrap">
       <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
         <table>
           <thead>
             <tr>
-              <th>라인</th><th>모델</th><th>품목명</th>
+              <th>자품번</th><th>고객사 P/N</th><th>품목명</th><th>모델</th>
               <th>준비수량(EA)</th><th>출고수량</th><th>재고</th><th>최근작업일</th>
             </tr>
           </thead>
@@ -1824,21 +1816,13 @@
         <span class="prep-cur-month" id="insp-inv-curMonth"></span>
         <button onclick="inspChangeMonth(1);inspRenderInventory()">▶</button>
       </div>
-      <div class="prep-filter-line">
-        <button class="prep-filter-btn active" id="insp-inv-filter-all" onclick="inspInvSetFilter('all',this)">전체</button>
-        <button class="prep-filter-btn" onclick="inspInvSetFilter('A',this)">A라인</button>
-        <button class="prep-filter-btn" onclick="inspInvSetFilter('B',this)">B라인</button>
-        <button class="prep-filter-btn" onclick="inspInvSetFilter('C',this)">C라인</button>
-        <button class="prep-filter-btn" onclick="inspInvSetFilter('D',this)">D라인</button>
-        <button class="prep-filter-btn" onclick="inspInvSetFilter('검사자',this)">검사자</button>
-      </div>
     </div>
     <div class="prep-inv-table-wrap">
       <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
         <table>
           <thead>
             <tr>
-              <th>라인</th><th>모델</th><th>품목명</th>
+              <th>자품번</th><th>고객사 P/N</th><th>품목명</th>
               <th>검사수량(EA)</th><th>출고수량</th><th>재고</th><th>최근작업일</th>
             </tr>
           </thead>
@@ -6746,23 +6730,28 @@ function prepGetInventoryRows() {
   const prepRecs = prepGetRecords().filter(r => r.month === mk);
   const ogRecs = outgoingGetRecords().filter(r => r.month === mk);
 
-  // 그룹: 라인+모델+품목
+  // 그룹: 자품번(partNo) 기준 - 라인 무관 합산
   const groups = {};
   prepRecs.forEach(r => {
-    const key = `${r.line||''}||${r.modelName||''}||${r.itemName||''}`;
-    if (!groups[key]) groups[key] = { line: r.line||'', modelName: r.modelName||'', itemName: r.itemName||'', prepQty: 0, lastDate: '' };
+    const key = r.partNo || r.itemName || '';
+    if (!groups[key]) groups[key] = { partNo: r.partNo||'', custPN: r.custPN||'', itemName: r.itemName||'', models: new Set(), prepQty: 0, lastDate: '' };
     groups[key].prepQty += (r.qty || 0);
     if (!groups[key].lastDate || r.date > groups[key].lastDate) groups[key].lastDate = r.date;
+    // custPN / itemName 최신 값 유지
+    if (r.custPN) groups[key].custPN = r.custPN;
+    if (r.itemName) groups[key].itemName = r.itemName;
+    if (r.modelName) groups[key].models.add(r.modelName);
   });
-  // 출고 수량 매핑 (모델+품목 기준)
+  // 출고 수량 매핑 (자품번 기준)
   const ogMap = {};
   ogRecs.forEach(r => {
-    const key = `${r.line||''}||${r.modelName||''}||${r.itemName||''}`;
+    const key = r.partNo || r.itemName || '';
     ogMap[key] = (ogMap[key] || 0) + (r.qty || 0);
   });
 
   return Object.entries(groups).map(([key, g]) => ({
     ...g,
+    models: [...g.models].join(', '),
     ogQty: ogMap[key] || 0,
     stock: g.prepQty - (ogMap[key] || 0)
   }));
@@ -6770,27 +6759,25 @@ function prepGetInventoryRows() {
 
 function prepRenderInventory() {
   const rows = prepGetInventoryRows();
-  const filtered = prepInvFilterLine === 'all' ? rows : rows.filter(r => r.line === prepInvFilterLine);
-  const sorted = filtered.sort((a,b) => {
-    if (a.line !== b.line) return a.line.localeCompare(b.line);
-    if (a.modelName !== b.modelName) return a.modelName.localeCompare(b.modelName);
-    return a.itemName.localeCompare(b.itemName);
+  const sorted = rows.sort((a,b) => {
+    const pa = a.partNo || a.itemName || '';
+    const pb = b.partNo || b.itemName || '';
+    return pa.localeCompare(pb);
   });
 
   const tbody = document.getElementById('prep-inv-tbody');
   if (!tbody) return;
   if (sorted.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#bbb;padding:30px;">데이터가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#bbb;padding:30px;">데이터가 없습니다.</td></tr>`;
     return;
   }
   tbody.innerHTML = sorted.map(r => {
-    const lineKey = (r.line||'a').toLowerCase();
-    const badge = `<span class="prep-line-badge prep-line-${lineKey}">${r.line}라인</span>`;
     const stockClass = r.stock > 0 ? 'prep-inv-positive' : r.stock < 0 ? 'prep-inv-negative' : 'prep-inv-zero';
     return `<tr>
-      <td style="text-align:center;">${badge}</td>
-      <td style="font-weight:700;color:#1e3a5f;">${r.modelName}</td>
+      <td style="font-weight:700;color:#1e3a5f;">${r.partNo||'-'}</td>
+      <td style="color:#6b7280;">${r.custPN||'-'}</td>
       <td>${r.itemName}</td>
+      <td style="color:#374151;font-size:12px;">${r.models||'-'}</td>
       <td style="text-align:right;font-weight:700;color:#1e3a5f;">${r.prepQty.toLocaleString()}</td>
       <td style="text-align:right;color:#e67e22;">${r.ogQty > 0 ? r.ogQty.toLocaleString() : '-'}</td>
       <td style="text-align:right;" class="${stockClass}">${r.stock.toLocaleString()}</td>
@@ -8077,16 +8064,19 @@ function inspGetInventoryRows() {
   const mk = inspMonthKey();
   const inspRecs = inspGetRecords().filter(r => r.month === mk);
   const ogRecs = inspOutgoingGetRecords().filter(r => r.month === mk);
+  // 그룹: 자품번(partNo) 기준 - 라인 무관 합산
   const groups = {};
   inspRecs.forEach(r => {
-    const key = `${r.line||''}||${r.modelName||''}||${r.itemName||''}`;
-    if (!groups[key]) groups[key] = { line: r.line||'', modelName: r.modelName||'', itemName: r.itemName||'', prepQty: 0, lastDate: '' };
+    const key = r.partNo || r.itemName || '';
+    if (!groups[key]) groups[key] = { partNo: r.partNo||'', custPN: r.custPN||'', itemName: r.itemName||'', prepQty: 0, lastDate: '' };
     groups[key].prepQty += (r.qty || 0);
     if (!groups[key].lastDate || r.date > groups[key].lastDate) groups[key].lastDate = r.date;
+    if (r.custPN) groups[key].custPN = r.custPN;
+    if (r.itemName) groups[key].itemName = r.itemName;
   });
   const ogMap = {};
   ogRecs.forEach(r => {
-    const key = `${r.line||''}||${r.modelName||''}||${r.itemName||''}`;
+    const key = r.partNo || r.itemName || '';
     ogMap[key] = (ogMap[key] || 0) + (r.qty || 0);
   });
   return Object.entries(groups).map(([key, g]) => ({ ...g, ogQty: ogMap[key]||0, stock: g.prepQty-(ogMap[key]||0) }));
@@ -8094,11 +8084,10 @@ function inspGetInventoryRows() {
 
 function inspRenderInventory() {
   const rows = inspGetInventoryRows();
-  const filtered = inspInvFilterLine === 'all' ? rows : rows.filter(r => r.line === inspInvFilterLine);
-  const sorted = filtered.sort((a,b) => {
-    if (a.line !== b.line) return a.line.localeCompare(b.line);
-    if (a.modelName !== b.modelName) return a.modelName.localeCompare(b.modelName);
-    return a.itemName.localeCompare(b.itemName);
+  const sorted = rows.sort((a,b) => {
+    const pa = a.partNo || a.itemName || '';
+    const pb = b.partNo || b.itemName || '';
+    return pa.localeCompare(pb);
   });
   const tbody = document.getElementById('insp-inv-tbody');
   if (!tbody) return;
@@ -8107,12 +8096,10 @@ function inspRenderInventory() {
     return;
   }
   tbody.innerHTML = sorted.map(r => {
-    const lineKey = (r.line||'a').toLowerCase();
-    const badge = `<span class="prep-line-badge prep-line-${lineKey}">${r.line}라인</span>`;
     const stockClass = r.stock > 0 ? 'prep-inv-positive' : r.stock < 0 ? 'prep-inv-negative' : 'prep-inv-zero';
     return `<tr>
-      <td style="text-align:center;">${badge}</td>
-      <td style="font-weight:700;color:#1e3a5f;">${r.modelName}</td>
+      <td style="font-weight:700;color:#1e3a5f;">${r.partNo||'-'}</td>
+      <td style="color:#6b7280;">${r.custPN||'-'}</td>
       <td>${r.itemName}</td>
       <td style="text-align:right;font-weight:700;color:#1e3a5f;">${r.prepQty.toLocaleString()}</td>
       <td style="text-align:right;color:#e67e22;">${r.ogQty > 0 ? r.ogQty.toLocaleString() : '-'}</td>
