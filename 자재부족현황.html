@@ -661,6 +661,15 @@
       <a onclick="openAppSettings()" style="font-size:11px;color:#aaa;cursor:pointer;text-decoration:none;">⚙️ 연결 설정</a>
     </div>
   </div>
+  <!-- 비밀번호 재설정 (메일 링크 클릭 후) -->
+  <div id="auth-reset" class="auth-box" style="display:none;">
+    <h2>🔒 새 비밀번호 설정</h2>
+    <div class="auth-sub">새로 사용할 비밀번호를 입력해주세요.</div>
+    <div class="auth-field"><label>새 비밀번호 <span style="font-weight:400;color:#999;">(6자 이상)</span></label><input type="password" id="reset-pw" placeholder="새 비밀번호 입력"></div>
+    <div class="auth-field"><label>새 비밀번호 확인</label><input type="password" id="reset-pw2" placeholder="새 비밀번호 재입력" onkeydown="if(event.key==='Enter')doResetPw()"></div>
+    <button class="btn-auth" onclick="doResetPw()">비밀번호 변경</button>
+    <div class="auth-err" id="reset-err"></div>
+  </div>
   <!-- 비밀번호 찾기 -->
   <div id="auth-forgot" class="auth-box" style="display:none;">
     <h2>🔑 비밀번호 찾기</h2>
@@ -5138,13 +5147,32 @@ async function doForgotPw(){
   errEl.textContent='';
   if(!email){ errEl.textContent='이메일을 입력해주세요.'; return; }
   try{
-    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    const redirectTo = window.location.origin + window.location.pathname;
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
     if(error) throw error.message;
     errEl.style.color='#16a34a';
     errEl.textContent='재설정 링크를 이메일로 발송했습니다. 받은 편지함을 확인해주세요.';
   }catch(e){
     errEl.style.color='';
     errEl.textContent=typeof e==='string'?e:'발송 실패. 잠시 후 다시 시도해주세요.';
+  }
+}
+async function doResetPw(){
+  const pw=document.getElementById('reset-pw').value;
+  const pw2=document.getElementById('reset-pw2').value;
+  const errEl=document.getElementById('reset-err');
+  errEl.style.color='';
+  errEl.textContent='';
+  if(pw.length<6){ errEl.textContent='비밀번호는 6자 이상이어야 합니다.'; return; }
+  if(pw!==pw2){ errEl.textContent='비밀번호가 일치하지 않습니다.'; return; }
+  try{
+    const { error } = await sb.auth.updateUser({ password: pw });
+    if(error) throw error.message;
+    errEl.style.color='#16a34a';
+    errEl.textContent='비밀번호가 변경되었습니다. 잠시 후 로그인 화면으로 이동합니다.';
+    setTimeout(()=>{ window.location.hash=''; showAuthOverlay(); }, 2000);
+  }catch(e){
+    errEl.textContent=typeof e==='string'?e:'변경 실패. 다시 시도해주세요.';
   }
 }
 function showPending(){
@@ -5302,6 +5330,18 @@ function resetKitNotice(){
 
 // ── 앱 초기화 ──
 async function initAuth(){
+  // 비밀번호 재설정 링크 클릭 후 진입 감지 (#type=recovery)
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  if (hashParams.get('type') === 'recovery') {
+    document.getElementById('auth-overlay').style.display='flex';
+    document.getElementById('auth-login').style.display='none';
+    document.getElementById('auth-register').style.display='none';
+    document.getElementById('auth-pending').style.display='none';
+    document.getElementById('auth-forgot').style.display='none';
+    document.getElementById('auth-reset').style.display='';
+    return;
+  }
+
   // 통합 대시보드에서 접근 시 게스트 바이패스
   const _urlFrom = new URLSearchParams(window.location.search).get('from');
   const _fromDashboard = _urlFrom === 'ssat' ||
