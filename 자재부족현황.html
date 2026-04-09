@@ -2417,26 +2417,16 @@ function showPlanColMap(wb) {
 // · 정수 n≥10: 분 단위 (24→24분, 90→90분)
 // · 정수 n<10: 시간 단위 (1→60분, 4→240분)
 // · "H:MM" 문자열: "2:23" → 143분
-function parseTaktMin(raw, unitHint) {
+function parseTaktMin(raw) {
   if (raw === '' || raw === null || raw === undefined) return 0;
   const n = parseFloat(raw);
   if (!isNaN(n) && n > 0) {
-    const hint = (unitHint || '').toUpperCase();
-    // 컬럼 헤더에 분 단위 명시 → 항상 분으로 해석
-    if (hint.includes('분') || hint.includes('MIN')) return Math.round(n);
-    // 컬럼 헤더에 시간 단위 명시
-    if (hint.includes('HR') || hint.includes('(H)') || hint.includes('비율')) {
-      if (n < 1) return Math.round(n * 24 * 60);
-      return Math.round(n * 60);
-    }
-    // 단위 불명:
-    // · 0 < n < 1 → Excel 시간 day분수 (예: "10:00" = 10/24 ≈ 0.4167 → 600분)
+    // Excel 시간형식 "10:00" → day분수(10/24≈0.4167) 저장된 경우: ×24×60
     if (n < 1) return Math.round(n * 24 * 60);
-    // · 1 ≤ n ≤ 24 → 시간 단위 (10 → 600분)
-    if (n <= 24) return Math.round(n * 60);
-    // · 25 이상 → 분 단위
-    return Math.round(n);
+    // 모든 수치값은 시간 단위로 해석 (×60 → 분)
+    return Math.round(n * 60);
   }
+  // "H:MM" 문자열 ("10:30" → 630분)
   const m = String(raw).match(/^(\d{1,2}):(\d{2})/);
   if (m) return parseInt(m[1]) * 60 + parseInt(m[2]);
   return 0;
@@ -2448,7 +2438,7 @@ function parsePlan(wb, fromSerial) {
   const result = [];
   for (const sn of sheets) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header:1, defval:'' });
-    let ds=-1, cD=0, cP=1, cQ=5, cM=-1, cS=-1, cLR=-1, cP2=-1, cT=-1, cTkw='';
+    let ds=-1, cD=0, cP=1, cQ=5, cM=-1, cS=-1, cLR=-1, cP2=-1, cT=-1;
 
     for (let i=0; i<Math.min(20,rows.length); i++) {
       const r = rows[i].map(v => String(v).trim());
@@ -2465,7 +2455,7 @@ function parsePlan(wb, fromSerial) {
         cM  = m.model.idx; // -1이면 model 없음
         cS  = m.spec.idx;  // -1이면 spec 없음
         if (m.lhrh.idx  >= 0) cLR = m.lhrh.idx;
-        if (m.takt.idx  >= 0) { cT = m.takt.idx; cTkw = m.takt.matched || ''; }
+        if (m.takt.idx  >= 0) cT = m.takt.idx;
         // 1차 P/N이 품목코드(시스템 P/N)인 경우 → 고객사 PART NO(P/N) 컬럼을 보조로 탐색
         // 품목코드가 비어있는 행에서 fallback으로 사용
         if (m.pn.idx >= 0) {
@@ -2495,7 +2485,7 @@ function parsePlan(wb, fromSerial) {
         model: cM >= 0 ? String(r[cM]||'').trim() : '',
         spec:  cS >= 0 ? String(r[cS]||'').trim() : '',
         lhrh:  cLR >= 0 ? String(r[cLR]||'').trim() : '',
-        takt:  cT >= 0 ? parseTaktMin(r[cT], cTkw) : 0 });
+        takt:  cT >= 0 ? parseTaktMin(r[cT]) : 0 });
     }
   }
   return result;
