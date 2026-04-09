@@ -2421,9 +2421,7 @@ function parseTaktMin(raw) {
   if (raw === '' || raw === null || raw === undefined) return 0;
   const n = parseFloat(raw);
   if (!isNaN(n) && n > 0) {
-    // Excel 시간형식 "10:00" → day분수(10/24≈0.4167) 저장된 경우: ×24×60
-    if (n < 1) return Math.round(n * 24 * 60);
-    // 모든 수치값은 시간 단위로 해석 (×60 → 분)
+    // 모든 수치값은 시간 단위 → 분으로 변환 (0.5→30분, 10→600분)
     return Math.round(n * 60);
   }
   // "H:MM" 문자열 ("10:30" → 630분)
