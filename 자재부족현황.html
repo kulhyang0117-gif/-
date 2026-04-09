@@ -425,6 +425,8 @@
   .prep-form-control { padding:8px 10px; border:1.5px solid #ddd; border-radius:6px; font-size:13px; font-family:inherit; transition:border-color 0.2s; }
   .prep-form-control:focus { outline:none; border-color:#1e3a5f; }
   .prep-form-control[readonly] { background:#f8f8f8; color:#888; }
+  input.prep-form-control:not([readonly]), select.prep-form-control { background:#fefce8; }
+  input.prep-form-control:not([readonly]):focus, select.prep-form-control:focus { background:#fef9c3; }
   .prep-form-hint { font-size:10px; color:#999; }
   .prep-history-section { margin-top:10px; }
   .prep-history-title { font-weight:700; color:#1e3a5f; font-size:13px; margin-bottom:10px; padding-bottom:6px; border-bottom:2px solid #1e3a5f; display:flex; align-items:center; justify-content:space-between; }
