@@ -1499,7 +1499,8 @@ def automate_upload(downloaded_files):
             page.wait_for_load_state("networkidle", timeout=15000)
 
         # 로그인 (이미 로그인 상태면 스킵)
-        if page.locator(".btn-logout").is_visible():
+        # .btn-logout 버튼이 2개(설정/로그아웃)이므로 .first 사용
+        if page.locator(".btn-logout").first.is_visible():
             log("  ✅ 이미 로그인 상태")
         else:
             log("  로그인 중...")

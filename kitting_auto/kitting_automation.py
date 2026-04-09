@@ -48,7 +48,10 @@ def _init_log():
 
 def log(msg):
     line = f"[{datetime.now():%H:%M:%S}] {msg}"
-    print(line, flush=True)
+    try:
+        print(line, flush=True)
+    except UnicodeEncodeError:
+        print(line.encode('utf-8', errors='replace').decode('ascii', errors='replace'), flush=True)
     if _log_file:
         _log_file.write(line + "\n")
         _log_file.flush()
@@ -372,6 +375,11 @@ def navigate_and_download(app):
         input("  조회 완료 후 Enter → ")
     time.sleep(LOAD_DELAY)
     log("  ✅ 조회 완료")
+
+    # 수동 조작 등으로 창 핸들이 스테일해질 수 있으므로 재취득
+    _, main_win = _get_smes_window()
+    if not main_win:
+        raise RuntimeError("조회 후 메인 창을 찾을 수 없습니다.")
 
     # ── 품목별 다운로드 ────────────────────────────────────────────────────
     log("  품목별 Excel 다운로드 시작...")
@@ -876,152 +884,164 @@ def automate_upload(downloaded_files):
     with sync_playwright() as p:
         page = None
         is_cdp = False
+        browser = None
 
-        # ── 1순위: 이미 열린 브라우저에 CDP 연결 ────────────────────────────
         try:
-            browser = p.chromium.connect_over_cdp("http://localhost:9222")
-            is_cdp = True
-            log("  ✅ 기존 브라우저 CDP 연결 성공")
+            # ── 1순위: 이미 열린 브라우저에 CDP 연결 ─────────────────────────
+            try:
+                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                is_cdp = True
+                log("  기존 브라우저 CDP 연결 성공")
 
-            # 이미 열린 앱 탭 찾기
-            for ctx in browser.contexts:
-                for pg in ctx.pages:
-                    if "material-shortage" in pg.url:
-                        page = pg
-                        page.bring_to_front()
-                        log("  ✅ 기존 앱 탭 사용")
+                for ctx in browser.contexts:
+                    for pg in ctx.pages:
+                        if "material-shortage" in pg.url:
+                            page = pg
+                            page.bring_to_front()
+                            log("  기존 앱 탭 사용")
+                            break
+                    if page:
                         break
-                if page:
-                    break
 
-            # 앱 탭 없으면 새 탭 열기
-            if not page:
-                ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-                page = ctx.new_page()
-                page.goto("https://material-shortage.vercel.app/", timeout=30000)
-                page.wait_for_load_state("networkidle", timeout=15000)
+                if not page:
+                    ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+                    page = ctx.new_page()
+                    page.goto("https://material-shortage.vercel.app/", timeout=30000)
+                    page.wait_for_load_state("networkidle", timeout=15000)
 
-        except Exception as e:
-            log(f"  CDP 연결 실패({e}) → 새 브라우저 실행")
-            browser = p.chromium.launch(
-                headless=False,
-                args=["--start-maximized", "--disable-web-security"]
-            )
-            page = browser.new_context(no_viewport=True).new_page()
-            page.goto("https://material-shortage.vercel.app/", timeout=30000)
-            page.wait_for_load_state("networkidle", timeout=15000)
-
-        # 로그인 (이미 로그인 상태면 스킵)
-        if page.locator(".btn-logout").is_visible():
-            log("  ✅ 이미 로그인 상태")
-        else:
-            log("  로그인 중...")
-            try:
-                page.locator("#login-email").fill(WEB_EMAIL)
-                page.locator("#login-pw").fill(WEB_PW)
-                page.locator("#auth-login .btn-auth").click()
-                page.wait_for_selector(".btn-logout", timeout=10000)
-                log("  ✅ 로그인 완료")
-            except Exception as e:
-                log(f"  ⚠️  로그인 실패: {e}")
-                input("  수동 로그인 후 Enter → ")
-
-        # 키팅 로컬 상태 초기화 (Supabase에는 쓰지 않음 — 업로드 시 덮어쓰기)
-        # clearKitFiles() 버튼 클릭 시 syncUploadLog(file_names=[]) 가 비동기로 발사되어
-        # 업로드 완료 후에도 Supabase에 늦게 도착하면 file_names=[] 로 덮어쓰는 race condition 발생
-        log("  키팅 로컬 상태 초기화...")
-        try:
-            page.evaluate("""
-                () => {
-                    window.state.kitFiles = [];
-                    if (window.dbPut) window.dbPut('kit_list', []);
-                    if (window.renderKitChips) window.renderKitChips();
-                    if (window.checkReady) window.checkReady();
-                    localStorage.removeItem('ms_uptime_kit');
-                    localStorage.removeItem('ms_uploader_kit');
-                    const el = document.getElementById('uptime-kit');
-                    if (el) el.textContent = '';
-                }
-            """)
-        except Exception as e:
-            log(f"  ⚠️  초기화 평가 오류: {e}")
-
-        # 키팅된 자재 — kitting 자재 폴더 전체 파일 업로드 (먼저)
-        all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
-        all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
-        valid = [str(f) for f in all_kit if f.exists()]
-        log(f"  kitting 자재 폴더 전체 {len(valid)}개 파일 업로드 중...")
-        if valid:
-            page.locator("#file-kit").set_input_files(valid)
-
-            # 칩 렌더링 대기 (파일이 state에 로드됐을 때)
-            try:
-                page.wait_for_selector('.kit-chip', timeout=15000)
-                log("  파일 처리 완료 — Supabase 저장 중...")
             except Exception:
-                time.sleep(5)
+                log("  CDP 연결 실패 → 새 브라우저 실행")
+                browser = p.chromium.launch(
+                    headless=False,
+                    args=["--start-maximized", "--disable-web-security"]
+                )
+                page = browser.new_context(no_viewport=True).new_page()
+                try:
+                    page.goto("https://material-shortage.vercel.app/", timeout=30000)
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception as e2:
+                    log(f"  페이지 로드 실패: {e2}")
+                    input("  페이지 수동 로드 후 Enter → ")
 
-            # Storage 업로드 + upload_logs 동기화를 await로 명시적 완료
+            # ── 로그인 (이미 로그인 상태면 스킵) ──────────────────────────────
+            # .btn-logout 버튼이 2개(설정/로그아웃)이므로 .first 사용
+            if page.locator(".btn-logout").first.is_visible():
+                log("  이미 로그인 상태")
+            else:
+                log("  로그인 중...")
+                try:
+                    page.locator("#login-email").fill(WEB_EMAIL)
+                    page.locator("#login-pw").fill(WEB_PW)
+                    page.locator("#auth-login .btn-auth").click()
+                    page.wait_for_selector(".btn-logout", timeout=10000)
+                    log("  로그인 완료")
+                except Exception as e:
+                    log(f"  로그인 실패: {e}")
+                    input("  수동 로그인 후 Enter → ")
+
+            # ── 키팅 로컬 상태 초기화 ──────────────────────────────────────────
+            log("  키팅 로컬 상태 초기화...")
             try:
-                result = page.evaluate("""
-                    async () => {
-                        const files = (window.state && window.state.kitFiles) || [];
-                        if (!files.length) return { ok: false, reason: 'state.kitFiles 비어있음' };
-                        const results = [];
-                        for (const f of files) {
-                            const r = await window.uploadFileToStorage('kit/' + f.name, f.rawData);
-                            results.push({ name: f.name, ok: r?.ok, msg: r?.msg || '' });
-                        }
-                        const ts = Date.now();
-                        const uname = (window.currentUser && window.currentUser.displayName) || '';
-                        await window.syncUploadLog('kit', ts, uname, files.map(f => f.name));
-                        localStorage.setItem('ms_uptime_kit', String(ts));
-                        if (uname) localStorage.setItem('ms_uploader_kit', uname);
-                        return { ok: true, fileCount: files.length, names: files.map(f => f.name), results };
+                page.evaluate("""
+                    () => {
+                        window.state.kitFiles = [];
+                        if (window.dbPut) window.dbPut('kit_list', []);
+                        if (window.renderKitChips) window.renderKitChips();
+                        if (window.checkReady) window.checkReady();
+                        localStorage.removeItem('ms_uptime_kit');
+                        localStorage.removeItem('ms_uploader_kit');
+                        const el = document.getElementById('uptime-kit');
+                        if (el) el.textContent = '';
                     }
-                """, None)
-                if result and result.get('ok'):
-                    log(f"  ✅ 키팅 Supabase 저장 완료: {result.get('names')}")
-                else:
-                    log(f"  ⚠️  키팅 Supabase 저장 결과: {result}")
+                """)
             except Exception as e:
-                log(f"  ⚠️  키팅 Supabase 저장 오류: {e} — 10초 추가 대기")
-                time.sleep(10)
+                log(f"  초기화 오류: {e}")
 
-        # 재고현황 최신 파일 업로드 (키팅 업로드 완료 후)
-        inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
-        inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if inv_files:
-            latest_inv = str(inv_files[0])
-            log(f"  재고현황 업로드: {inv_files[0].name}")
-            page.locator("#file-inv").set_input_files(latest_inv)
-            time.sleep(3)
-            log("  ✅ 재고현황 업로드 완료")
-        else:
-            log("  ⚠️  재고현황 폴더에 파일 없음")
+            # ── 키팅된 자재 업로드 ─────────────────────────────────────────────
+            all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
+            all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
+            valid = [str(f) for f in all_kit if f.exists()]
+            log(f"  kitting 자재 폴더 전체 {len(valid)}개 파일 업로드 중...")
+            if valid:
+                page.locator("#file-kit").set_input_files(valid)
 
-        # 완료 팝업
-        page.evaluate("""
-            const el = document.createElement('div');
-            el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center';
-            el.innerHTML = '<div style="background:white;border-radius:16px;padding:36px 52px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35)">' +
-                '<div style="font-size:52px;margin-bottom:12px">✅</div>' +
-                '<div style="font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:8px">실행완료 되었습니다.</div>' +
-                '<div style="font-size:13px;color:#666;margin-bottom:20px">키팅 파일이 자재부족현황에 업로드되었습니다.</div>' +
-                '<button onclick="this.closest(\'div[style]\').remove()" style="padding:10px 36px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">확인</button>' +
-                '</div>';
-            document.body.appendChild(el);
-        """)
+                try:
+                    page.wait_for_selector('.kit-chip', timeout=15000)
+                    log("  파일 처리 완료 — Supabase 저장 중...")
+                except Exception:
+                    time.sleep(5)
 
-        log("✅ 전체 자동화 완료!")
+                try:
+                    result = page.evaluate("""
+                        async () => {
+                            const files = (window.state && window.state.kitFiles) || [];
+                            if (!files.length) return { ok: false, reason: 'state.kitFiles 비어있음' };
+                            const results = [];
+                            for (const f of files) {
+                                const r = await window.uploadFileToStorage('kit/' + f.name, f.rawData);
+                                results.push({ name: f.name, ok: r?.ok, msg: r?.msg || '' });
+                            }
+                            const ts = Date.now();
+                            const uname = (window.currentUser && window.currentUser.displayName) || '';
+                            await window.syncUploadLog('kit', ts, uname, files.map(f => f.name));
+                            localStorage.setItem('ms_uptime_kit', String(ts));
+                            if (uname) localStorage.setItem('ms_uploader_kit', uname);
+                            return { ok: true, fileCount: files.length, names: files.map(f => f.name), results };
+                        }
+                    """, None)
+                    if result and result.get('ok'):
+                        log(f"  키팅 Supabase 저장 완료: {result.get('names')}")
+                    else:
+                        log(f"  키팅 Supabase 저장 결과: {result}")
+                except Exception as e:
+                    log(f"  키팅 Supabase 저장 오류: {e} — 10초 추가 대기")
+                    time.sleep(10)
+
+            # ── 재고현황 업로드 ────────────────────────────────────────────────
+            inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+            inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
+            if inv_files:
+                latest_inv = str(inv_files[0])
+                log(f"  재고현황 업로드: {inv_files[0].name}")
+                page.locator("#file-inv").set_input_files(latest_inv)
+                time.sleep(3)
+                log("  재고현황 업로드 완료")
+            else:
+                log("  재고현황 폴더에 파일 없음")
+
+            # ── 완료 팝업 ──────────────────────────────────────────────────────
+            try:
+                page.evaluate("""
+                    const el = document.createElement('div');
+                    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center';
+                    el.innerHTML = '<div style="background:white;border-radius:16px;padding:36px 52px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35)">' +
+                        '<div style="font-size:52px;margin-bottom:12px">완료</div>' +
+                        '<div style="font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:8px">실행완료 되었습니다.</div>' +
+                        '<div style="font-size:13px;color:#666;margin-bottom:20px">키팅 파일이 자재부족현황에 업로드되었습니다.</div>' +
+                        '<button onclick="this.closest(\'div[style]\').remove()" style="padding:10px 36px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">확인</button>' +
+                        '</div>';
+                    document.body.appendChild(el);
+                """)
+            except Exception:
+                pass
+
+            log("전체 자동화 완료!")
+
+        except Exception as e:
+            log(f"  업로드 오류: {e}")
+            import traceback as _tb; _tb.print_exc()
+            input("  오류 확인 후 Enter → ")
 
         # CDP 연결은 브라우저를 닫지 않음 — 새 브라우저는 60초 후 종료
-        if not is_cdp:
+        if not is_cdp and browser:
             try:
                 page.wait_for_timeout(60000)
             except Exception:
                 pass
-            browser.close()
+            try:
+                browser.close()
+            except Exception:
+                pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────

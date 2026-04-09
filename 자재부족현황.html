@@ -314,7 +314,9 @@
   body[data-view=pkg] #panel-modinv { display:none !important; }
   body[data-view=pkg] #panel-pkg { display:block !important; }
   /* 준비작업/투입전 뷰 */
-  body[data-view=insp] #view-coming { display:flex; }
+  body[data-view=insp] #view-coming { display:none; }
+  #view-insp { display:none; padding:20px 24px; overflow-y:auto; flex:1; }
+  body[data-view=insp] #view-insp { display:block; }
   /* 메뉴얼 뷰 */
   body[data-view=manual] #view-manual { display:block; }
   #view-manual { display:none; background:#f8fafc; min-height:calc(100vh - 56px); padding:36px 48px; overflow-y:auto; }
@@ -716,10 +718,9 @@
       <span class="side-item-icon">🔧</span>
       <span class="side-item-label">준비작업 관리</span>
     </div>
-    <div class="side-item disabled" id="snav-insp" onclick="switchView('insp')">
+    <div class="side-item" id="snav-insp" onclick="switchView('insp')">
       <span class="side-item-icon">🔍</span>
       <span class="side-item-label">투입전 검사관리</span>
-      <span class="side-coming">준비중</span>
     </div>
     <div class="side-item" id="snav-upload" onclick="switchView('upload')">
       <span class="side-item-icon">📂</span>
@@ -923,6 +924,14 @@
         <div class="desc">모델별 항목·UPH·인원 정보 <span class="optional-badge">선택</span></div>
         <div class="status" id="status-prep-master">클릭하여 파일 선택</div>
         <div class="upload-time" id="uptime-prep-master"></div>
+      </div>
+      <div class="upload-item" id="drop-insp-master">
+        <input type="file" accept=".xlsx,.xls" id="file-insp-master" onchange="inspLoadMasterFile(this)">
+        <div class="icon">🔍</div>
+        <div class="label">투입전 검사 마스터</div>
+        <div class="desc">모델별 항목·UPH·인원 정보 <span class="optional-badge">선택</span></div>
+        <div class="status" id="status-insp-master">클릭하여 파일 선택</div>
+        <div class="upload-time" id="uptime-insp-master"></div>
       </div>
     </div>
 
@@ -1751,6 +1760,388 @@
 
 <!-- 준비작업 토스트 -->
 <div class="prep-toast" id="prep-toast"></div>
+
+<!-- ── 투입전 검사관리 뷰 ── -->
+<div id="view-insp">
+
+  <!-- 홈 (메뉴 선택 화면) -->
+  <div id="insp-home">
+    <div class="prep-home-wrap">
+      <div class="prep-home-title">🔍 투입전 검사관리</div>
+      <div class="prep-home-sub">항목을 선택하여 이동하세요</div>
+      <div class="prep-home-cards">
+        <div class="prep-home-card" onclick="inspGotoSubview('inventory')">
+          <div class="prep-home-card-icon">📦</div>
+          <div class="prep-home-card-title">검사 재고현황</div>
+          <div class="prep-home-card-desc">품목별 검사수량과 출고수량을 비교하여 현재 재고를 확인합니다</div>
+          <div class="prep-home-card-count" id="insp-home-inv-count">-</div>
+        </div>
+        <div class="prep-home-card" onclick="inspGotoSubview('list')">
+          <div class="prep-home-card-icon">📋</div>
+          <div class="prep-home-card-title">검사 리스트</div>
+          <div class="prep-home-card-desc">투입전 검사 실적을 등록하고 라인/모델별로 조회합니다</div>
+          <div class="prep-home-card-count" id="insp-home-list-count">-</div>
+        </div>
+        <div class="prep-home-card" onclick="inspGotoSubview('outgoing')">
+          <div class="prep-home-card-icon">📤</div>
+          <div class="prep-home-card-title">출고이력</div>
+          <div class="prep-home-card-desc">자재 출고를 등록하고 출고 이력을 관리합니다</div>
+          <div class="prep-home-card-count" id="insp-home-og-count">-</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ① 검사 재고현황 서브뷰 -->
+  <div id="insp-subview-inventory" style="display:none;">
+    <div class="prep-subview-header">
+      <button class="prep-back-btn" onclick="inspGotoHome()">← 뒤로</button>
+      <span class="prep-subview-title">📦 검사 재고현황</span>
+    </div>
+    <div class="prep-toolbar" style="margin-bottom:14px;">
+      <div class="prep-month-nav">
+        <button onclick="inspChangeMonth(-1);inspRenderInventory()">◀</button>
+        <span class="prep-cur-month" id="insp-inv-curMonth"></span>
+        <button onclick="inspChangeMonth(1);inspRenderInventory()">▶</button>
+      </div>
+      <div class="prep-filter-line">
+        <button class="prep-filter-btn active" id="insp-inv-filter-all" onclick="inspInvSetFilter('all',this)">전체</button>
+        <button class="prep-filter-btn" onclick="inspInvSetFilter('A',this)">A라인</button>
+        <button class="prep-filter-btn" onclick="inspInvSetFilter('B',this)">B라인</button>
+        <button class="prep-filter-btn" onclick="inspInvSetFilter('C',this)">C라인</button>
+        <button class="prep-filter-btn" onclick="inspInvSetFilter('D',this)">D라인</button>
+        <button class="prep-filter-btn" onclick="inspInvSetFilter('검사자',this)">검사자</button>
+      </div>
+    </div>
+    <div class="prep-inv-table-wrap">
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>라인</th><th>모델</th><th>품목명</th>
+              <th>검사수량(EA)</th><th>출고수량</th><th>재고</th><th>최근작업일</th>
+            </tr>
+          </thead>
+          <tbody id="insp-inv-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② 검사 리스트 서브뷰 -->
+  <div id="insp-subview-list" style="display:none;">
+    <div class="prep-subview-header">
+      <button class="prep-back-btn" onclick="inspGotoHome()">← 뒤로</button>
+      <span class="prep-subview-title">📋 검사 리스트</span>
+    </div>
+
+    <!-- 통계 -->
+    <div class="prep-stats-row">
+      <div class="prep-stat-card blue">
+        <div class="prep-stat-label">총 등록 건수</div>
+        <div class="prep-stat-value" id="insp-statTotal">0<span class="prep-stat-unit">건</span></div>
+      </div>
+      <div class="prep-stat-card green">
+        <div class="prep-stat-label">금월 총 생산수량</div>
+        <div class="prep-stat-value" id="insp-statQty">0<span class="prep-stat-unit">EA</span></div>
+      </div>
+      <div class="prep-stat-card orange">
+        <div class="prep-stat-label">금월 총 소요시간</div>
+        <div class="prep-stat-value" id="insp-statHours">0<span class="prep-stat-unit">H</span></div>
+      </div>
+      <div class="prep-stat-card purple">
+        <div class="prep-stat-label">평균 인원</div>
+        <div class="prep-stat-value" id="insp-statWorkers">0<span class="prep-stat-unit">명</span></div>
+      </div>
+      <div class="prep-stat-card red">
+        <div class="prep-stat-label">활성 모델 수</div>
+        <div class="prep-stat-value" id="insp-statModels">0<span class="prep-stat-unit">개</span></div>
+      </div>
+    </div>
+
+    <!-- 툴바 -->
+    <div class="prep-toolbar">
+      <div class="prep-month-nav">
+        <button onclick="inspChangeMonth(-1)">◀</button>
+        <span class="prep-cur-month" id="insp-curMonth"></span>
+        <button onclick="inspChangeMonth(1)">▶</button>
+      </div>
+      <button class="prep-btn-export" onclick="inspExportCSV()">💾 CSV 내보내기</button>
+      <div class="prep-filter-line">
+        <button class="prep-filter-btn active" onclick="inspSetFilter('all', this)">전체</button>
+        <button class="prep-filter-btn" onclick="inspSetFilter('A', this)">A라인</button>
+        <button class="prep-filter-btn" onclick="inspSetFilter('B', this)">B라인</button>
+        <button class="prep-filter-btn" onclick="inspSetFilter('C', this)">C라인</button>
+        <button class="prep-filter-btn" onclick="inspSetFilter('D', this)">D라인</button>
+        <button class="prep-filter-btn" onclick="inspSetFilter('검사자', this)">검사자</button>
+      </div>
+      <button class="prep-btn-register" onclick="inspOpenAddModal()">📝 등록</button>
+    </div>
+
+    <!-- 메인 테이블 -->
+    <div class="prep-table-wrap">
+      <div class="prep-table-title">
+        <span>📋 투입전 검사 현황</span>
+        <span style="font-size:11px;color:#999;font-weight:400;">실적이 등록된 항목만 표시됩니다</span>
+      </div>
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
+        <table id="insp-mainTable">
+          <thead>
+            <tr>
+              <th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
+              <th>금월 건수</th><th>금월 수량(EA)</th><th>실제 소요시간(H)</th><th>조회</th>
+            </tr>
+          </thead>
+          <tbody id="insp-mainTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 출고이력 서브뷰 -->
+  <div id="insp-subview-outgoing" style="display:none;">
+    <div class="prep-subview-header">
+      <button class="prep-back-btn" onclick="inspGotoHome()">← 뒤로</button>
+      <span class="prep-subview-title">📤 출고이력</span>
+    </div>
+    <div class="prep-toolbar" style="margin-bottom:14px;">
+      <div class="prep-month-nav">
+        <button onclick="inspChangeMonth(-1);inspOutgoingRenderTable()">◀</button>
+        <span class="prep-cur-month" id="insp-og-curMonth"></span>
+        <button onclick="inspChangeMonth(1);inspOutgoingRenderTable()">▶</button>
+      </div>
+      <button class="prep-btn-outgoing" onclick="inspOutgoingOpenModal()">📤 출고 등록</button>
+    </div>
+    <div class="prep-outgoing-wrap" id="insp-outgoing-wrap">
+      <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>날짜</th><th>라인</th><th>모델</th><th>품목명</th>
+              <th>수량</th><th>단위</th><th>비고</th>
+              <th>작성자</th><th>작성일시</th><th>수정자</th><th>수정일시</th>
+              <th>수정</th><th>삭제</th>
+            </tr>
+          </thead>
+          <tbody id="insp-outgoing-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- 투입전 검사 실적 등록/조회 모달 -->
+<div class="prep-modal-overlay" id="insp-mainModal">
+  <div class="prep-modal-box">
+    <div class="prep-modal-header">
+      <h3 id="insp-modalTitle">🔍 투입전 검사 실적 등록</h3>
+      <button class="prep-modal-close" onclick="inspCloseModal()">✕</button>
+    </div>
+    <div class="prep-modal-body">
+      <!-- 실적 입력 폼 -->
+      <div class="prep-entry-section" id="insp-entrySection">
+        <div class="prep-entry-section-title">✏ 실적 입력</div>
+        <div class="prep-form-grid">
+          <div class="prep-form-group">
+            <label class="prep-form-label">날짜 <span class="req">*</span></label>
+            <input type="date" class="prep-form-control" id="insp-fDate">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">모델 <span class="req">*</span></label>
+            <div class="prep-search-wrap">
+              <input type="text" class="prep-form-control" id="insp-fModel"
+                placeholder="모델 검색..." autocomplete="off"
+                oninput="inspModelSearch(this.value)"
+                onfocus="inspModelSearch(this.value)"
+                onblur="setTimeout(()=>{const d=document.getElementById('insp-fModel-dd');if(d)d.classList.remove('open')},200)">
+              <ul class="prep-search-dd" id="insp-fModel-dd"></ul>
+            </div>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">라인 <span class="req">*</span></label>
+            <select class="prep-form-control" id="insp-fLine" onchange="inspOnLineChange()">
+              <option value="A">A 라인</option>
+              <option value="B">B 라인</option>
+              <option value="C">C 라인</option>
+              <option value="D">D 라인</option>
+              <option value="검사자">검사자</option>
+            </select>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">항목 <span class="req">*</span></label>
+            <div class="prep-search-wrap">
+              <input type="text" class="prep-form-control" id="insp-fItem"
+                placeholder="항목 검색..." autocomplete="off"
+                oninput="inspItemSearch(this.value)"
+                onfocus="inspItemSearch(this.value)"
+                onblur="setTimeout(()=>{const d=document.getElementById('insp-fItem-dd');if(d)d.classList.remove('open')},200)">
+              <ul class="prep-search-dd" id="insp-fItem-dd"></ul>
+            </div>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">자품번</label>
+            <input type="text" class="prep-form-control" id="insp-fPartNo" readonly placeholder="항목 선택 시 자동 입력" style="background:#f5f7fa;color:#374151;">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">고객사 P/N</label>
+            <input type="text" class="prep-form-control" id="insp-fCustPN" readonly placeholder="항목 선택 시 자동 입력" style="background:#f5f7fa;color:#374151;">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">양품수량 (EA) <span class="req">*</span></label>
+            <input type="number" class="prep-form-control" id="insp-fGoodQty" placeholder="양품 수량" min="0" oninput="inspCalcInputQty()">
+          </div>
+          <div class="prep-form-group full">
+            <label class="prep-form-label">불량유형별 수량</label>
+            <div class="prep-defect-grid" id="insp-defect-grid"></div>
+            <div class="prep-defect-total">불량수량 합계: <strong id="insp-defect-total-display">0</strong> EA</div>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">불량수량 (합계)</label>
+            <input type="number" class="prep-form-control" id="insp-fDefectQty" placeholder="자동 계산" readonly style="background:#fff8f8;color:#dc2626;font-weight:700;">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">투입수량 (EA)</label>
+            <input type="number" class="prep-form-control" id="insp-fQty" placeholder="자동 계산" readonly style="background:#f5f7fa;">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">검사자 (명) <span class="req">*</span></label>
+            <input type="number" class="prep-form-control" id="insp-fWorkers" placeholder="인원" min="1" oninput="inspCalcHours();inspCalcActualHours()">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">UPH (마스터 기준)</label>
+            <input type="number" class="prep-form-control" id="insp-fUph" readonly style="background:#f5f7fa;">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">UPPH (마스터 기준)</label>
+            <input type="number" class="prep-form-control" id="insp-fUpph" readonly style="background:#f5f7fa;">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">예상 소요시간 (H)</label>
+            <input type="number" class="prep-form-control" id="insp-fHours" placeholder="자동 계산" step="0.1">
+            <span class="prep-form-hint">* 수량/UPH 자동 계산 (직접 수정 가능)</span>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">작업시작 시간</label>
+            <input type="time" class="prep-form-control" id="insp-fStartTime" oninput="inspCalcActualHours()">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">작업종료 시간</label>
+            <input type="time" class="prep-form-control" id="insp-fEndTime" oninput="inspCalcActualHours()">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">실제 소요시간 (H)</label>
+            <input type="number" class="prep-form-control" id="insp-fActualHours" placeholder="시작·종료 입력 시 자동 계산" step="0.01" readonly style="background:#f0fdf4;color:#166534;font-weight:700;">
+            <span class="prep-form-hint">* 휴식·점심 시간 자동 제외</span>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">실제 UPH</label>
+            <input type="number" class="prep-form-control" id="insp-fActualUph" placeholder="자동 계산" step="0.1" readonly style="background:#f0fdf4;color:#166534;font-weight:700;">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">실제 UPPH</label>
+            <input type="number" class="prep-form-control" id="insp-fActualUpph" placeholder="자동 계산" step="0.1" readonly style="background:#f0fdf4;color:#166534;font-weight:700;">
+          </div>
+          <div class="prep-form-group full">
+            <label class="prep-form-label">비고</label>
+            <input type="text" class="prep-form-control" id="insp-fMemo" placeholder="메모 (선택)">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="prep-btn-save" id="insp-saveBtn" onclick="inspSaveRecord()">💾 저장</button>
+          <button class="prep-btn-secondary" id="insp-cancelEditBtn" style="display:none;" onclick="inspCancelEdit()">취소</button>
+        </div>
+      </div>
+      <!-- 이력 -->
+      <div class="prep-history-section">
+        <div class="prep-history-title">
+          <span>📅 등록 이력 <span id="insp-historyMonth" style="color:#e67e22;font-size:12px;"></span></span>
+          <span id="insp-historyCount" style="font-size:11px;color:#999;"></span>
+        </div>
+        <div id="insp-historyBody"></div>
+      </div>
+    </div>
+    <div class="prep-modal-footer">
+      <button class="prep-btn-secondary" onclick="inspCloseModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 투입전 검사 출고 등록 모달 -->
+<div class="prep-modal-overlay" id="insp-outgoing-modal">
+  <div class="prep-modal-box" style="max-width:560px;">
+    <div class="prep-modal-header" style="background:#0f766e;">
+      <h3>📤 출고 등록</h3>
+      <button class="prep-modal-close" onclick="inspOutgoingCloseModal()">✕</button>
+    </div>
+    <div class="prep-modal-body">
+      <div class="prep-entry-section">
+        <div class="prep-form-grid">
+          <div class="prep-form-group">
+            <label class="prep-form-label">날짜 <span class="req">*</span></label>
+            <input type="date" class="prep-form-control" id="insp-og-fDate">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">라인 <span class="req">*</span></label>
+            <select class="prep-form-control" id="insp-og-fLine">
+              <option value="A">A 라인</option>
+              <option value="B">B 라인</option>
+              <option value="C">C 라인</option>
+              <option value="D">D 라인</option>
+              <option value="검사자">검사자</option>
+            </select>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">모델</label>
+            <div class="prep-search-wrap">
+              <input type="text" class="prep-form-control" id="insp-og-fModel"
+                placeholder="모델 검색..." autocomplete="off"
+                oninput="inspOgModelSearch(this.value)"
+                onfocus="inspOgModelSearch(this.value)"
+                onblur="setTimeout(()=>{const d=document.getElementById('insp-og-fModel-dd');if(d)d.classList.remove('open')},200)">
+              <ul class="prep-search-dd" id="insp-og-fModel-dd"></ul>
+            </div>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">품목명 <span class="req">*</span></label>
+            <input type="text" class="prep-form-control" id="insp-og-fItem" list="insp-og-item-datalist" placeholder="품목명 입력">
+            <datalist id="insp-og-item-datalist"></datalist>
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">수량 <span class="req">*</span></label>
+            <input type="number" class="prep-form-control" id="insp-og-fQty" placeholder="수량" min="0">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">단위</label>
+            <input type="text" class="prep-form-control" id="insp-og-fUnit" placeholder="EA / Roll / 장 등">
+          </div>
+          <div class="prep-form-group full">
+            <label class="prep-form-label">비고</label>
+            <input type="text" class="prep-form-control" id="insp-og-fMemo" placeholder="메모 (선택)">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="prep-btn-save" id="insp-og-saveBtn" style="background:#0f766e;" onclick="inspOutgoingSaveRecord()">💾 저장</button>
+          <button class="prep-btn-secondary" id="insp-og-cancelEditBtn" style="display:none;" onclick="inspOgCancelEdit()">취소</button>
+        </div>
+      </div>
+      <!-- 출고 이력 -->
+      <div class="prep-history-section">
+        <div class="prep-history-title">
+          <span>📅 출고 이력</span>
+          <span id="insp-og-historyCount" style="font-size:11px;color:#999;"></span>
+        </div>
+        <div id="insp-og-historyBody"></div>
+      </div>
+    </div>
+    <div class="prep-modal-footer">
+      <button class="prep-btn-secondary" onclick="inspOutgoingCloseModal()">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 투입전 검사 토스트 -->
+<div class="prep-toast" id="insp-toast"></div>
 
 </div><!-- /app-layout -->
 
@@ -5047,8 +5438,9 @@ function switchView(v) {
     if (el) el.classList.toggle('active', id === v);
   });
   const coming = document.getElementById('view-coming');
-  if (coming) coming.style.display = (v === 'insp') ? 'flex' : 'none';
+  if (coming) coming.style.display = 'none';
   if (v === 'prep') prepInitView();
+  if (v === 'insp') inspInitView();
   if (v !== 'kb' && _kbNowTimer) { clearInterval(_kbNowTimer); _kbNowTimer = null; }
   if (v === 'kb') {
     if (state.plan) {
@@ -7407,6 +7799,967 @@ document.getElementById('outgoing-modal')?.addEventListener('click', function(e)
 });
 
 // ── 끝: 준비작업 관리 ─────────────────────────────────────────
+
+// ══════════════════════════════════════════════════════════════
+// ── 투입전 검사관리 ────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════
+
+let inspCurYear = new Date().getFullYear();
+let inspCurMonthNum = new Date().getMonth() + 1;
+let inspFilterLine = 'all';
+let inspInvFilterLine = 'all';
+let _editingInspId = null;
+let _editingInspOgId = null;
+
+const INSP_STORAGE_KEY = 'tuipjun_insp_records_v1';
+const INSP_OUTGOING_STORAGE_KEY = 'insp_outgoing_v1';
+window._inspMasterMap = {};
+window._inspBomMap = {};
+window._inspPartInfoMap = {};
+
+function inspGetRecords() {
+  try { return JSON.parse(localStorage.getItem(INSP_STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function inspSaveRecords(arr) {
+  localStorage.setItem(INSP_STORAGE_KEY, JSON.stringify(arr));
+}
+function inspOutgoingGetRecords() {
+  try { return JSON.parse(localStorage.getItem(INSP_OUTGOING_STORAGE_KEY) || '[]'); } catch { return []; }
+}
+function inspOutgoingSaveRecords(arr) {
+  localStorage.setItem(INSP_OUTGOING_STORAGE_KEY, JSON.stringify(arr));
+}
+
+function inspMonthKey() {
+  return `${inspCurYear}-${String(inspCurMonthNum).padStart(2,'0')}`;
+}
+function inspChangeMonth(d) {
+  inspCurMonthNum += d;
+  if (inspCurMonthNum > 12) { inspCurMonthNum = 1; inspCurYear++; }
+  if (inspCurMonthNum < 1) { inspCurMonthNum = 12; inspCurYear--; }
+  inspRenderMonthLabel();
+}
+function inspRenderMonthLabel() {
+  ['insp-curMonth','insp-inv-curMonth','insp-og-curMonth'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = `${inspCurYear}년 ${inspCurMonthNum}월`;
+  });
+}
+
+// ── BOM 맵 구성 (준비작업 BOM을 공유) ──
+function inspBuildBomMap() {
+  prepBuildBomMap();
+  window._inspBomMap = window._prepBomMap;
+  window._inspPartInfoMap = window._prepPartInfoMap;
+}
+
+// ── 마스터 파일 업로드 ──
+function inspLoadMasterFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (rows.length < 3) { inspShowToast('파일에 데이터가 없습니다', 'error'); return; }
+      const masterMap = {};
+      const parseLine = (lineRaw) => {
+        const s = String(lineRaw).trim();
+        const m = s.match(/^([A-D])/i);
+        return m ? m[1].toUpperCase() : s.replace(/\s*(line|라인)\s*/gi,'').trim().toUpperCase();
+      };
+      const addEntry = (modelName, lineRaw, workers, uph, upph) => {
+        const mn = String(modelName).trim();
+        if (!mn) return;
+        const line = parseLine(lineRaw);
+        if (!line) return;
+        if (!masterMap[mn]) masterMap[mn] = {};
+        masterMap[mn][line] = { uph: parseFloat(uph)||null, upph: parseFloat(upph)||null, workers: parseInt(workers)||null };
+      };
+      for (let i = 2; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length === 0) continue;
+        addEntry(row[1], row[2], row[3], row[4], row[5]);
+        addEntry(row[7], row[8], row[9], row[10], row[11]);
+      }
+      window._inspMasterMap = masterMap;
+      localStorage.setItem('insp_master_v2', JSON.stringify(masterMap));
+      const modelCount = Object.keys(masterMap).length;
+      const uploadTime = new Date().toLocaleString('ko-KR');
+      localStorage.setItem('insp_master_meta', JSON.stringify({ fileName: file.name, modelCount, uploadTime }));
+      const statusEl = document.getElementById('status-insp-master');
+      const dropEl = document.getElementById('drop-insp-master');
+      if (statusEl) statusEl.textContent = `✅ ${modelCount}개 모델 로드됨`;
+      if (dropEl) { dropEl.classList.remove('error'); dropEl.classList.add('loaded'); }
+      const timeEl = document.getElementById('uptime-insp-master');
+      if (timeEl) timeEl.textContent = uploadTime;
+      inspShowToast(`마스터 로드 완료: ${modelCount}개 모델`, 'success');
+    } catch(err) {
+      console.error(err);
+      const statusEl = document.getElementById('status-insp-master');
+      const dropEl = document.getElementById('drop-insp-master');
+      if (statusEl) statusEl.textContent = '❌ 파일 읽기 오류';
+      if (dropEl) { dropEl.classList.remove('loaded'); dropEl.classList.add('error'); }
+      inspShowToast('마스터 파일 오류: ' + err.message, 'error');
+    }
+    input.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function inspRestoreMasterUI() {
+  const raw = localStorage.getItem('insp_master_v2');
+  if (!raw) return;
+  try {
+    const masterMap = JSON.parse(raw);
+    window._inspMasterMap = masterMap;
+    const modelCount = Object.keys(masterMap).length;
+    const meta = (() => { try { return JSON.parse(localStorage.getItem('insp_master_meta')||'null'); } catch(e){return null;} })();
+    const statusEl = document.getElementById('status-insp-master');
+    const dropEl = document.getElementById('drop-insp-master');
+    const timeEl = document.getElementById('uptime-insp-master');
+    if (statusEl) statusEl.textContent = `✅ ${modelCount}개 모델 로드됨`;
+    if (dropEl) { dropEl.classList.remove('error'); dropEl.classList.add('loaded'); }
+    if (timeEl) timeEl.textContent = meta?.uploadTime || '';
+  } catch(e) {}
+}
+
+// ── 뷰 초기화 ──
+function inspInitView() {
+  inspRenderMonthLabel();
+  inspRestoreMasterUI();
+  inspBuildBomMap();
+  inspGotoHome();
+}
+
+function inspGotoHome() {
+  document.getElementById('insp-home').style.display = '';
+  document.getElementById('insp-subview-inventory').style.display = 'none';
+  document.getElementById('insp-subview-list').style.display = 'none';
+  document.getElementById('insp-subview-outgoing').style.display = 'none';
+  inspUpdateHomeCounts();
+}
+
+function inspGotoSubview(name) {
+  document.getElementById('insp-home').style.display = 'none';
+  document.getElementById('insp-subview-inventory').style.display = 'none';
+  document.getElementById('insp-subview-list').style.display = 'none';
+  document.getElementById('insp-subview-outgoing').style.display = 'none';
+  document.getElementById('insp-subview-' + name).style.display = '';
+  if (name === 'list') { inspRenderMonthLabel(); inspRenderTable(); inspUpdateStats(); }
+  else if (name === 'inventory') { inspRenderMonthLabel(); inspRenderInventory(); }
+  else if (name === 'outgoing') { inspRenderMonthLabel(); inspOutgoingRenderTable(); }
+}
+
+function inspUpdateHomeCounts() {
+  const mk = inspMonthKey();
+  const listCount = inspGetRecords().filter(r => r.month === mk).length;
+  const ogCount = inspOutgoingGetRecords().filter(r => r.month === mk).length;
+  const invItems = inspGetInventoryRows().length;
+  const lc = document.getElementById('insp-home-list-count');
+  const oc = document.getElementById('insp-home-og-count');
+  const ic = document.getElementById('insp-home-inv-count');
+  if (lc) lc.textContent = `금월 ${listCount}건`;
+  if (oc) oc.textContent = `금월 ${ogCount}건`;
+  if (ic) ic.textContent = `${invItems}개 품목`;
+}
+
+// ── 재고현황 ──
+function inspInvSetFilter(f, el) {
+  inspInvFilterLine = f;
+  document.querySelectorAll('#insp-subview-inventory .prep-filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  inspRenderInventory();
+}
+
+function inspGetInventoryRows() {
+  const mk = inspMonthKey();
+  const inspRecs = inspGetRecords().filter(r => r.month === mk);
+  const ogRecs = inspOutgoingGetRecords().filter(r => r.month === mk);
+  const groups = {};
+  inspRecs.forEach(r => {
+    const key = `${r.line||''}||${r.modelName||''}||${r.itemName||''}`;
+    if (!groups[key]) groups[key] = { line: r.line||'', modelName: r.modelName||'', itemName: r.itemName||'', prepQty: 0, lastDate: '' };
+    groups[key].prepQty += (r.qty || 0);
+    if (!groups[key].lastDate || r.date > groups[key].lastDate) groups[key].lastDate = r.date;
+  });
+  const ogMap = {};
+  ogRecs.forEach(r => {
+    const key = `${r.line||''}||${r.modelName||''}||${r.itemName||''}`;
+    ogMap[key] = (ogMap[key] || 0) + (r.qty || 0);
+  });
+  return Object.entries(groups).map(([key, g]) => ({ ...g, ogQty: ogMap[key]||0, stock: g.prepQty-(ogMap[key]||0) }));
+}
+
+function inspRenderInventory() {
+  const rows = inspGetInventoryRows();
+  const filtered = inspInvFilterLine === 'all' ? rows : rows.filter(r => r.line === inspInvFilterLine);
+  const sorted = filtered.sort((a,b) => {
+    if (a.line !== b.line) return a.line.localeCompare(b.line);
+    if (a.modelName !== b.modelName) return a.modelName.localeCompare(b.modelName);
+    return a.itemName.localeCompare(b.itemName);
+  });
+  const tbody = document.getElementById('insp-inv-tbody');
+  if (!tbody) return;
+  if (sorted.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#bbb;padding:30px;">데이터가 없습니다.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = sorted.map(r => {
+    const lineKey = (r.line||'a').toLowerCase();
+    const badge = `<span class="prep-line-badge prep-line-${lineKey}">${r.line}라인</span>`;
+    const stockClass = r.stock > 0 ? 'prep-inv-positive' : r.stock < 0 ? 'prep-inv-negative' : 'prep-inv-zero';
+    return `<tr>
+      <td style="text-align:center;">${badge}</td>
+      <td style="font-weight:700;color:#1e3a5f;">${r.modelName}</td>
+      <td>${r.itemName}</td>
+      <td style="text-align:right;font-weight:700;color:#1e3a5f;">${r.prepQty.toLocaleString()}</td>
+      <td style="text-align:right;color:#e67e22;">${r.ogQty > 0 ? r.ogQty.toLocaleString() : '-'}</td>
+      <td style="text-align:right;" class="${stockClass}">${r.stock.toLocaleString()}</td>
+      <td style="text-align:center;color:#6b7280;font-size:11px;">${r.lastDate||'-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── 리스트 렌더링 ──
+function inspSetFilter(f, el) {
+  inspFilterLine = f;
+  document.querySelectorAll('#insp-subview-list .prep-filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  inspRenderTable();
+}
+
+function inspRenderTable() {
+  const mk = inspMonthKey();
+  const allRecords = inspGetRecords().filter(r => r.month === mk);
+  const tbody = document.getElementById('insp-mainTbody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  const records = inspFilterLine === 'all' ? allRecords : allRecords.filter(r => r.line === inspFilterLine);
+  if (records.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#bbb;padding:30px;">등록된 실적이 없습니다.</td></tr>`;
+    inspUpdateStats();
+    return;
+  }
+  const grouped = {};
+  records.forEach(r => {
+    const key = `${r.line||''}||${r.modelName||''}||${r.itemName||''}`;
+    if (!grouped[key]) grouped[key] = { line: r.line||'', modelName: r.modelName||'', itemName: r.itemName||'', records: [] };
+    grouped[key].records.push(r);
+  });
+  const sorted = Object.values(grouped).sort((a,b) => {
+    if (a.line !== b.line) return a.line.localeCompare(b.line);
+    if (a.modelName !== b.modelName) return a.modelName.localeCompare(b.modelName);
+    return a.itemName.localeCompare(b.itemName);
+  });
+  sorted.forEach(g => {
+    const count = g.records.length;
+    const totalQty = g.records.reduce((s,r)=>s+(r.qty||0),0);
+    const totalHours = g.records.reduce((s,r)=>s+(r.actualHours||0),0);
+    const lineKey = (g.line||'a').toLowerCase();
+    const badge = `<span class="prep-line-badge prep-line-${lineKey}">${g.line}라인</span>`;
+    const tr = document.createElement('tr');
+    const eLine = encodeURIComponent(g.line);
+    const eModel = encodeURIComponent(g.modelName);
+    const eItem = encodeURIComponent(g.itemName);
+    const partInfo = window._inspPartInfoMap[g.modelName + '::' + g.itemName] ||
+      (() => { const lr = g.records.slice().sort((a,b)=>b.id-a.id)[0]; return { partNo: lr?.partNo||'', custPN: lr?.custPN||'' }; })();
+    tr.innerHTML = `
+      <td style="text-align:center;">${badge}</td>
+      <td style="font-weight:700;color:#1e3a5f;">${g.modelName}</td>
+      <td>${g.itemName}</td>
+      <td style="color:#374151;font-size:12px;">${partInfo.partNo||'-'}</td>
+      <td style="color:#374151;font-size:12px;">${partInfo.custPN||'-'}</td>
+      <td style="text-align:center;color:#555;">${count}건</td>
+      <td class="prep-qty-cell">${totalQty.toLocaleString()}</td>
+      <td class="prep-hours-cell">${totalHours.toFixed(1)}</td>
+      <td style="text-align:center;">
+        <button class="prep-register-btn" onclick="inspOpenViewModal('${eLine}','${eModel}','${eItem}')">🔍 조회</button>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+  inspUpdateStats();
+}
+
+function inspUpdateStats() {
+  const mk = inspMonthKey();
+  const records = inspGetRecords().filter(r => r.month === mk);
+  const totalQty = records.reduce((s,r)=>s+(r.qty||0),0);
+  const totalHours = records.reduce((s,r)=>s+(r.hours||0),0);
+  const avgWorkers = records.length > 0 ? (records.reduce((s,r)=>s+(r.workers||0),0)/records.length).toFixed(1) : 0;
+  const activeModels = new Set(records.map(r=>r.modelName)).size;
+  const setEl = (id,html) => { const el=document.getElementById(id); if(el) el.innerHTML=html; };
+  setEl('insp-statTotal', `${records.length}<span class="prep-stat-unit">건</span>`);
+  setEl('insp-statQty', `${totalQty.toLocaleString()}<span class="prep-stat-unit">EA</span>`);
+  setEl('insp-statHours', `${totalHours.toFixed(1)}<span class="prep-stat-unit">H</span>`);
+  setEl('insp-statWorkers', `${avgWorkers}<span class="prep-stat-unit">명</span>`);
+  setEl('insp-statModels', `${activeModels}<span class="prep-stat-unit">개</span>`);
+}
+
+// ── 모델 목록 ──
+function inspGetModelList() {
+  const bomModels = Object.keys(window._inspBomMap);
+  if (bomModels.length > 0) return bomModels.sort();
+  return Object.keys(window._inspMasterMap).sort();
+}
+
+let _inspAllModels = [];
+let _inspAllItems = [];
+
+function inspModelSearch(query) {
+  const dd = document.getElementById('insp-fModel-dd');
+  if (!dd) return;
+  const q = (query||'').trim().toLowerCase();
+  const filtered = q ? _inspAllModels.filter(m=>m.toLowerCase().includes(q)) : _inspAllModels;
+  if (filtered.length === 0) {
+    dd.innerHTML = '<li class="prep-dd-empty">검색 결과 없음</li>';
+  } else {
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const re = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi') : null;
+    dd.innerHTML = filtered.map(m => {
+      const label = re ? esc(m).replace(re, s=>`<mark class="prep-search-hl">${s}</mark>`) : esc(m);
+      return `<li data-val="${esc(m)}" onmousedown="inspModelSelect(this.getAttribute('data-val'))">${label}</li>`;
+    }).join('');
+  }
+  dd.classList.add('open');
+}
+
+function inspModelSelect(modelName) {
+  const input = document.getElementById('insp-fModel');
+  if (input) input.value = modelName;
+  const dd = document.getElementById('insp-fModel-dd');
+  if (dd) dd.classList.remove('open');
+  inspOnModelChange();
+}
+
+function inspModelDropdownClose() {
+  const dd = document.getElementById('insp-fModel-dd');
+  if (dd) dd.classList.remove('open');
+}
+
+function inspPopulateItemSelect(modelName, selectedItem) {
+  const input = document.getElementById('insp-fItem');
+  if (!input) return;
+  if (!modelName) {
+    _inspAllItems = [];
+    input.value = '';
+    input.placeholder = '항목 검색...';
+    const dd = document.getElementById('insp-fItem-dd');
+    if (dd) dd.classList.remove('open');
+    return;
+  }
+  const bomItems = window._inspBomMap[modelName] || [];
+  const pastItems = new Set(inspGetRecords().filter(r=>r.modelName===modelName).map(r=>r.itemName).filter(Boolean));
+  bomItems.forEach(i => pastItems.delete(i));
+  _inspAllItems = [...bomItems, ...[...pastItems].sort()];
+  input.value = selectedItem || '';
+  input.placeholder = _inspAllItems.length > 0 ? '항목 검색...' : '항목 직접 입력';
+  const dd = document.getElementById('insp-fItem-dd');
+  if (dd) dd.classList.remove('open');
+}
+
+function inspItemSearch(query) {
+  const dd = document.getElementById('insp-fItem-dd');
+  if (!dd) return;
+  if (_inspAllItems.length === 0) { dd.classList.remove('open'); return; }
+  const q = (query||'').trim().toLowerCase();
+  const filtered = q ? _inspAllItems.filter(i=>i.toLowerCase().includes(q)) : _inspAllItems;
+  if (filtered.length === 0) {
+    dd.innerHTML = '<li class="prep-dd-empty">검색 결과 없음</li>';
+  } else {
+    const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    const re = q ? new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi') : null;
+    dd.innerHTML = filtered.map(i => {
+      const label = re ? esc(i).replace(re, s=>`<mark class="prep-search-hl">${s}</mark>`) : esc(i);
+      return `<li data-val="${esc(i)}" onmousedown="inspItemSelect(this.getAttribute('data-val'))">${label}</li>`;
+    }).join('');
+  }
+  dd.classList.add('open');
+}
+
+function inspItemSelect(itemName) {
+  const input = document.getElementById('insp-fItem');
+  if (input) input.value = itemName;
+  const dd = document.getElementById('insp-fItem-dd');
+  if (dd) dd.classList.remove('open');
+  const modelName = document.getElementById('insp-fModel')?.value || '';
+  inspFillPartInfo(modelName, itemName);
+  const line = document.getElementById('insp-fLine')?.value || '';
+  inspRenderHistoryByFilter(line, modelName, itemName);
+}
+
+function inspFillPartInfo(modelName, itemName) {
+  const info = window._inspPartInfoMap[modelName + '::' + itemName] || {};
+  const setV = (id,v) => { const el=document.getElementById(id); if(el) el.value=v||''; };
+  setV('insp-fPartNo', info.partNo||'');
+  setV('insp-fCustPN', info.custPN||'');
+}
+
+function inspFillFromMaster(modelName, line) {
+  const setVal = (id,v) => { const el=document.getElementById(id); if(el) el.value=v!=null?v:''; };
+  const entry = (window._inspMasterMap[modelName]||{})[line] || null;
+  setVal('insp-fUph', entry?.uph??'');
+  setVal('insp-fUpph', entry?.upph??'');
+  setVal('insp-fWorkers', entry?.workers??'');
+  inspCalcHours();
+}
+
+// ── 불량 그리드 ──
+function inspBuildDefectGrid() {
+  const grid = document.getElementById('insp-defect-grid');
+  if (!grid || grid.children.length > 0) return;
+  grid.innerHTML = PREP_DEFECT_TYPES.map((t,i) => `
+    <div class="prep-defect-item">
+      <label for="insp-def-${i}">${t}</label>
+      <input type="number" class="prep-defect-input" id="insp-def-${i}" min="0" value="0" oninput="inspCalcInputQty()">
+    </div>`).join('');
+}
+
+function inspResetDefectGrid() {
+  PREP_DEFECT_TYPES.forEach((_,i) => {
+    const el = document.getElementById(`insp-def-${i}`);
+    if (el) el.value = '0';
+  });
+  const disp = document.getElementById('insp-defect-total-display');
+  if (disp) disp.textContent = '0';
+  const defQty = document.getElementById('insp-fDefectQty');
+  if (defQty) defQty.value = '';
+}
+
+function inspGetDefectMap() {
+  const map = {};
+  PREP_DEFECT_TYPES.forEach((t,i) => {
+    const v = parseInt(document.getElementById(`insp-def-${i}`)?.value) || 0;
+    if (v > 0) map[t] = v;
+  });
+  return map;
+}
+
+// ── 계산 ──
+function inspCalcInputQty() {
+  const good = parseFloat(document.getElementById('insp-fGoodQty')?.value) || 0;
+  const defect = PREP_DEFECT_TYPES.reduce((s,_,i) => s+(parseFloat(document.getElementById(`insp-def-${i}`)?.value)||0), 0);
+  const total = good + defect;
+  const defQtyEl = document.getElementById('insp-fDefectQty');
+  if (defQtyEl) defQtyEl.value = defect || '';
+  const dispEl = document.getElementById('insp-defect-total-display');
+  if (dispEl) dispEl.textContent = defect.toLocaleString();
+  const qtyEl = document.getElementById('insp-fQty');
+  if (qtyEl) qtyEl.value = total || '';
+  inspCalcHours();
+  inspCalcActualHours();
+}
+
+function inspCalcHours() {
+  const qty = parseFloat(document.getElementById('insp-fQty')?.value) || 0;
+  const uph = parseFloat(document.getElementById('insp-fUph')?.value) || 0;
+  if (qty > 0 && uph > 0) {
+    const hoursEl = document.getElementById('insp-fHours');
+    if (hoursEl) hoursEl.value = (qty/uph).toFixed(2);
+  }
+}
+
+function inspCalcActualHours() {
+  const startStr = document.getElementById('insp-fStartTime')?.value;
+  const endStr = document.getElementById('insp-fEndTime')?.value;
+  const netMin = prepCalcNetMinutes(startStr, endStr);
+  const setV = (id,v) => { const el=document.getElementById(id); if(el) el.value=v!=null?v:''; };
+  if (netMin === null || netMin === 0) {
+    setV('insp-fActualHours',''); setV('insp-fActualUph',''); setV('insp-fActualUpph','');
+    return;
+  }
+  const actualH = netMin/60;
+  setV('insp-fActualHours', actualH.toFixed(2));
+  const qty = parseFloat(document.getElementById('insp-fQty')?.value) || 0;
+  const workers = parseFloat(document.getElementById('insp-fWorkers')?.value) || 0;
+  if (qty > 0 && actualH > 0) {
+    setV('insp-fActualUph', (qty/actualH).toFixed(1));
+    if (workers > 0) setV('insp-fActualUpph', (qty/actualH/workers).toFixed(1));
+    else setV('insp-fActualUpph','');
+  } else {
+    setV('insp-fActualUph',''); setV('insp-fActualUpph','');
+  }
+}
+
+// ── 모달 ──
+function inspOpenAddModal() {
+  if (state.bom) inspBuildBomMap();
+  _inspAllModels = inspGetModelList();
+  const titleEl = document.getElementById('insp-modalTitle');
+  if (titleEl) titleEl.textContent = '🔍 투입전 검사 실적 등록';
+  const mInput = document.getElementById('insp-fModel');
+  if (mInput) mInput.value = '';
+  inspModelDropdownClose();
+  inspPopulateItemSelect('','');
+  inspBuildDefectGrid();
+  inspResetDefectGrid();
+  const setVal = (id,v) => { const el=document.getElementById(id); if(el) el.value=v; };
+  setVal('insp-fDate', prepFormatDate(new Date()));
+  setVal('insp-fLine','A');
+  setVal('insp-fGoodQty','');
+  setVal('insp-fQty',''); setVal('insp-fWorkers',''); setVal('insp-fUph','');
+  setVal('insp-fUpph',''); setVal('insp-fHours','');
+  setVal('insp-fStartTime',''); setVal('insp-fEndTime',''); setVal('insp-fMemo','');
+  setVal('insp-fPartNo',''); setVal('insp-fCustPN','');
+  inspRenderHistoryByFilter('','','');
+  document.getElementById('insp-mainModal').classList.add('open');
+}
+
+function inspOpenViewModal(eLine, eModel, eItem) {
+  if (state.bom) inspBuildBomMap();
+  _inspAllModels = inspGetModelList();
+  const line = decodeURIComponent(eLine);
+  const modelName = decodeURIComponent(eModel);
+  const itemName = decodeURIComponent(eItem);
+  const titleEl = document.getElementById('insp-modalTitle');
+  if (titleEl) titleEl.textContent = `🔍 ${modelName} - ${itemName} (${line}라인) 조회`;
+  const mInput = document.getElementById('insp-fModel');
+  if (mInput) mInput.value = modelName;
+  inspModelDropdownClose();
+  inspPopulateItemSelect(modelName, itemName);
+  inspBuildDefectGrid();
+  inspResetDefectGrid();
+  const setVal = (id,v) => { const el=document.getElementById(id); if(el) el.value=v; };
+  setVal('insp-fDate', prepFormatDate(new Date()));
+  setVal('insp-fLine', line);
+  setVal('insp-fGoodQty','');
+  setVal('insp-fQty',''); setVal('insp-fHours','');
+  setVal('insp-fStartTime',''); setVal('insp-fEndTime',''); setVal('insp-fMemo','');
+  inspFillFromMaster(modelName, line);
+  inspFillPartInfo(modelName, itemName);
+  inspRenderHistoryByFilter(line, modelName, itemName);
+  document.getElementById('insp-mainModal').classList.add('open');
+}
+
+function inspCloseModal() {
+  document.getElementById('insp-mainModal').classList.remove('open');
+  inspCancelEdit();
+}
+
+function inspOnModelChange() {
+  const modelName = document.getElementById('insp-fModel')?.value || '';
+  const line = document.getElementById('insp-fLine')?.value || 'A';
+  inspPopulateItemSelect(modelName,'');
+  inspFillFromMaster(modelName, line);
+  inspRenderHistoryByFilter(line, modelName,'');
+}
+
+function inspOnLineChange() {
+  const modelName = document.getElementById('insp-fModel')?.value || '';
+  const line = document.getElementById('insp-fLine')?.value || 'A';
+  inspFillFromMaster(modelName, line);
+  inspRenderHistoryByFilter(line, modelName, document.getElementById('insp-fItem')?.value||'');
+}
+
+// ── 저장 ──
+function inspSaveRecord() {
+  const getVal = id => document.getElementById(id)?.value || '';
+  const modelName = getVal('insp-fModel').trim();
+  const itemName = getVal('insp-fItem').trim();
+  const line = getVal('insp-fLine');
+  const date = getVal('insp-fDate');
+  const goodQty = parseInt(getVal('insp-fGoodQty')) || 0;
+  const defects = inspGetDefectMap();
+  const defectQty = Object.values(defects).reduce((s,v)=>s+v,0);
+  const qty = goodQty + defectQty;
+  const workers = parseInt(getVal('insp-fWorkers'));
+  if (!modelName) { inspShowToast('모델을 선택해주세요','error'); return; }
+  if (!itemName) { inspShowToast('항목명을 입력해주세요','error'); return; }
+  if (!date) { inspShowToast('날짜를 입력해주세요','error'); return; }
+  if (goodQty <= 0 && defectQty <= 0) { inspShowToast('양품수량 또는 불량수량을 입력해주세요','error'); return; }
+  if (!workers || workers <= 0) { inspShowToast('인원을 입력해주세요','error'); return; }
+  const uph = parseFloat(getVal('insp-fUph')) || 0;
+  const hoursInput = parseFloat(getVal('insp-fHours'));
+  const hours = hoursInput || (uph ? qty/uph : 0);
+  const startTime = getVal('insp-fStartTime');
+  const endTime = getVal('insp-fEndTime');
+  const memo = getVal('insp-fMemo');
+  const mk = date.slice(0,7);
+  const actualHours = parseFloat(document.getElementById('insp-fActualHours')?.value) || null;
+  const actualUph = parseFloat(document.getElementById('insp-fActualUph')?.value) || null;
+  const actualUpph = parseFloat(document.getElementById('insp-fActualUpph')?.value) || null;
+  const partInfo = window._inspPartInfoMap[modelName+'::'+itemName] || {};
+  const now = new Date().toISOString();
+  const userName = prepGetCurrentUser();
+  let records = inspGetRecords();
+  if (_editingInspId !== null) {
+    const idx = records.findIndex(r => r.id === _editingInspId);
+    if (idx < 0) { inspShowToast('수정할 레코드를 찾을 수 없습니다','error'); return; }
+    const orig = records[idx];
+    records[idx] = { ...orig, modelName, itemName, line, partNo: partInfo.partNo||orig.partNo||'', custPN: partInfo.custPN||orig.custPN||'',
+      date, month: mk, qty, goodQty, defectQty, defects, workers, hours: parseFloat(hours.toFixed(2)),
+      actualHours, actualUph, actualUpph, startTime, endTime, memo, updatedAt: now, updatedBy: userName };
+    inspSaveRecords(records);
+    inspShowToast(`수정 완료! ${modelName} - ${itemName}`,'success');
+    inspCancelEdit();
+  } else {
+    const record = { id: Date.now(), modelName, itemName, line, partNo: partInfo.partNo||'', custPN: partInfo.custPN||'',
+      date, month: mk, qty, goodQty, defectQty, defects, workers, hours: parseFloat(hours.toFixed(2)),
+      actualHours, actualUph, actualUpph, startTime, endTime, memo, createdAt: now, createdBy: userName };
+    records.push(record);
+    inspSaveRecords(records);
+    inspShowToast(`저장 완료! ${modelName} - ${itemName} 투입${qty.toLocaleString()} / 양품${goodQty.toLocaleString()}EA`,'success');
+  }
+  const setVal2 = (id,v) => { const el=document.getElementById(id); if(el) el.value=v; };
+  setVal2('insp-fGoodQty',''); setVal2('insp-fQty','');
+  setVal2('insp-fHours',''); setVal2('insp-fStartTime',''); setVal2('insp-fEndTime',''); setVal2('insp-fMemo','');
+  setVal2('insp-fActualHours',''); setVal2('insp-fActualUph',''); setVal2('insp-fActualUpph','');
+  inspResetDefectGrid();
+  inspPopulateItemSelect(modelName, itemName);
+  inspRenderHistoryByFilter(line, modelName, itemName);
+  inspRenderTable();
+}
+
+// ── 이력 렌더링 ──
+function inspRenderHistoryByFilter(line, modelName, itemName) {
+  const mk = inspMonthKey();
+  let records = inspGetRecords().filter(r => r.month === mk);
+  if (line) records = records.filter(r => r.line === line);
+  if (modelName) records = records.filter(r => r.modelName === modelName);
+  if (itemName) records = records.filter(r => r.itemName === itemName);
+  records = records.sort((a,b) => b.date.localeCompare(a.date));
+  const historyBody = document.getElementById('insp-historyBody');
+  const historyMonth = document.getElementById('insp-historyMonth');
+  const historyCount = document.getElementById('insp-historyCount');
+  if (historyMonth) historyMonth.textContent = `(${inspCurYear}년 ${inspCurMonthNum}월)`;
+  if (historyCount) historyCount.textContent = `총 ${records.length}건 / ${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}EA`;
+  if (!historyBody) return;
+  if (records.length === 0) {
+    historyBody.innerHTML = `<div class="prep-no-history">등록된 이력이 없습니다.</div>`;
+    return;
+  }
+  const fmtDt = iso => iso ? iso.replace('T',' ').slice(0,16) : '-';
+  historyBody.innerHTML = `<table class="prep-history-table">
+    <thead><tr>
+      <th>날짜</th><th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
+      <th>투입수량</th><th>양품수량</th><th>불량수량</th><th>불량유형 내역</th>
+      <th>인원</th><th>예상시간(H)</th><th>시작</th><th>종료</th><th>실제시간(H)</th><th>실제UPH</th><th>실제UPPH</th><th>비고</th>
+      <th>작성자</th><th>작성일시</th><th>수정자</th><th>수정일시</th>
+      <th>수정</th><th>삭제</th>
+    </tr></thead>
+    <tbody>
+      ${records.map(r => {
+        const pi = window._inspPartInfoMap[r.modelName+'::'+r.itemName] || {};
+        const pNo = r.partNo||pi.partNo||'-';
+        const cPN = r.custPN||pi.custPN||'-';
+        return `<tr>
+        <td>${r.date}</td>
+        <td><span class="prep-line-badge prep-line-${(r.line||'a').toLowerCase()}">${r.line||'-'}라인</span></td>
+        <td><strong>${r.modelName||''}</strong></td>
+        <td>${r.itemName||''}</td>
+        <td style="color:#374151;font-size:11px;">${pNo}</td>
+        <td style="color:#374151;font-size:11px;">${cPN}</td>
+        <td style="font-weight:700;color:#1e3a5f;">${(r.qty||0).toLocaleString()}</td>
+        <td style="color:#16a34a;font-weight:600;">${r.goodQty!=null?r.goodQty.toLocaleString():'-'}</td>
+        <td style="color:#dc2626;">${r.defectQty?r.defectQty.toLocaleString():'-'}</td>
+        <td style="font-size:10px;color:#7f1d1d;max-width:160px;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
+        <td>${r.workers||'-'}</td>
+        <td style="color:#e67e22;">${r.hours||'-'}</td>
+        <td>${r.startTime||'-'}</td>
+        <td>${r.endTime||'-'}</td>
+        <td style="color:#166534;font-weight:600;">${r.actualHours!=null?r.actualHours:'-'}</td>
+        <td style="color:#166534;">${r.actualUph!=null?r.actualUph:'-'}</td>
+        <td style="color:#166534;">${r.actualUpph!=null?r.actualUpph:'-'}</td>
+        <td style="font-size:11px;color:#888;">${r.memo||''}</td>
+        <td style="font-size:11px;color:#374151;">${r.createdBy||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;">${fmtDt(r.createdAt)}</td>
+        <td style="font-size:11px;color:#374151;">${r.updatedBy||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;">${fmtDt(r.updatedAt)}</td>
+        <td><button class="prep-register-btn" style="background:#e67e22;" onclick="inspEditRecord(${r.id})">✏️ 수정</button></td>
+        <td><button class="prep-del-btn" onclick="inspDeleteRecord(${r.id},'${encodeURIComponent(line)}','${encodeURIComponent(modelName)}','${encodeURIComponent(itemName)}')">삭제</button></td>
+      </tr>`;
+      }).join('')}
+      <tr style="background:#f8fafc;font-weight:700;">
+        <td colspan="6" style="text-align:right;">합계</td>
+        <td style="color:#1e3a5f;">${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}</td>
+        <td style="color:#16a34a;">${records.reduce((s,r)=>s+(r.goodQty||0),0).toLocaleString()}</td>
+        <td style="color:#dc2626;">${records.reduce((s,r)=>s+(r.defectQty||0),0).toLocaleString()}</td>
+        <td style="font-size:10px;color:#7f1d1d;">${(()=>{const t={};records.forEach(r=>{Object.entries(r.defects||{}).forEach(([k,v])=>{t[k]=(t[k]||0)+v;});});return Object.entries(t).map(([k,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${k}:${v}</span>`).join('')||'-';})()}</td>
+        <td>-</td>
+        <td style="color:#e67e22;">${records.reduce((s,r)=>s+(r.hours||0),0).toFixed(1)}</td>
+        <td colspan="2">-</td>
+        <td style="color:#166534;font-weight:600;">${(()=>{const v=records.reduce((s,r)=>s+(r.actualHours||0),0);return v>0?v.toFixed(1):'-';})()}</td>
+        <td colspan="7"></td>
+      </tr>
+    </tbody>
+  </table>`;
+}
+
+function inspEditRecord(id) {
+  const r = inspGetRecords().find(r => r.id === id);
+  if (!r) return;
+  _editingInspId = id;
+  const setV = (eid,v) => { const el=document.getElementById(eid); if(el) el.value=v??''; };
+  setV('insp-fModel', r.modelName||'');
+  inspPopulateItemSelect(r.modelName||'', r.itemName||'');
+  inspFillPartInfo(r.modelName||'', r.itemName||'');
+  setV('insp-fLine', r.line||'A');
+  setV('insp-fDate', r.date||'');
+  setV('insp-fGoodQty', r.goodQty??'');
+  setV('insp-fWorkers', r.workers??'');
+  setV('insp-fUph',''); setV('insp-fUpph','');
+  inspFillFromMaster(r.modelName||'', r.line||'A');
+  setV('insp-fHours', r.hours??'');
+  setV('insp-fStartTime', r.startTime||'');
+  setV('insp-fEndTime', r.endTime||'');
+  setV('insp-fActualHours', r.actualHours??'');
+  setV('insp-fActualUph', r.actualUph??'');
+  setV('insp-fActualUpph', r.actualUpph??'');
+  setV('insp-fMemo', r.memo||'');
+  inspBuildDefectGrid();
+  inspResetDefectGrid();
+  const defects = r.defects || {};
+  PREP_DEFECT_TYPES.forEach((t,i) => {
+    const el = document.getElementById(`insp-def-${i}`);
+    if (el) el.value = defects[t] || 0;
+  });
+  inspCalcInputQty();
+  const saveBtn = document.getElementById('insp-saveBtn');
+  const cancelBtn = document.getElementById('insp-cancelEditBtn');
+  if (saveBtn) saveBtn.textContent = '💾 수정 저장';
+  if (cancelBtn) cancelBtn.style.display = '';
+  document.getElementById('insp-mainModal')?.querySelector('.prep-modal-body')?.scrollTo(0,0);
+}
+
+function inspCancelEdit() {
+  _editingInspId = null;
+  const saveBtn = document.getElementById('insp-saveBtn');
+  const cancelBtn = document.getElementById('insp-cancelEditBtn');
+  if (saveBtn) saveBtn.textContent = '💾 저장';
+  if (cancelBtn) cancelBtn.style.display = 'none';
+}
+
+function inspDeleteRecord(id, eLine, eModel, eItem) {
+  if (!confirm('이 이력을 삭제하시겠습니까?')) return;
+  const records = inspGetRecords().filter(r => r.id !== id);
+  inspSaveRecords(records);
+  inspRenderHistoryByFilter(decodeURIComponent(eLine||''), decodeURIComponent(eModel||''), decodeURIComponent(eItem||''));
+  inspRenderTable();
+  inspShowToast('삭제되었습니다','success');
+}
+
+function inspExportCSV() {
+  const mk = inspMonthKey();
+  const records = inspGetRecords().filter(r => r.month === mk);
+  if (records.length === 0) { inspShowToast('내보낼 데이터가 없습니다','error'); return; }
+  const defectHeaders = PREP_DEFECT_TYPES.map(t=>`불량_${t}`);
+  const header = ['날짜','라인','모델','항목','투입수량(EA)','양품수량(EA)','불량수량(EA)',...defectHeaders,'인원','소요시간(H)','시작시간','종료시간','비고'];
+  const rows = records.map(r => [
+    r.date, r.line||'', r.modelName, r.itemName,
+    r.qty||0, r.goodQty??'', r.defectQty??'',
+    ...PREP_DEFECT_TYPES.map(t=>(r.defects&&r.defects[t])?r.defects[t]:0),
+    r.workers, r.hours, r.startTime||'', r.endTime||'', r.memo||''
+  ]);
+  const csv = '\uFEFF' + [header,...rows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=`투입전검사_${mk}.csv`; a.click();
+  URL.revokeObjectURL(url);
+  inspShowToast('CSV 내보내기 완료','success');
+}
+
+// ── 출고 현황 ──
+function inspOutgoingRenderTable() {
+  const mk = inspMonthKey();
+  const records = inspOutgoingGetRecords().filter(r => r.month === mk);
+  const tbody = document.getElementById('insp-outgoing-tbody');
+  if (!tbody) return;
+  if (records.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="13" style="text-align:center;color:#bbb;padding:20px;">출고 이력이 없습니다.</td></tr>`;
+    return;
+  }
+  const fmtDt2 = iso => iso ? iso.replace('T',' ').slice(0,16) : '-';
+  const sorted = [...records].sort((a,b)=>b.date.localeCompare(a.date));
+  tbody.innerHTML = sorted.map(r=>`<tr>
+    <td>${r.date}</td>
+    <td><span class="prep-line-badge prep-line-${(r.line||'a').toLowerCase()}">${r.line||'-'}라인</span></td>
+    <td>${r.modelName||'-'}</td>
+    <td>${r.itemName||'-'}</td>
+    <td style="font-weight:700;">${(r.qty||0).toLocaleString()}</td>
+    <td>${r.unit||'-'}</td>
+    <td style="font-size:11px;color:#888;">${r.memo||''}</td>
+    <td style="font-size:11px;color:#374151;">${r.createdBy||'-'}</td>
+    <td style="font-size:11px;color:#6b7280;">${fmtDt2(r.createdAt)}</td>
+    <td style="font-size:11px;color:#374151;">${r.updatedBy||'-'}</td>
+    <td style="font-size:11px;color:#6b7280;">${fmtDt2(r.updatedAt)}</td>
+    <td><button class="prep-register-btn" style="background:#e67e22;" onclick="inspOutgoingEditRecord(${r.id});document.getElementById('insp-outgoing-modal').classList.add('open')">✏️ 수정</button></td>
+    <td><button class="prep-del-btn" onclick="inspOutgoingDeleteRecord(${r.id})">삭제</button></td>
+  </tr>`).join('');
+}
+
+function inspOgGetRegisteredModels() {
+  return [...new Set(inspGetRecords().map(r=>r.modelName).filter(Boolean))].sort();
+}
+
+function inspOgModelSearch(query) {
+  const dd = document.getElementById('insp-og-fModel-dd');
+  if (!dd) return;
+  const models = inspOgGetRegisteredModels();
+  const q = query.trim().toLowerCase();
+  const filtered = q ? models.filter(m=>m.toLowerCase().includes(q)) : models;
+  if (filtered.length === 0) { dd.classList.remove('open'); return; }
+  const esc = v => v.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  dd.innerHTML = filtered.map(m => {
+    const label = q ? m.replace(new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),s=>`<mark>${s}</mark>`) : m;
+    return `<li data-val="${esc(m)}" onmousedown="inspOgModelSelect(this.getAttribute('data-val'))">${label}</li>`;
+  }).join('');
+  dd.classList.add('open');
+}
+
+function inspOgModelSelect(modelName) {
+  const input = document.getElementById('insp-og-fModel');
+  if (input) input.value = modelName;
+  const dd = document.getElementById('insp-og-fModel-dd');
+  if (dd) dd.classList.remove('open');
+  const items = new Set(inspGetRecords().filter(r=>r.modelName===modelName).map(r=>r.itemName).filter(Boolean));
+  const dl = document.getElementById('insp-og-item-datalist');
+  if (dl) dl.innerHTML = [...items].sort().map(i=>`<option value="${i}">`).join('');
+}
+
+function inspOutgoingOpenModal() {
+  const items = new Set(inspOutgoingGetRecords().map(r=>r.itemName).filter(Boolean));
+  inspGetRecords().forEach(r => { if(r.itemName) items.add(r.itemName); });
+  const dl = document.getElementById('insp-og-item-datalist');
+  if (dl) dl.innerHTML = [...items].sort().map(i=>`<option value="${i}">`).join('');
+  const setVal = (id,v) => { const el=document.getElementById(id); if(el) el.value=v; };
+  setVal('insp-og-fDate', prepFormatDate(new Date()));
+  setVal('insp-og-fLine','A');
+  setVal('insp-og-fModel',''); setVal('insp-og-fItem','');
+  setVal('insp-og-fQty',''); setVal('insp-og-fUnit','EA'); setVal('insp-og-fMemo','');
+  inspOutgoingRenderHistory();
+  document.getElementById('insp-outgoing-modal').classList.add('open');
+}
+
+function inspOutgoingCloseModal() {
+  document.getElementById('insp-outgoing-modal').classList.remove('open');
+}
+
+function inspOutgoingSaveRecord() {
+  const getVal = id => document.getElementById(id)?.value || '';
+  const date = getVal('insp-og-fDate');
+  const line = getVal('insp-og-fLine');
+  const modelName = getVal('insp-og-fModel').trim();
+  const itemName = getVal('insp-og-fItem').trim();
+  const qty = parseFloat(getVal('insp-og-fQty'));
+  const unit = getVal('insp-og-fUnit').trim() || 'EA';
+  const memo = getVal('insp-og-fMemo');
+  if (!date) { inspShowToast('날짜를 입력해주세요','error'); return; }
+  if (!itemName) { inspShowToast('품목명을 입력해주세요','error'); return; }
+  if (!qty || qty <= 0) { inspShowToast('수량을 입력해주세요','error'); return; }
+  const mk = date.slice(0,7);
+  const now = new Date().toISOString();
+  const userName = prepGetCurrentUser();
+  let records = inspOutgoingGetRecords();
+  if (_editingInspOgId !== null) {
+    const idx = records.findIndex(r=>r.id===_editingInspOgId);
+    if (idx < 0) { inspShowToast('수정할 레코드를 찾을 수 없습니다','error'); return; }
+    records[idx] = { ...records[idx], date, month:mk, line, modelName, itemName, qty, unit, memo, updatedAt:now, updatedBy:userName };
+    inspOutgoingSaveRecords(records);
+    inspShowToast(`출고 수정 완료: ${itemName} ${qty}${unit}`,'success');
+    inspOgCancelEdit();
+  } else {
+    records.push({ id:Date.now(), date, month:mk, line, modelName, itemName, qty, unit, memo, createdAt:now, createdBy:userName });
+    inspOutgoingSaveRecords(records);
+    inspShowToast(`출고 등록: ${itemName} ${qty}${unit}`,'success');
+  }
+  ['insp-og-fItem','insp-og-fQty','insp-og-fMemo'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  inspOutgoingRenderHistory();
+  inspOutgoingRenderTable();
+}
+
+function inspOutgoingRenderHistory() {
+  const mk = inspMonthKey();
+  const records = inspOutgoingGetRecords().filter(r=>r.month===mk).sort((a,b)=>b.date.localeCompare(a.date));
+  const countEl = document.getElementById('insp-og-historyCount');
+  if (countEl) countEl.textContent = `총 ${records.length}건`;
+  const body = document.getElementById('insp-og-historyBody');
+  if (!body) return;
+  if (records.length === 0) {
+    body.innerHTML = `<div class="prep-no-history">출고 이력이 없습니다.</div>`;
+    return;
+  }
+  const fmtDt = iso => iso ? iso.replace('T',' ').slice(0,16) : '-';
+  body.innerHTML = `<table class="prep-history-table">
+    <thead><tr>
+      <th>날짜</th><th>라인</th><th>모델</th><th>품목명</th><th>수량</th><th>단위</th><th>비고</th>
+      <th>작성자</th><th>작성일시</th><th>수정자</th><th>수정일시</th>
+      <th>수정</th><th>삭제</th>
+    </tr></thead>
+    <tbody>
+      ${records.map(r=>`<tr>
+        <td>${r.date}</td>
+        <td><span class="prep-line-badge prep-line-${(r.line||'a').toLowerCase()}">${r.line||'-'}라인</span></td>
+        <td>${r.modelName||'-'}</td>
+        <td>${r.itemName||''}</td>
+        <td style="font-weight:700;">${(r.qty||0).toLocaleString()}</td>
+        <td>${r.unit||'-'}</td>
+        <td style="font-size:11px;color:#888;">${r.memo||''}</td>
+        <td style="font-size:11px;color:#374151;">${r.createdBy||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;">${fmtDt(r.createdAt)}</td>
+        <td style="font-size:11px;color:#374151;">${r.updatedBy||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;">${fmtDt(r.updatedAt)}</td>
+        <td><button class="prep-register-btn" style="background:#e67e22;" onclick="inspOutgoingEditRecord(${r.id})">✏️ 수정</button></td>
+        <td><button class="prep-del-btn" onclick="inspOutgoingDeleteRecord(${r.id})">삭제</button></td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function inspOutgoingEditRecord(id) {
+  const r = inspOutgoingGetRecords().find(r=>r.id===id);
+  if (!r) return;
+  _editingInspOgId = id;
+  const setV = (eid,v) => { const el=document.getElementById(eid); if(el) el.value=v??''; };
+  setV('insp-og-fDate', r.date||'');
+  setV('insp-og-fLine', r.line||'A');
+  setV('insp-og-fModel', r.modelName||'');
+  inspOgModelSelect(r.modelName||'');
+  setV('insp-og-fItem', r.itemName||'');
+  setV('insp-og-fQty', r.qty??'');
+  setV('insp-og-fUnit', r.unit||'EA');
+  setV('insp-og-fMemo', r.memo||'');
+  const saveBtn = document.getElementById('insp-og-saveBtn');
+  const cancelBtn = document.getElementById('insp-og-cancelEditBtn');
+  if (saveBtn) saveBtn.textContent = '💾 수정 저장';
+  if (cancelBtn) cancelBtn.style.display = '';
+}
+
+function inspOgCancelEdit() {
+  _editingInspOgId = null;
+  const saveBtn = document.getElementById('insp-og-saveBtn');
+  const cancelBtn = document.getElementById('insp-og-cancelEditBtn');
+  if (saveBtn) { saveBtn.textContent = '💾 저장'; saveBtn.style.background = '#0f766e'; }
+  if (cancelBtn) cancelBtn.style.display = 'none';
+}
+
+function inspOutgoingDeleteRecord(id) {
+  if (!confirm('출고 이력을 삭제하시겠습니까?')) return;
+  const records = inspOutgoingGetRecords().filter(r=>r.id!==id);
+  inspOutgoingSaveRecords(records);
+  inspOutgoingRenderHistory();
+  inspOutgoingRenderTable();
+  inspShowToast('삭제되었습니다','success');
+}
+
+function inspShowToast(msg, type='') {
+  const t = document.getElementById('insp-toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'prep-toast show' + (type ? ' '+type : '');
+  setTimeout(()=>{ t.className='prep-toast'; }, 2500);
+}
+
+document.getElementById('insp-mainModal')?.addEventListener('click', function(e) {
+  if (e.target === this) inspCloseModal();
+});
+document.getElementById('insp-outgoing-modal')?.addEventListener('click', function(e) {
+  if (e.target === this) inspOutgoingCloseModal();
+});
+
+// ── 끝: 투입전 검사관리 ──────────────────────────────────────
 
 </script>
 </body>
