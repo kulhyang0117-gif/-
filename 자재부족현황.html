@@ -499,6 +499,12 @@
   .prep-search-dd li:hover { background:#eff6ff; color:#1e3a5f; }
   .prep-search-dd li.prep-dd-empty { color:#9ca3af; cursor:default; font-style:italic; }
   .prep-search-hl { background:#fef08a; border-radius:2px; font-weight:700; color:#1e3a5f; font-style:normal; }
+  /* ── 시간 입력 피커 ── */
+  .time-input-wrap { position:relative; }
+  .time-picker-dd { display:none; position:absolute; top:calc(100% + 2px); left:0; right:0; background:white; border:1.5px solid #1e3a5f; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.15); max-height:200px; overflow-y:auto; z-index:9999; list-style:none; margin:0; padding:4px 0; }
+  .time-picker-dd.open { display:block; }
+  .time-picker-dd li { padding:7px 14px; cursor:pointer; font-size:13px; color:#374151; transition:background 0.1s; }
+  .time-picker-dd li:hover, .time-picker-dd li.active { background:#eff6ff; color:#1e3a5f; font-weight:600; }
   .prep-btn-register { padding:8px 16px; background:#1e3a5f; color:white; border:none; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; }
   .prep-btn-register:hover { background:#163050; }
   .prep-btn-outgoing { padding:8px 16px; background:#0f766e; color:white; border:none; border-radius:8px; font-size:12px; font-weight:700; cursor:pointer; }
@@ -1641,11 +1647,25 @@
           </div>
           <div class="prep-form-group">
             <label class="prep-form-label">작업시작 시간</label>
-            <input type="time" class="prep-form-control" id="prep-fStartTime" oninput="prepCalcActualHours()">
+            <div class="time-input-wrap">
+              <input type="text" class="prep-form-control" id="prep-fStartTime"
+                placeholder="HH:MM (예: 08:30)" maxlength="5" autocomplete="off"
+                oninput="timeAutoFmt(this);prepCalcActualHours()"
+                onfocus="timePickerShow(this)"
+                onblur="timePickerHide(this)">
+              <ul class="time-picker-dd" id="prep-fStartTime-dd"></ul>
+            </div>
           </div>
           <div class="prep-form-group">
             <label class="prep-form-label">작업종료 시간</label>
-            <input type="time" class="prep-form-control" id="prep-fEndTime" oninput="prepCalcActualHours()">
+            <div class="time-input-wrap">
+              <input type="text" class="prep-form-control" id="prep-fEndTime"
+                placeholder="HH:MM (예: 17:30)" maxlength="5" autocomplete="off"
+                oninput="timeAutoFmt(this);prepCalcActualHours()"
+                onfocus="timePickerShow(this)"
+                onblur="timePickerHide(this)">
+              <ul class="time-picker-dd" id="prep-fEndTime-dd"></ul>
+            </div>
           </div>
           <div class="prep-form-group">
             <label class="prep-form-label">실제 소요시간 (H)</label>
@@ -2023,11 +2043,25 @@
           </div>
           <div class="prep-form-group">
             <label class="prep-form-label">작업시작 시간</label>
-            <input type="time" class="prep-form-control" id="insp-fStartTime" oninput="inspCalcActualHours()">
+            <div class="time-input-wrap">
+              <input type="text" class="prep-form-control" id="insp-fStartTime"
+                placeholder="HH:MM (예: 08:30)" maxlength="5" autocomplete="off"
+                oninput="timeAutoFmt(this);inspCalcActualHours()"
+                onfocus="timePickerShow(this)"
+                onblur="timePickerHide(this)">
+              <ul class="time-picker-dd" id="insp-fStartTime-dd"></ul>
+            </div>
           </div>
           <div class="prep-form-group">
             <label class="prep-form-label">작업종료 시간</label>
-            <input type="time" class="prep-form-control" id="insp-fEndTime" oninput="inspCalcActualHours()">
+            <div class="time-input-wrap">
+              <input type="text" class="prep-form-control" id="insp-fEndTime"
+                placeholder="HH:MM (예: 17:30)" maxlength="5" autocomplete="off"
+                oninput="timeAutoFmt(this);inspCalcActualHours()"
+                onfocus="timePickerShow(this)"
+                onblur="timePickerHide(this)">
+              <ul class="time-picker-dd" id="insp-fEndTime-dd"></ul>
+            </div>
           </div>
           <div class="prep-form-group">
             <label class="prep-form-label">실제 소요시간 (H)</label>
@@ -8823,6 +8857,79 @@ document.getElementById('insp-mainModal')?.addEventListener('click', function(e)
 document.getElementById('insp-outgoing-modal')?.addEventListener('click', function(e) {
   if (e.target === this) inspOutgoingCloseModal();
 });
+
+// ── 24시간 시간 입력 헬퍼 ──────────────────────────────────────
+// 타이핑 자동 포맷: "0830" → "08:30"
+function timeAutoFmt(input) {
+  const pos = input.selectionStart;
+  let v = input.value.replace(/[^0-9]/g, '').slice(0, 4);
+  if (v.length >= 3) {
+    v = v.slice(0, 2) + ':' + v.slice(2);
+  }
+  // 시/분 범위 제한
+  if (v.length >= 2) {
+    let h = parseInt(v.slice(0, 2));
+    if (h > 23) v = '23' + v.slice(2);
+  }
+  if (v.length === 5) {
+    let m = parseInt(v.slice(3, 5));
+    if (m > 59) v = v.slice(0, 3) + '59';
+  }
+  input.value = v;
+  // 커서 위치 복원 (콜론 자동 삽입 후 커서가 뒤로 밀리지 않도록)
+  try { input.setSelectionRange(v.length, v.length); } catch(e) {}
+}
+
+// 시간 피커 드롭다운 표시 (30분 단위, 클릭 선택 가능)
+function timePickerShow(input) {
+  const ddId = input.id + '-dd';
+  const dd = document.getElementById(ddId);
+  if (!dd) return;
+  const cur = input.value;
+  const items = [];
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 30) {
+      items.push(String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0'));
+    }
+  }
+  dd.innerHTML = items.map(t => {
+    const cls = t === cur ? ' class="active"' : '';
+    return `<li${cls} onmousedown="timePickerSelect('${input.id}','${t}')">${t}</li>`;
+  }).join('');
+  dd.classList.add('open');
+  // 현재 값과 가장 가까운 항목으로 스크롤
+  const activeEl = dd.querySelector('.active');
+  if (activeEl) activeEl.scrollIntoView({ block: 'nearest' });
+}
+
+function timePickerHide(input) {
+  setTimeout(() => {
+    const dd = document.getElementById(input.id + '-dd');
+    if (dd) dd.classList.remove('open');
+    // blur 시 HH:MM 완성 정규화 (숫자 4자리면 변환)
+    let v = input.value.replace(/[^0-9:]/g,'');
+    const digits = v.replace(/:/g,'');
+    if (digits.length === 4 && !v.includes(':')) {
+      v = digits.slice(0,2) + ':' + digits.slice(2);
+    }
+    // 불완전 입력 정리 (1자리 시간 → 2자리로)
+    if (/^\d:\d\d$/.test(v)) v = '0' + v;
+    if (/^\d\d$/.test(v)) v = v + ':00';
+    if (/^\d$/.test(v)) v = '0' + v + ':00';
+    input.value = (v.length === 5 && /^\d\d:\d\d$/.test(v)) ? v : (v.length > 0 ? v : '');
+  }, 200);
+}
+
+function timePickerSelect(inputId, time) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.value = time;
+  const dd = document.getElementById(inputId + '-dd');
+  if (dd) dd.classList.remove('open');
+  // 시간 계산 트리거
+  if (inputId.startsWith('prep-')) prepCalcActualHours();
+  else if (inputId.startsWith('insp-')) inspCalcActualHours();
+}
 
 // ── 끝: 투입전 검사관리 ──────────────────────────────────────
 
