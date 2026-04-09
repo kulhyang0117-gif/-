@@ -5210,6 +5210,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
   const partInfoMap = {};
   for (const r of analysisResult) partInfoMap[r.자품번] = r;
   const supplierMap = window._kbSupplierMap || {};
+  const bomMap = window._kbBomMap || {};
 
   let totalCnt = 0;
   for (const line of lines) {
@@ -5222,7 +5223,8 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       for (const part of dangerParts) {
         if (seenParts.has(part.자품번)) continue;
         seenParts.add(part.자품번);
-        lineShortages.push(part);
+        // 부모 제품 pn 저장 → 렌더링 시 BOM 직접 조회용
+        lineShortages.push({ ...part, _parentPn: row.pn });
       }
     }
     if (!lineShortages.length) continue;
@@ -5249,9 +5251,10 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
 
     for (const part of lineShortages) {
       const pi = partInfoMap[part.자품번] || {};
-      // BOM 부품유형 우선 → analysisResult 부품유형/조달 구분 순으로 조회
-      const 조달 = part.부품유형 || pi.부품유형 || pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
-      const 협력사 = supplierMap[part.자품번] || pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
+      // 상세패널(openKbDetail)과 동일 방식: BOM 직접 조회 → 부품유형 우선
+      const bomComp = (bomMap[part._parentPn] || []).find(c => c.자품번 === part.자품번);
+      const 조달 = bomComp?.부품유형 || part.부품유형 || pi.부품유형 || pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
+      const 협력사 = bomComp?.협력사명 || supplierMap[part.자품번] || pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
       const available = part.available ?? (part.stock ?? 0);
       const cumConsumed = part.cumConsumed ?? 0;
       const remaining   = part.remaining  ?? available;
