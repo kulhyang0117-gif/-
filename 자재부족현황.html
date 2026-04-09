@@ -1826,7 +1826,7 @@
         <table>
           <thead>
             <tr>
-              <th>자품번</th><th>고객사 P/N</th><th>품목명</th>
+              <th>모델</th><th>자품번</th><th>고객사 P/N</th><th>품목명</th>
               <th>검사수량(EA)</th><th>출고수량</th><th>재고</th><th>최근작업일</th>
             </tr>
           </thead>
@@ -8119,18 +8119,19 @@ function inspGetInventoryRows() {
   const groups = {};
   inspRecs.forEach(r => {
     const key = r.partNo || r.itemName || '';
-    if (!groups[key]) groups[key] = { partNo: r.partNo||'', custPN: r.custPN||'', itemName: r.itemName||'', prepQty: 0, lastDate: '' };
+    if (!groups[key]) groups[key] = { partNo: r.partNo||'', custPN: r.custPN||'', itemName: r.itemName||'', models: new Set(), prepQty: 0, lastDate: '' };
     groups[key].prepQty += (r.qty || 0);
     if (!groups[key].lastDate || r.date > groups[key].lastDate) groups[key].lastDate = r.date;
     if (r.custPN) groups[key].custPN = r.custPN;
     if (r.itemName) groups[key].itemName = r.itemName;
+    if (r.modelName) groups[key].models.add(r.modelName);
   });
   const ogMap = {};
   ogRecs.forEach(r => {
     const key = r.partNo || r.itemName || '';
     ogMap[key] = (ogMap[key] || 0) + (r.qty || 0);
   });
-  return Object.entries(groups).map(([key, g]) => ({ ...g, ogQty: ogMap[key]||0, stock: g.prepQty-(ogMap[key]||0) }));
+  return Object.entries(groups).map(([key, g]) => ({ ...g, models: [...g.models].join(', '), ogQty: ogMap[key]||0, stock: g.prepQty-(ogMap[key]||0) }));
 }
 
 function inspRenderInventory() {
@@ -8143,12 +8144,13 @@ function inspRenderInventory() {
   const tbody = document.getElementById('insp-inv-tbody');
   if (!tbody) return;
   if (sorted.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#bbb;padding:30px;">데이터가 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;color:#bbb;padding:30px;">데이터가 없습니다.</td></tr>`;
     return;
   }
   tbody.innerHTML = sorted.map(r => {
     const stockClass = r.stock > 0 ? 'prep-inv-positive' : r.stock < 0 ? 'prep-inv-negative' : 'prep-inv-zero';
     return `<tr>
+      <td style="color:#374151;font-size:12px;">${r.models||'-'}</td>
       <td style="font-weight:700;color:#1e3a5f;">${r.partNo||'-'}</td>
       <td style="color:#6b7280;">${r.custPN||'-'}</td>
       <td>${r.itemName}</td>
