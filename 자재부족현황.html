@@ -656,10 +656,19 @@
     </div>
     <button class="btn-auth" onclick="doLogin()">로그인</button>
     <div class="auth-err" id="login-err"></div>
-    <div class="auth-link">계정이 없으신가요? <a onclick="showRegister()">회원가입 신청</a></div>
+    <div class="auth-link">계정이 없으신가요? <a onclick="showRegister()">회원가입 신청</a> &nbsp;·&nbsp; <a onclick="showForgot()">비밀번호 찾기</a></div>
     <div style="text-align:center;margin-top:10px;">
       <a onclick="openAppSettings()" style="font-size:11px;color:#aaa;cursor:pointer;text-decoration:none;">⚙️ 연결 설정</a>
     </div>
+  </div>
+  <!-- 비밀번호 찾기 -->
+  <div id="auth-forgot" class="auth-box" style="display:none;">
+    <h2>🔑 비밀번호 찾기</h2>
+    <div class="auth-sub">가입 시 사용한 이메일 주소를 입력하시면<br>재설정 링크를 보내드립니다.</div>
+    <div class="auth-field"><label>이메일</label><input type="email" id="forgot-email" placeholder="이메일 주소 입력" onkeydown="if(event.key==='Enter')doForgotPw()"></div>
+    <button class="btn-auth" onclick="doForgotPw()">재설정 링크 발송</button>
+    <div class="auth-err" id="forgot-err"></div>
+    <div class="auth-link"><a onclick="showLogin()">← 로그인으로 돌아가기</a></div>
   </div>
   <!-- 회원가입 -->
   <div id="auth-register" class="auth-box" style="display:none;">
@@ -1621,6 +1630,10 @@
             <input type="number" class="prep-form-control" id="prep-fWorkers" placeholder="인원" min="1" oninput="prepCalcHours();prepCalcActualHours()">
           </div>
           <div class="prep-form-group">
+            <label class="prep-form-label">인원 (마스터 기준)</label>
+            <input type="number" class="prep-form-control" id="prep-fMasterWorkers" readonly style="background:#f5f7fa;">
+          </div>
+          <div class="prep-form-group">
             <label class="prep-form-label">UPH (마스터 기준)</label>
             <input type="number" class="prep-form-control" id="prep-fUph" readonly style="background:#f5f7fa;">
           </div>
@@ -1993,6 +2006,10 @@
           <div class="prep-form-group">
             <label class="prep-form-label">검사자 (명) <span class="req">*</span></label>
             <input type="number" class="prep-form-control" id="insp-fWorkers" placeholder="인원" min="1" oninput="inspCalcHours();inspCalcActualHours()">
+          </div>
+          <div class="prep-form-group">
+            <label class="prep-form-label">인원 (마스터 기준)</label>
+            <input type="number" class="prep-form-control" id="insp-fMasterWorkers" readonly style="background:#f5f7fa;">
           </div>
           <div class="prep-form-group">
             <label class="prep-form-label">UPH (마스터 기준)</label>
@@ -5095,6 +5112,7 @@ function showLogin(){
   document.getElementById('auth-login').style.display='';
   document.getElementById('auth-register').style.display='none';
   document.getElementById('auth-pending').style.display='none';
+  document.getElementById('auth-forgot').style.display='none';
   const savedEmail=localStorage.getItem('ms_saved_email');
   const savedPw=localStorage.getItem('ms_saved_pw');
   if(savedEmail){ document.getElementById('login-email').value=savedEmail; document.getElementById('login-remember').checked=true; }
@@ -5104,6 +5122,30 @@ function showRegister(){
   document.getElementById('auth-login').style.display='none';
   document.getElementById('auth-register').style.display='';
   document.getElementById('auth-pending').style.display='none';
+  document.getElementById('auth-forgot').style.display='none';
+}
+function showForgot(){
+  document.getElementById('auth-login').style.display='none';
+  document.getElementById('auth-register').style.display='none';
+  document.getElementById('auth-pending').style.display='none';
+  document.getElementById('auth-forgot').style.display='';
+  document.getElementById('forgot-email').value='';
+  document.getElementById('forgot-err').textContent='';
+}
+async function doForgotPw(){
+  const email=document.getElementById('forgot-email').value.trim();
+  const errEl=document.getElementById('forgot-err');
+  errEl.textContent='';
+  if(!email){ errEl.textContent='이메일을 입력해주세요.'; return; }
+  try{
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    if(error) throw error.message;
+    errEl.style.color='#16a34a';
+    errEl.textContent='재설정 링크를 이메일로 발송했습니다. 받은 편지함을 확인해주세요.';
+  }catch(e){
+    errEl.style.color='';
+    errEl.textContent=typeof e==='string'?e:'발송 실패. 잠시 후 다시 시도해주세요.';
+  }
 }
 function showPending(){
   document.getElementById('auth-login').style.display='none';
@@ -7097,7 +7139,7 @@ function prepOpenAddModal() {
   setVal('prep-fDate', prepFormatDate(new Date()));
   setVal('prep-fLine', 'A');
   setVal('prep-fGoodQty', '');
-  setVal('prep-fQty', ''); setVal('prep-fWorkers', ''); setVal('prep-fUph', '');
+  setVal('prep-fQty', ''); setVal('prep-fWorkers', ''); setVal('prep-fMasterWorkers', ''); setVal('prep-fUph', '');
   setVal('prep-fUpph', ''); setVal('prep-fHours', '');
   setVal('prep-fStartTime', ''); setVal('prep-fEndTime', ''); setVal('prep-fMemo', '');
   setVal('prep-fPartNo', ''); setVal('prep-fCustPN', '');
@@ -7236,6 +7278,7 @@ function prepFillPartInfo(modelName, itemName) {
 function prepFillFromMaster(modelName, line) {
   const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v != null ? v : ''; };
   const entry = (window._prepMasterMap[modelName] || {})[line] || null;
+  setVal('prep-fMasterWorkers', entry?.workers ?? '');
   setVal('prep-fUph', entry?.uph ?? '');
   setVal('prep-fUpph', entry?.upph ?? '');
   setVal('prep-fWorkers', entry?.workers ?? '');
@@ -8254,6 +8297,7 @@ function inspFillPartInfo(modelName, itemName) {
 function inspFillFromMaster(modelName, line) {
   const setVal = (id,v) => { const el=document.getElementById(id); if(el) el.value=v!=null?v:''; };
   const entry = (window._inspMasterMap[modelName]||{})[line] || null;
+  setVal('insp-fMasterWorkers', entry?.workers??'');
   setVal('insp-fUph', entry?.uph??'');
   setVal('insp-fUpph', entry?.upph??'');
   setVal('insp-fWorkers', entry?.workers??'');
@@ -8353,7 +8397,7 @@ function inspOpenAddModal() {
   setVal('insp-fDate', prepFormatDate(new Date()));
   setVal('insp-fLine','A');
   setVal('insp-fGoodQty','');
-  setVal('insp-fQty',''); setVal('insp-fWorkers',''); setVal('insp-fUph','');
+  setVal('insp-fQty',''); setVal('insp-fWorkers',''); setVal('insp-fMasterWorkers',''); setVal('insp-fUph','');
   setVal('insp-fUpph',''); setVal('insp-fHours','');
   setVal('insp-fStartTime',''); setVal('insp-fEndTime',''); setVal('insp-fMemo','');
   setVal('insp-fPartNo',''); setVal('insp-fCustPN','');
