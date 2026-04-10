@@ -1519,7 +1519,7 @@
           <thead>
             <tr>
               <th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
-              <th>금월 건수</th><th>금월 수량(EA)</th><th>실제 소요시간(H)</th><th>조회</th>
+              <th>금월 건수</th><th>금월 수량(EA)</th><th>불량률(%)</th><th>실제 소요시간(H)</th><th>조회</th>
             </tr>
           </thead>
           <tbody id="prep-mainTbody"></tbody>
@@ -1901,7 +1901,7 @@
           <thead>
             <tr>
               <th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
-              <th>금월 건수</th><th>금월 수량(EA)</th><th>실제 소요시간(H)</th><th>조회</th>
+              <th>금월 건수</th><th>금월 수량(EA)</th><th>불량률(%)</th><th>실제 소요시간(H)</th><th>조회</th>
             </tr>
           </thead>
           <tbody id="insp-mainTbody"></tbody>
@@ -7051,7 +7051,7 @@ function prepRenderTable() {
   const records = prepFilterLine === 'all' ? allRecords : allRecords.filter(r => r.line === prepFilterLine);
 
   if (records.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#bbb;padding:30px;">등록된 실적이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#bbb;padding:30px;">등록된 실적이 없습니다.</td></tr>`;
     prepUpdateStats();
     return;
   }
@@ -7074,7 +7074,9 @@ function prepRenderTable() {
   sorted.forEach(g => {
     const count = g.records.length;
     const totalQty = g.records.reduce((s,r)=>s+(r.qty||0),0);
+    const totalDefect = g.records.reduce((s,r)=>s+(r.defectQty||0),0);
     const totalHours = g.records.reduce((s,r)=>s+(r.actualHours||0),0);
+    const defRate = totalQty > 0 ? (totalDefect / totalQty * 100).toFixed(1) + '%' : '-';
     const lineKey = (g.line||'a').toLowerCase();
     const badge = `<span class="prep-line-badge prep-line-${lineKey}">${g.line}라인</span>`;
     const tr = document.createElement('tr');
@@ -7091,6 +7093,7 @@ function prepRenderTable() {
       <td style="color:#374151;font-size:12px;">${partInfo.custPN||'-'}</td>
       <td style="text-align:center;color:#555;">${count}건</td>
       <td class="prep-qty-cell">${totalQty.toLocaleString()}</td>
+      <td style="text-align:right;color:#dc2626;font-weight:700;">${defRate}</td>
       <td class="prep-hours-cell">${totalHours.toFixed(1)}</td>
       <td style="text-align:center;">
         <button class="prep-register-btn" onclick="prepOpenViewModal('${eLine}','${eModel}','${eItem}')">🔍 조회</button>
@@ -7413,7 +7416,7 @@ function prepCalcInputQty() {
   const qtyEl = document.getElementById('prep-fQty');
   if (qtyEl) qtyEl.value = total || '';
   const rateEl = document.getElementById('prep-fDefectRate');
-  if (rateEl) rateEl.value = total > 0 ? (defect / total * 100).toFixed(2) + '%' : '';
+  if (rateEl) rateEl.value = total > 0 ? (defect / total * 100).toFixed(1) + '%' : '';
   prepCalcHours();
   prepCalcActualHours();
 }
@@ -7542,7 +7545,7 @@ function prepRenderHistoryByFilter(line, modelName, itemName) {
   historyBody.innerHTML = `<table class="prep-history-table">
     <thead><tr>
       <th>날짜</th><th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
-      <th>투입수량</th><th>양품수량</th><th>불량수량</th><th>불량유형 내역</th>
+      <th>투입수량</th><th>양품수량</th><th>불량수량</th><th>불량률(%)</th><th>불량유형 내역</th>
       <th>인원</th><th>예상시간(H)</th><th>시작</th><th>종료</th><th>실제시간(H)</th><th>실제UPH</th><th>실제UPPH</th><th>비고</th>
       <th>작성자</th><th>작성일시</th><th>수정자</th><th>수정일시</th>
       <th>수정</th><th>삭제</th>
@@ -7552,6 +7555,7 @@ function prepRenderHistoryByFilter(line, modelName, itemName) {
         const pi = window._prepPartInfoMap[r.modelName + '::' + r.itemName] || {};
         const pNo  = r.partNo  || pi.partNo  || '-';
         const cPN  = r.custPN  || pi.custPN  || '-';
+        const defRate = r.qty > 0 ? (((r.defectQty||0) / r.qty) * 100).toFixed(1) + '%' : '-';
         return `<tr>
         <td>${r.date}</td>
         <td><span class="prep-line-badge prep-line-${(r.line||'a').toLowerCase()}">${r.line||'-'}라인</span></td>
@@ -7562,6 +7566,7 @@ function prepRenderHistoryByFilter(line, modelName, itemName) {
         <td style="font-weight:700;color:#1e3a5f;">${(r.qty||0).toLocaleString()}</td>
         <td style="color:#16a34a;font-weight:600;">${r.goodQty != null ? r.goodQty.toLocaleString() : '-'}</td>
         <td style="color:#dc2626;">${r.defectQty ? r.defectQty.toLocaleString() : '-'}</td>
+        <td style="color:#dc2626;font-weight:700;">${defRate}</td>
         <td style="font-size:10px;color:#7f1d1d;max-width:160px;">${r.defects ? Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join('') : '-'}</td>
         <td>${r.workers||'-'}</td>
         <td style="color:#e67e22;">${r.hours||'-'}</td>
@@ -8188,7 +8193,7 @@ function inspRenderTable() {
   tbody.innerHTML = '';
   const records = inspFilterLine === 'all' ? allRecords : allRecords.filter(r => r.line === inspFilterLine);
   if (records.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:#bbb;padding:30px;">등록된 실적이 없습니다.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;color:#bbb;padding:30px;">등록된 실적이 없습니다.</td></tr>`;
     inspUpdateStats();
     return;
   }
@@ -8206,7 +8211,9 @@ function inspRenderTable() {
   sorted.forEach(g => {
     const count = g.records.length;
     const totalQty = g.records.reduce((s,r)=>s+(r.qty||0),0);
+    const totalDefect = g.records.reduce((s,r)=>s+(r.defectQty||0),0);
     const totalHours = g.records.reduce((s,r)=>s+(r.actualHours||0),0);
+    const defRate = totalQty > 0 ? (totalDefect / totalQty * 100).toFixed(1) + '%' : '-';
     const lineKey = (g.line||'a').toLowerCase();
     const badge = `<span class="prep-line-badge prep-line-${lineKey}">${g.line}라인</span>`;
     const tr = document.createElement('tr');
@@ -8223,6 +8230,7 @@ function inspRenderTable() {
       <td style="color:#374151;font-size:12px;">${partInfo.custPN||'-'}</td>
       <td style="text-align:center;color:#555;">${count}건</td>
       <td class="prep-qty-cell">${totalQty.toLocaleString()}</td>
+      <td style="text-align:right;color:#dc2626;font-weight:700;">${defRate}</td>
       <td class="prep-hours-cell">${totalHours.toFixed(1)}</td>
       <td style="text-align:center;">
         <button class="prep-register-btn" onclick="inspOpenViewModal('${eLine}','${eModel}','${eItem}')">🔍 조회</button>
@@ -8399,7 +8407,7 @@ function inspCalcInputQty() {
   const qtyEl = document.getElementById('insp-fQty');
   if (qtyEl) qtyEl.value = total || '';
   const rateEl = document.getElementById('insp-fDefectRate');
-  if (rateEl) rateEl.value = total > 0 ? (defect / total * 100).toFixed(2) + '%' : '';
+  if (rateEl) rateEl.value = total > 0 ? (defect / total * 100).toFixed(1) + '%' : '';
   inspCalcHours();
   inspCalcActualHours();
 }
@@ -8586,7 +8594,7 @@ function inspRenderHistoryByFilter(line, modelName, itemName) {
   historyBody.innerHTML = `<table class="prep-history-table">
     <thead><tr>
       <th>날짜</th><th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
-      <th>투입수량</th><th>양품수량</th><th>불량수량</th><th>불량유형 내역</th>
+      <th>투입수량</th><th>양품수량</th><th>불량수량</th><th>불량률(%)</th><th>불량유형 내역</th>
       <th>인원</th><th>예상시간(H)</th><th>시작</th><th>종료</th><th>실제시간(H)</th><th>실제UPH</th><th>실제UPPH</th><th>비고</th>
       <th>작성자</th><th>작성일시</th><th>수정자</th><th>수정일시</th>
       <th>수정</th><th>삭제</th>
@@ -8596,6 +8604,7 @@ function inspRenderHistoryByFilter(line, modelName, itemName) {
         const pi = window._inspPartInfoMap[r.modelName+'::'+r.itemName] || {};
         const pNo = r.partNo||pi.partNo||'-';
         const cPN = r.custPN||pi.custPN||'-';
+        const defRate = r.qty > 0 ? (((r.defectQty||0) / r.qty) * 100).toFixed(1) + '%' : '-';
         return `<tr>
         <td>${r.date}</td>
         <td><span class="prep-line-badge prep-line-${(r.line||'a').toLowerCase()}">${r.line||'-'}라인</span></td>
@@ -8606,6 +8615,7 @@ function inspRenderHistoryByFilter(line, modelName, itemName) {
         <td style="font-weight:700;color:#1e3a5f;">${(r.qty||0).toLocaleString()}</td>
         <td style="color:#16a34a;font-weight:600;">${r.goodQty!=null?r.goodQty.toLocaleString():'-'}</td>
         <td style="color:#dc2626;">${r.defectQty?r.defectQty.toLocaleString():'-'}</td>
+        <td style="color:#dc2626;font-weight:700;">${defRate}</td>
         <td style="font-size:10px;color:#7f1d1d;max-width:160px;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
         <td>${r.workers||'-'}</td>
         <td style="color:#e67e22;">${r.hours||'-'}</td>
