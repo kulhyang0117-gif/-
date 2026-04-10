@@ -1420,6 +1420,12 @@
           <div class="prep-home-card-desc">준비작업 실적을 등록하고 라인/모델별로 조회합니다</div>
           <div class="prep-home-card-count" id="prep-home-list-count">-</div>
         </div>
+        <div class="prep-home-card" onclick="prepGotoSubview('history')">
+          <div class="prep-home-card-icon">📜</div>
+          <div class="prep-home-card-title">준비작업 이력</div>
+          <div class="prep-home-card-desc">등록된 준비작업 실적 전체 이력을 조회합니다</div>
+          <div class="prep-home-card-count" id="prep-home-hist-count">-</div>
+        </div>
         <div class="prep-home-card" onclick="prepGotoSubview('outgoing')">
           <div class="prep-home-card-icon">📤</div>
           <div class="prep-home-card-title">출고이력</div>
@@ -1529,7 +1535,33 @@
     </div>
   </div>
 
-  <!-- ③ 출고이력 서브뷰 -->
+  <!-- ③ 준비작업 이력 서브뷰 -->
+  <div id="prep-subview-history" style="display:none;">
+    <div class="prep-subview-header">
+      <button class="prep-back-btn" onclick="prepGotoHome()">← 뒤로</button>
+      <span class="prep-subview-title">📜 준비작업 이력</span>
+    </div>
+    <div class="prep-toolbar" style="margin-bottom:14px;">
+      <div class="prep-month-nav">
+        <button onclick="prepChangeMonth(-1);prepRenderAllHistory()">◀</button>
+        <span class="prep-cur-month" id="prep-hist-curMonth"></span>
+        <button onclick="prepChangeMonth(1);prepRenderAllHistory()">▶</button>
+      </div>
+      <span id="prep-hist-count" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
+      <div class="prep-filter-line">
+        <button class="prep-filter-btn active" onclick="prepHistSetFilter('all',this)">전체</button>
+        <button class="prep-filter-btn" onclick="prepHistSetFilter('A',this)">A라인</button>
+        <button class="prep-filter-btn" onclick="prepHistSetFilter('B',this)">B라인</button>
+        <button class="prep-filter-btn" onclick="prepHistSetFilter('C',this)">C라인</button>
+        <button class="prep-filter-btn" onclick="prepHistSetFilter('D',this)">D라인</button>
+        <button class="prep-filter-btn" onclick="prepHistSetFilter('박스담당',this)">박스담당</button>
+        <button class="prep-filter-btn" onclick="prepHistSetFilter('검사자',this)">검사자</button>
+      </div>
+    </div>
+    <div id="prep-hist-wrap" style="overflow-x:auto;max-height:600px;overflow-y:auto;"></div>
+  </div>
+
+  <!-- ④ 출고이력 서브뷰 -->
   <div id="prep-subview-outgoing" style="display:none;">
     <div class="prep-subview-header">
       <button class="prep-back-btn" onclick="prepGotoHome()">← 뒤로</button>
@@ -1805,6 +1837,12 @@
           <div class="prep-home-card-desc">투입전 검사 실적을 등록하고 라인/모델별로 조회합니다</div>
           <div class="prep-home-card-count" id="insp-home-list-count">-</div>
         </div>
+        <div class="prep-home-card" onclick="inspGotoSubview('history')">
+          <div class="prep-home-card-icon">📜</div>
+          <div class="prep-home-card-title">투입전 검사 이력</div>
+          <div class="prep-home-card-desc">등록된 투입전 검사 실적 전체 이력을 조회합니다</div>
+          <div class="prep-home-card-count" id="insp-home-hist-count">-</div>
+        </div>
         <div class="prep-home-card" onclick="inspGotoSubview('outgoing')">
           <div class="prep-home-card-icon">📤</div>
           <div class="prep-home-card-title">출고이력</div>
@@ -1913,7 +1951,32 @@
     </div>
   </div>
 
-  <!-- ③ 출고이력 서브뷰 -->
+  <!-- ③ 투입전 검사 이력 서브뷰 -->
+  <div id="insp-subview-history" style="display:none;">
+    <div class="prep-subview-header">
+      <button class="prep-back-btn" onclick="inspGotoHome()">← 뒤로</button>
+      <span class="prep-subview-title">📜 투입전 검사 이력</span>
+    </div>
+    <div class="prep-toolbar" style="margin-bottom:14px;">
+      <div class="prep-month-nav">
+        <button onclick="inspChangeMonth(-1);inspRenderAllHistory()">◀</button>
+        <span class="prep-cur-month" id="insp-hist-curMonth"></span>
+        <button onclick="inspChangeMonth(1);inspRenderAllHistory()">▶</button>
+      </div>
+      <span id="insp-hist-count" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
+      <div class="prep-filter-line">
+        <button class="prep-filter-btn active" onclick="inspHistSetFilter('all',this)">전체</button>
+        <button class="prep-filter-btn" onclick="inspHistSetFilter('A',this)">A라인</button>
+        <button class="prep-filter-btn" onclick="inspHistSetFilter('B',this)">B라인</button>
+        <button class="prep-filter-btn" onclick="inspHistSetFilter('C',this)">C라인</button>
+        <button class="prep-filter-btn" onclick="inspHistSetFilter('D',this)">D라인</button>
+        <button class="prep-filter-btn" onclick="inspHistSetFilter('검사자',this)">검사자</button>
+      </div>
+    </div>
+    <div id="insp-hist-wrap" style="overflow-x:auto;max-height:600px;overflow-y:auto;"></div>
+  </div>
+
+  <!-- ④ 출고이력 서브뷰 -->
   <div id="insp-subview-outgoing" style="display:none;">
     <div class="prep-subview-header">
       <button class="prep-back-btn" onclick="inspGotoHome()">← 뒤로</button>
@@ -6764,24 +6827,21 @@ async function prepInitView() {
 // ── 서브뷰 네비게이션 ──
 function prepGotoHome() {
   document.getElementById('prep-home').style.display = '';
-  document.getElementById('prep-subview-inventory').style.display = 'none';
-  document.getElementById('prep-subview-list').style.display = 'none';
-  document.getElementById('prep-subview-outgoing').style.display = 'none';
+  ['inventory','list','history','outgoing'].forEach(n =>
+    document.getElementById('prep-subview-'+n).style.display = 'none');
   prepUpdateHomeCounts();
 }
 
 async function prepGotoSubview(name) {
   document.getElementById('prep-home').style.display = 'none';
-  document.getElementById('prep-subview-inventory').style.display = 'none';
-  document.getElementById('prep-subview-list').style.display = 'none';
-  document.getElementById('prep-subview-outgoing').style.display = 'none';
+  ['inventory','list','history','outgoing'].forEach(n =>
+    document.getElementById('prep-subview-'+n).style.display = 'none');
   document.getElementById('prep-subview-' + name).style.display = '';
 
   if (name === 'list') {
     prepRenderMonthLabel();
     prepRenderTable();
     prepUpdateStats();
-    // Supabase 최신 데이터 반영 후 재렌더
     const sb = await _sbPullRecords('prep_records', PREP_STORAGE_KEY);
     if (sb !== null) { prepRenderTable(); prepUpdateStats(); }
   } else if (name === 'inventory') {
@@ -6793,21 +6853,29 @@ async function prepGotoSubview(name) {
     prepRenderOgMonthLabel();
     const sbO = await _sbPullRecords('prep_outgoing', OUTGOING_STORAGE_KEY);
     outgoingRenderTable();
+  } else if (name === 'history') {
+    const el = document.getElementById('prep-hist-curMonth');
+    if (el) el.textContent = `${prepCurYear}년 ${prepCurMonthNum}월`;
+    const sb = await _sbPullRecords('prep_records', PREP_STORAGE_KEY);
+    prepRenderAllHistory();
   }
 }
 
 function prepUpdateHomeCounts() {
   const mk = prepMonthKey();
-  const listCount = prepGetRecords().filter(r => r.month === mk).length;
+  const recs = prepGetRecords().filter(r => r.month === mk);
+  const listCount = recs.length;
   const ogCount = outgoingGetRecords().filter(r => r.month === mk).length;
   const invItems = prepGetInventoryRows().length;
 
   const lc = document.getElementById('prep-home-list-count');
   const oc = document.getElementById('prep-home-og-count');
   const ic = document.getElementById('prep-home-inv-count');
+  const hc = document.getElementById('prep-home-hist-count');
   if (lc) lc.textContent = `금월 ${listCount}건`;
   if (oc) oc.textContent = `금월 ${ogCount}건`;
   if (ic) ic.textContent = `${invItems}개 품목`;
+  if (hc) hc.textContent = `금월 ${listCount}건`;
 }
 
 function prepRenderMonthLabel() {
@@ -7646,6 +7714,102 @@ function prepRenderHistoryByFilter(line, modelName, itemName) {
   </table>`;
 }
 
+// ── 준비작업 이력 서브뷰 ──
+let prepHistFilterLine = 'all';
+
+function prepHistSetFilter(f, el) {
+  prepHistFilterLine = f;
+  document.querySelectorAll('#prep-subview-history .prep-filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  prepRenderAllHistory();
+}
+
+function prepRenderAllHistory() {
+  const mk = prepMonthKey();
+  let records = prepGetRecords().filter(r => r.month === mk);
+  if (prepHistFilterLine !== 'all') records = records.filter(r => r.line === prepHistFilterLine);
+  records = records.sort((a, b) => b.date.localeCompare(a.date));
+
+  const wrap = document.getElementById('prep-hist-wrap');
+  const countEl = document.getElementById('prep-hist-count');
+  if (countEl) countEl.textContent = `총 ${records.length}건 / ${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}EA`;
+  if (!wrap) return;
+
+  if (records.length === 0) {
+    wrap.innerHTML = `<div class="prep-no-history">등록된 이력이 없습니다.</div>`;
+    return;
+  }
+  const fmtDt = iso => iso ? iso.replace('T',' ').slice(0,16) : '-';
+  wrap.innerHTML = `<table class="prep-history-table">
+    <thead><tr>
+      <th>날짜</th><th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
+      <th>투입수량</th><th>양품수량</th><th>불량수량</th><th>불량률(%)</th><th>불량유형 내역</th>
+      <th>인원</th><th>예상시간(H)</th><th>시작</th><th>종료</th><th>실제시간(H)</th><th>실제UPH</th><th>실제UPPH</th><th>비고</th>
+      <th>작성자</th><th>작성일시</th><th>수정자</th><th>수정일시</th>
+      <th>수정</th><th>삭제</th>
+    </tr></thead>
+    <tbody>
+      ${records.map(r => {
+        const pi = window._prepPartInfoMap?.[r.modelName+'::'+r.itemName] || {};
+        const pNo = r.partNo||pi.partNo||'-';
+        const cPN = r.custPN||pi.custPN||'-';
+        const defRate = r.qty > 0 ? (((r.defectQty||0)/r.qty)*100).toFixed(1)+'%' : '-';
+        return `<tr>
+        <td>${r.date}</td>
+        <td><span class="prep-line-badge prep-line-${(r.line||'a').toLowerCase()}">${r.line||'-'}라인</span></td>
+        <td><strong>${r.modelName||''}</strong></td>
+        <td>${r.itemName||''}</td>
+        <td style="color:#374151;font-size:11px;">${pNo}</td>
+        <td style="color:#374151;font-size:11px;">${cPN}</td>
+        <td style="font-weight:700;color:#1e3a5f;">${(r.qty||0).toLocaleString()}</td>
+        <td style="color:#16a34a;font-weight:600;">${r.goodQty!=null?r.goodQty.toLocaleString():'-'}</td>
+        <td style="color:#dc2626;">${r.defectQty?r.defectQty.toLocaleString():'-'}</td>
+        <td style="color:#dc2626;font-weight:700;">${defRate}</td>
+        <td style="font-size:10px;color:#7f1d1d;max-width:160px;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
+        <td>${r.workers||'-'}</td>
+        <td style="color:#e67e22;">${r.hours||'-'}</td>
+        <td>${r.startTime||'-'}</td>
+        <td>${r.endTime||'-'}</td>
+        <td style="color:#166534;font-weight:600;">${r.actualHours!=null?r.actualHours:'-'}</td>
+        <td style="color:#166534;">${r.actualUph!=null?r.actualUph:'-'}</td>
+        <td style="color:#166534;">${r.actualUpph!=null?r.actualUpph:'-'}</td>
+        <td style="font-size:11px;color:#888;">${r.memo||''}</td>
+        <td style="font-size:11px;color:#374151;">${r.createdBy||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;">${fmtDt(r.createdAt)}</td>
+        <td style="font-size:11px;color:#374151;">${r.updatedBy||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;">${fmtDt(r.updatedAt)}</td>
+        <td><button class="prep-register-btn" style="background:#e67e22;" onclick="prepEditRecord(${r.id});prepGotoSubview('list')">✏️ 수정</button></td>
+        <td><button class="prep-del-btn" onclick="prepDeleteFromHistory(${r.id})">삭제</button></td>
+      </tr>`;
+      }).join('')}
+      <tr style="background:#f8fafc;font-weight:700;">
+        <td colspan="6" style="text-align:right;">합계</td>
+        ${(()=>{ const tQty=records.reduce((s,r)=>s+(r.qty||0),0); const tDef=records.reduce((s,r)=>s+(r.defectQty||0),0); const rate=tQty>0?(tDef/tQty*100).toFixed(1)+'%':'-'; return `
+        <td style="color:#1e3a5f;">${tQty.toLocaleString()}</td>
+        <td style="color:#16a34a;">${records.reduce((s,r)=>s+(r.goodQty||0),0).toLocaleString()}</td>
+        <td style="color:#dc2626;">${tDef.toLocaleString()}</td>
+        <td style="color:#dc2626;">${rate}</td>`; })()}
+        <td style="font-size:10px;color:#7f1d1d;">${(()=>{const t={};records.forEach(r=>{Object.entries(r.defects||{}).forEach(([k,v])=>{t[k]=(t[k]||0)+v;});});return Object.entries(t).map(([k,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${k}:${v}</span>`).join('')||'-';})()}</td>
+        <td>-</td>
+        <td style="color:#e67e22;">${records.reduce((s,r)=>s+(r.hours||0),0).toFixed(1)}</td>
+        <td colspan="2">-</td>
+        <td style="color:#166534;font-weight:600;">${(()=>{const v=records.reduce((s,r)=>s+(r.actualHours||0),0);return v>0?v.toFixed(1):'-';})()}</td>
+        <td colspan="7"></td>
+      </tr>
+    </tbody>
+  </table>`;
+}
+
+function prepDeleteFromHistory(id) {
+  if (!confirm('이 이력을 삭제하시겠습니까?')) return;
+  const records = prepGetRecords().filter(r => r.id !== id);
+  prepSaveRecords(records);
+  prepRenderAllHistory();
+  prepRenderTable();
+  prepUpdateHomeCounts();
+  prepShowToast('삭제되었습니다', 'success');
+}
+
 function prepEditRecord(id) {
   const r = prepGetRecords().find(r => r.id === id);
   if (!r) return;
@@ -8123,17 +8287,15 @@ async function inspInitView() {
 
 function inspGotoHome() {
   document.getElementById('insp-home').style.display = '';
-  document.getElementById('insp-subview-inventory').style.display = 'none';
-  document.getElementById('insp-subview-list').style.display = 'none';
-  document.getElementById('insp-subview-outgoing').style.display = 'none';
+  ['inventory','list','history','outgoing'].forEach(n =>
+    document.getElementById('insp-subview-'+n).style.display = 'none');
   inspUpdateHomeCounts();
 }
 
 async function inspGotoSubview(name) {
   document.getElementById('insp-home').style.display = 'none';
-  document.getElementById('insp-subview-inventory').style.display = 'none';
-  document.getElementById('insp-subview-list').style.display = 'none';
-  document.getElementById('insp-subview-outgoing').style.display = 'none';
+  ['inventory','list','history','outgoing'].forEach(n =>
+    document.getElementById('insp-subview-'+n).style.display = 'none');
   document.getElementById('insp-subview-' + name).style.display = '';
   if (name === 'list') {
     inspRenderMonthLabel(); inspRenderTable(); inspUpdateStats();
@@ -8148,20 +8310,28 @@ async function inspGotoSubview(name) {
     inspRenderMonthLabel();
     await _sbPullRecords('insp_outgoing', INSP_OUTGOING_STORAGE_KEY);
     inspOutgoingRenderTable();
+  } else if (name === 'history') {
+    const el = document.getElementById('insp-hist-curMonth');
+    if (el) el.textContent = `${inspCurYear}년 ${inspCurMonthNum}월`;
+    await _sbPullRecords('insp_records', INSP_STORAGE_KEY);
+    inspRenderAllHistory();
   }
 }
 
 function inspUpdateHomeCounts() {
   const mk = inspMonthKey();
-  const listCount = inspGetRecords().filter(r => r.month === mk).length;
+  const recs = inspGetRecords().filter(r => r.month === mk);
+  const listCount = recs.length;
   const ogCount = inspOutgoingGetRecords().filter(r => r.month === mk).length;
   const invItems = inspGetInventoryRows().length;
   const lc = document.getElementById('insp-home-list-count');
   const oc = document.getElementById('insp-home-og-count');
   const ic = document.getElementById('insp-home-inv-count');
+  const hc = document.getElementById('insp-home-hist-count');
   if (lc) lc.textContent = `금월 ${listCount}건`;
   if (oc) oc.textContent = `금월 ${ogCount}건`;
   if (ic) ic.textContent = `${invItems}개 품목`;
+  if (hc) hc.textContent = `금월 ${listCount}건`;
 }
 
 // ── 재고현황 ──
@@ -8695,6 +8865,102 @@ function inspRenderHistoryByFilter(line, modelName, itemName) {
       </tr>
     </tbody>
   </table>`;
+}
+
+// ── 투입전 검사 이력 서브뷰 ──
+let inspHistFilterLine = 'all';
+
+function inspHistSetFilter(f, el) {
+  inspHistFilterLine = f;
+  document.querySelectorAll('#insp-subview-history .prep-filter-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  inspRenderAllHistory();
+}
+
+function inspRenderAllHistory() {
+  const mk = inspMonthKey();
+  let records = inspGetRecords().filter(r => r.month === mk);
+  if (inspHistFilterLine !== 'all') records = records.filter(r => r.line === inspHistFilterLine);
+  records = records.sort((a, b) => b.date.localeCompare(a.date));
+
+  const wrap = document.getElementById('insp-hist-wrap');
+  const countEl = document.getElementById('insp-hist-count');
+  if (countEl) countEl.textContent = `총 ${records.length}건 / ${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}EA`;
+  if (!wrap) return;
+
+  if (records.length === 0) {
+    wrap.innerHTML = `<div class="prep-no-history">등록된 이력이 없습니다.</div>`;
+    return;
+  }
+  const fmtDt = iso => iso ? iso.replace('T',' ').slice(0,16) : '-';
+  wrap.innerHTML = `<table class="prep-history-table">
+    <thead><tr>
+      <th>날짜</th><th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
+      <th>투입수량</th><th>양품수량</th><th>불량수량</th><th>불량률(%)</th><th>불량유형 내역</th>
+      <th>인원</th><th>예상시간(H)</th><th>시작</th><th>종료</th><th>실제시간(H)</th><th>실제UPH</th><th>실제UPPH</th><th>비고</th>
+      <th>작성자</th><th>작성일시</th><th>수정자</th><th>수정일시</th>
+      <th>수정</th><th>삭제</th>
+    </tr></thead>
+    <tbody>
+      ${records.map(r => {
+        const pi = window._inspPartInfoMap?.[r.modelName+'::'+r.itemName] || {};
+        const pNo = r.partNo||pi.partNo||'-';
+        const cPN = r.custPN||pi.custPN||'-';
+        const defRate = r.qty > 0 ? (((r.defectQty||0)/r.qty)*100).toFixed(1)+'%' : '-';
+        return `<tr>
+        <td>${r.date}</td>
+        <td><span class="prep-line-badge prep-line-${(r.line||'a').toLowerCase()}">${r.line||'-'}라인</span></td>
+        <td><strong>${r.modelName||''}</strong></td>
+        <td>${r.itemName||''}</td>
+        <td style="color:#374151;font-size:11px;">${pNo}</td>
+        <td style="color:#374151;font-size:11px;">${cPN}</td>
+        <td style="font-weight:700;color:#1e3a5f;">${(r.qty||0).toLocaleString()}</td>
+        <td style="color:#16a34a;font-weight:600;">${r.goodQty!=null?r.goodQty.toLocaleString():'-'}</td>
+        <td style="color:#dc2626;">${r.defectQty?r.defectQty.toLocaleString():'-'}</td>
+        <td style="color:#dc2626;font-weight:700;">${defRate}</td>
+        <td style="font-size:10px;color:#7f1d1d;max-width:160px;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
+        <td>${r.workers||'-'}</td>
+        <td style="color:#e67e22;">${r.hours||'-'}</td>
+        <td>${r.startTime||'-'}</td>
+        <td>${r.endTime||'-'}</td>
+        <td style="color:#166534;font-weight:600;">${r.actualHours!=null?r.actualHours:'-'}</td>
+        <td style="color:#166534;">${r.actualUph!=null?r.actualUph:'-'}</td>
+        <td style="color:#166534;">${r.actualUpph!=null?r.actualUpph:'-'}</td>
+        <td style="font-size:11px;color:#888;">${r.memo||''}</td>
+        <td style="font-size:11px;color:#374151;">${r.createdBy||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;">${fmtDt(r.createdAt)}</td>
+        <td style="font-size:11px;color:#374151;">${r.updatedBy||'-'}</td>
+        <td style="font-size:11px;color:#6b7280;">${fmtDt(r.updatedAt)}</td>
+        <td><button class="prep-register-btn" style="background:#e67e22;" onclick="inspEditRecord(${r.id});inspGotoSubview('list')">✏️ 수정</button></td>
+        <td><button class="prep-del-btn" onclick="inspDeleteFromHistory(${r.id})">삭제</button></td>
+      </tr>`;
+      }).join('')}
+      <tr style="background:#f8fafc;font-weight:700;">
+        <td colspan="6" style="text-align:right;">합계</td>
+        ${(()=>{ const tQty=records.reduce((s,r)=>s+(r.qty||0),0); const tDef=records.reduce((s,r)=>s+(r.defectQty||0),0); const rate=tQty>0?(tDef/tQty*100).toFixed(1)+'%':'-'; return `
+        <td style="color:#1e3a5f;">${tQty.toLocaleString()}</td>
+        <td style="color:#16a34a;">${records.reduce((s,r)=>s+(r.goodQty||0),0).toLocaleString()}</td>
+        <td style="color:#dc2626;">${tDef.toLocaleString()}</td>
+        <td style="color:#dc2626;">${rate}</td>`; })()}
+        <td style="font-size:10px;color:#7f1d1d;">${(()=>{const t={};records.forEach(r=>{Object.entries(r.defects||{}).forEach(([k,v])=>{t[k]=(t[k]||0)+v;});});return Object.entries(t).map(([k,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${k}:${v}</span>`).join('')||'-';})()}</td>
+        <td>-</td>
+        <td style="color:#e67e22;">${records.reduce((s,r)=>s+(r.hours||0),0).toFixed(1)}</td>
+        <td colspan="2">-</td>
+        <td style="color:#166534;font-weight:600;">${(()=>{const v=records.reduce((s,r)=>s+(r.actualHours||0),0);return v>0?v.toFixed(1):'-';})()}</td>
+        <td colspan="7"></td>
+      </tr>
+    </tbody>
+  </table>`;
+}
+
+function inspDeleteFromHistory(id) {
+  if (!confirm('이 이력을 삭제하시겠습니까?')) return;
+  const records = inspGetRecords().filter(r => r.id !== id);
+  inspSaveRecords(records);
+  inspRenderAllHistory();
+  inspRenderTable();
+  inspUpdateHomeCounts();
+  inspShowToast('삭제되었습니다', 'success');
 }
 
 function inspEditRecord(id) {
