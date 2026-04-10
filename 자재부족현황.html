@@ -7586,9 +7586,11 @@ function prepRenderHistoryByFilter(line, modelName, itemName) {
       }).join('')}
       <tr style="background:#f8fafc;font-weight:700;">
         <td colspan="6" style="text-align:right;">합계</td>
-        <td style="color:#1e3a5f;">${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}</td>
+        ${(() => { const tQty=records.reduce((s,r)=>s+(r.qty||0),0); const tDef=records.reduce((s,r)=>s+(r.defectQty||0),0); const rate=tQty>0?(tDef/tQty*100).toFixed(1)+'%':'-'; return `
+        <td style="color:#1e3a5f;">${tQty.toLocaleString()}</td>
         <td style="color:#16a34a;">${records.reduce((s,r)=>s+(r.goodQty||0),0).toLocaleString()}</td>
-        <td style="color:#dc2626;">${records.reduce((s,r)=>s+(r.defectQty||0),0).toLocaleString()}</td>
+        <td style="color:#dc2626;">${tDef.toLocaleString()}</td>
+        <td style="color:#dc2626;">${rate}</td>`; })()}
         <td style="font-size:10px;color:#7f1d1d;">${(() => { const t={}; records.forEach(r=>{ Object.entries(r.defects||{}).forEach(([k,v])=>{ t[k]=(t[k]||0)+v; }); }); return Object.entries(t).map(([k,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${k}:${v}</span>`).join('')||'-'; })()}</td>
         <td>-</td>
         <td style="color:#e67e22;">${records.reduce((s,r)=>s+(r.hours||0),0).toFixed(1)}</td>
@@ -8635,9 +8637,11 @@ function inspRenderHistoryByFilter(line, modelName, itemName) {
       }).join('')}
       <tr style="background:#f8fafc;font-weight:700;">
         <td colspan="6" style="text-align:right;">합계</td>
-        <td style="color:#1e3a5f;">${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}</td>
+        ${(()=>{ const tQty=records.reduce((s,r)=>s+(r.qty||0),0); const tDef=records.reduce((s,r)=>s+(r.defectQty||0),0); const rate=tQty>0?(tDef/tQty*100).toFixed(1)+'%':'-'; return `
+        <td style="color:#1e3a5f;">${tQty.toLocaleString()}</td>
         <td style="color:#16a34a;">${records.reduce((s,r)=>s+(r.goodQty||0),0).toLocaleString()}</td>
-        <td style="color:#dc2626;">${records.reduce((s,r)=>s+(r.defectQty||0),0).toLocaleString()}</td>
+        <td style="color:#dc2626;">${tDef.toLocaleString()}</td>
+        <td style="color:#dc2626;">${rate}</td>`; })()}
         <td style="font-size:10px;color:#7f1d1d;">${(()=>{const t={};records.forEach(r=>{Object.entries(r.defects||{}).forEach(([k,v])=>{t[k]=(t[k]||0)+v;});});return Object.entries(t).map(([k,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${k}:${v}</span>`).join('')||'-';})()}</td>
         <td>-</td>
         <td style="color:#e67e22;">${records.reduce((s,r)=>s+(r.hours||0),0).toFixed(1)}</td>
