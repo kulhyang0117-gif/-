@@ -2672,13 +2672,11 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
   let cur='';
   const al = levelFilter==='all'?null:levelFilter.split(',').map(Number);
 
-  // VEND_NAME Row X 패턴 → 실제 업체명 치환 함수
+  // VEND_NAME 포함 시 → '자작' 으로 치환
   const resolveVendor = (raw) => {
     if (!raw) return '';
-    if (!raw.includes('VEND_NAME')) return raw;
-    const m = raw.match(/(\d+)/);
-    if (m) return vendorRowMap[parseInt(m[1])] || '';
-    return '';
+    if (raw.includes('VEND_NAME')) return '자작';
+    return raw;
   };
 
   for (let i=hRow+1; i<rows.length; i++) {
