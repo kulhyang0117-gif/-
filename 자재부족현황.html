@@ -1541,7 +1541,7 @@
       <button class="prep-back-btn" onclick="prepGotoHome()">← 뒤로</button>
       <span class="prep-subview-title">📜 준비작업 이력</span>
     </div>
-    <div class="prep-toolbar" style="margin-bottom:14px;">
+    <div class="prep-toolbar" style="margin-bottom:6px;">
       <div class="prep-month-nav">
         <button onclick="prepChangeMonth(-1);prepRenderAllHistory()">◀</button>
         <span class="prep-cur-month" id="prep-hist-curMonth"></span>
@@ -1558,7 +1558,18 @@
         <button class="prep-filter-btn" onclick="prepHistSetFilter('검사자',this)">검사자</button>
       </div>
     </div>
-    <div id="prep-hist-wrap" style="overflow-x:auto;max-height:600px;overflow-y:auto;"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <label style="font-size:12px;color:#555;font-weight:600;">모델 검색</label>
+      <input type="text" id="prep-hist-model-search" list="prep-hist-model-list"
+        placeholder="모델명 입력..."
+        style="padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;width:200px;"
+        oninput="prepRenderAllHistory()">
+      <datalist id="prep-hist-model-list"></datalist>
+      <button onclick="document.getElementById('prep-hist-model-search').value='';prepRenderAllHistory()"
+        style="font-size:11px;padding:4px 10px;background:#e5e7eb;border:none;border-radius:5px;cursor:pointer;">✕ 초기화</button>
+    </div>
+    <div id="prep-hist-wrap" style="overflow-x:auto;max-height:520px;overflow-y:auto;"></div>
+    <div id="prep-hist-summary"></div>
   </div>
 
   <!-- ④ 출고이력 서브뷰 -->
@@ -1957,7 +1968,7 @@
       <button class="prep-back-btn" onclick="inspGotoHome()">← 뒤로</button>
       <span class="prep-subview-title">📜 투입전 검사 이력</span>
     </div>
-    <div class="prep-toolbar" style="margin-bottom:14px;">
+    <div class="prep-toolbar" style="margin-bottom:6px;">
       <div class="prep-month-nav">
         <button onclick="inspChangeMonth(-1);inspRenderAllHistory()">◀</button>
         <span class="prep-cur-month" id="insp-hist-curMonth"></span>
@@ -1973,7 +1984,18 @@
         <button class="prep-filter-btn" onclick="inspHistSetFilter('검사자',this)">검사자</button>
       </div>
     </div>
-    <div id="insp-hist-wrap" style="overflow-x:auto;max-height:600px;overflow-y:auto;"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <label style="font-size:12px;color:#555;font-weight:600;">모델 검색</label>
+      <input type="text" id="insp-hist-model-search" list="insp-hist-model-list"
+        placeholder="모델명 입력..."
+        style="padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;width:200px;"
+        oninput="inspRenderAllHistory()">
+      <datalist id="insp-hist-model-list"></datalist>
+      <button onclick="document.getElementById('insp-hist-model-search').value='';inspRenderAllHistory()"
+        style="font-size:11px;padding:4px 10px;background:#e5e7eb;border:none;border-radius:5px;cursor:pointer;">✕ 초기화</button>
+    </div>
+    <div id="insp-hist-wrap" style="overflow-x:auto;max-height:520px;overflow-y:auto;"></div>
+    <div id="insp-hist-summary"></div>
   </div>
 
   <!-- ④ 출고이력 서브뷰 -->
@@ -7728,17 +7750,30 @@ function prepHistSetFilter(f, el) {
 
 function prepRenderAllHistory() {
   const mk = prepMonthKey();
-  let records = prepGetRecords().filter(r => r.month === mk);
-  if (prepHistFilterLine !== 'all') records = records.filter(r => r.line === prepHistFilterLine);
+  let allRecs = prepGetRecords().filter(r => r.month === mk);
+  if (prepHistFilterLine !== 'all') allRecs = allRecs.filter(r => r.line === prepHistFilterLine);
+
+  // datalist 갱신
+  const dl = document.getElementById('prep-hist-model-list');
+  if (dl) {
+    const models = [...new Set(allRecs.map(r => r.modelName).filter(Boolean))].sort();
+    dl.innerHTML = models.map(m => `<option value="${m}">`).join('');
+  }
+
+  // 모델 검색 필터
+  const modelQ = (document.getElementById('prep-hist-model-search')?.value || '').trim();
+  let records = modelQ ? allRecs.filter(r => (r.modelName||'').includes(modelQ)) : allRecs;
   records = records.sort((a, b) => b.date.localeCompare(a.date));
 
   const wrap = document.getElementById('prep-hist-wrap');
+  const summaryEl = document.getElementById('prep-hist-summary');
   const countEl = document.getElementById('prep-hist-count');
   if (countEl) countEl.textContent = `총 ${records.length}건 / ${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}EA`;
   if (!wrap) return;
 
   if (records.length === 0) {
     wrap.innerHTML = `<div class="prep-no-history">등록된 이력이 없습니다.</div>`;
+    if (summaryEl) summaryEl.innerHTML = '';
     return;
   }
   const fmtDt = iso => iso ? iso.replace('T',' ').slice(0,16) : '-';
@@ -7784,22 +7819,27 @@ function prepRenderAllHistory() {
         <td><button class="prep-del-btn" onclick="prepDeleteFromHistory(${r.id})">삭제</button></td>
       </tr>`;
       }).join('')}
-      <tr style="background:#f8fafc;font-weight:700;">
-        <td colspan="6" style="text-align:right;">합계</td>
-        ${(()=>{ const tQty=records.reduce((s,r)=>s+(r.qty||0),0); const tDef=records.reduce((s,r)=>s+(r.defectQty||0),0); const rate=tQty>0?(tDef/tQty*100).toFixed(1)+'%':'-'; return `
-        <td style="color:#1e3a5f;">${tQty.toLocaleString()}</td>
-        <td style="color:#16a34a;">${records.reduce((s,r)=>s+(r.goodQty||0),0).toLocaleString()}</td>
-        <td style="color:#dc2626;">${tDef.toLocaleString()}</td>
-        <td style="color:#dc2626;">${rate}</td>`; })()}
-        <td style="font-size:10px;color:#7f1d1d;">${(()=>{const t={};records.forEach(r=>{Object.entries(r.defects||{}).forEach(([k,v])=>{t[k]=(t[k]||0)+v;});});return Object.entries(t).map(([k,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${k}:${v}</span>`).join('')||'-';})()}</td>
-        <td>-</td>
-        <td style="color:#e67e22;">${records.reduce((s,r)=>s+(r.hours||0),0).toFixed(1)}</td>
-        <td colspan="2">-</td>
-        <td style="color:#166534;font-weight:600;">${(()=>{const v=records.reduce((s,r)=>s+(r.actualHours||0),0);return v>0?v.toFixed(1):'-';})()}</td>
-        <td colspan="7"></td>
-      </tr>
     </tbody>
   </table>`;
+
+  // 합계 (스크롤 밖)
+  if (summaryEl) {
+    const tQty = records.reduce((s,r)=>s+(r.qty||0),0);
+    const tGood = records.reduce((s,r)=>s+(r.goodQty||0),0);
+    const tDef = records.reduce((s,r)=>s+(r.defectQty||0),0);
+    const rate = tQty>0?(tDef/tQty*100).toFixed(1)+'%':'-';
+    const tHours = records.reduce((s,r)=>s+(r.hours||0),0);
+    const tActual = records.reduce((s,r)=>s+(r.actualHours||0),0);
+    summaryEl.innerHTML = `<div style="margin-top:8px;padding:10px 16px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;font-size:12px;font-weight:700;display:flex;gap:24px;flex-wrap:wrap;">
+      <span>합계 ${records.length}건</span>
+      <span>투입 <span style="color:#1e3a5f;">${tQty.toLocaleString()}</span> EA</span>
+      <span>양품 <span style="color:#16a34a;">${tGood.toLocaleString()}</span> EA</span>
+      <span>불량 <span style="color:#dc2626;">${tDef.toLocaleString()}</span> EA</span>
+      <span>불량률 <span style="color:#dc2626;">${rate}</span></span>
+      <span>예상시간 <span style="color:#e67e22;">${tHours.toFixed(1)}</span> H</span>
+      ${tActual>0?`<span>실제시간 <span style="color:#166534;">${tActual.toFixed(1)}</span> H</span>`:''}
+    </div>`;
+  }
 }
 
 function prepDeleteFromHistory(id) {
@@ -8881,17 +8921,30 @@ function inspHistSetFilter(f, el) {
 
 function inspRenderAllHistory() {
   const mk = inspMonthKey();
-  let records = inspGetRecords().filter(r => r.month === mk);
-  if (inspHistFilterLine !== 'all') records = records.filter(r => r.line === inspHistFilterLine);
+  let allRecs = inspGetRecords().filter(r => r.month === mk);
+  if (inspHistFilterLine !== 'all') allRecs = allRecs.filter(r => r.line === inspHistFilterLine);
+
+  // datalist 갱신
+  const dl = document.getElementById('insp-hist-model-list');
+  if (dl) {
+    const models = [...new Set(allRecs.map(r => r.modelName).filter(Boolean))].sort();
+    dl.innerHTML = models.map(m => `<option value="${m}">`).join('');
+  }
+
+  // 모델 검색 필터
+  const modelQ = (document.getElementById('insp-hist-model-search')?.value || '').trim();
+  let records = modelQ ? allRecs.filter(r => (r.modelName||'').includes(modelQ)) : allRecs;
   records = records.sort((a, b) => b.date.localeCompare(a.date));
 
   const wrap = document.getElementById('insp-hist-wrap');
+  const summaryEl = document.getElementById('insp-hist-summary');
   const countEl = document.getElementById('insp-hist-count');
   if (countEl) countEl.textContent = `총 ${records.length}건 / ${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}EA`;
   if (!wrap) return;
 
   if (records.length === 0) {
     wrap.innerHTML = `<div class="prep-no-history">등록된 이력이 없습니다.</div>`;
+    if (summaryEl) summaryEl.innerHTML = '';
     return;
   }
   const fmtDt = iso => iso ? iso.replace('T',' ').slice(0,16) : '-';
@@ -8937,22 +8990,27 @@ function inspRenderAllHistory() {
         <td><button class="prep-del-btn" onclick="inspDeleteFromHistory(${r.id})">삭제</button></td>
       </tr>`;
       }).join('')}
-      <tr style="background:#f8fafc;font-weight:700;">
-        <td colspan="6" style="text-align:right;">합계</td>
-        ${(()=>{ const tQty=records.reduce((s,r)=>s+(r.qty||0),0); const tDef=records.reduce((s,r)=>s+(r.defectQty||0),0); const rate=tQty>0?(tDef/tQty*100).toFixed(1)+'%':'-'; return `
-        <td style="color:#1e3a5f;">${tQty.toLocaleString()}</td>
-        <td style="color:#16a34a;">${records.reduce((s,r)=>s+(r.goodQty||0),0).toLocaleString()}</td>
-        <td style="color:#dc2626;">${tDef.toLocaleString()}</td>
-        <td style="color:#dc2626;">${rate}</td>`; })()}
-        <td style="font-size:10px;color:#7f1d1d;">${(()=>{const t={};records.forEach(r=>{Object.entries(r.defects||{}).forEach(([k,v])=>{t[k]=(t[k]||0)+v;});});return Object.entries(t).map(([k,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${k}:${v}</span>`).join('')||'-';})()}</td>
-        <td>-</td>
-        <td style="color:#e67e22;">${records.reduce((s,r)=>s+(r.hours||0),0).toFixed(1)}</td>
-        <td colspan="2">-</td>
-        <td style="color:#166534;font-weight:600;">${(()=>{const v=records.reduce((s,r)=>s+(r.actualHours||0),0);return v>0?v.toFixed(1):'-';})()}</td>
-        <td colspan="7"></td>
-      </tr>
     </tbody>
   </table>`;
+
+  // 합계 (스크롤 밖)
+  if (summaryEl) {
+    const tQty = records.reduce((s,r)=>s+(r.qty||0),0);
+    const tGood = records.reduce((s,r)=>s+(r.goodQty||0),0);
+    const tDef = records.reduce((s,r)=>s+(r.defectQty||0),0);
+    const rate = tQty>0?(tDef/tQty*100).toFixed(1)+'%':'-';
+    const tHours = records.reduce((s,r)=>s+(r.hours||0),0);
+    const tActual = records.reduce((s,r)=>s+(r.actualHours||0),0);
+    summaryEl.innerHTML = `<div style="margin-top:8px;padding:10px 16px;background:#f0f4ff;border:1px solid #c7d2fe;border-radius:8px;font-size:12px;font-weight:700;display:flex;gap:24px;flex-wrap:wrap;">
+      <span>합계 ${records.length}건</span>
+      <span>투입 <span style="color:#1e3a5f;">${tQty.toLocaleString()}</span> EA</span>
+      <span>양품 <span style="color:#16a34a;">${tGood.toLocaleString()}</span> EA</span>
+      <span>불량 <span style="color:#dc2626;">${tDef.toLocaleString()}</span> EA</span>
+      <span>불량률 <span style="color:#dc2626;">${rate}</span></span>
+      <span>예상시간 <span style="color:#e67e22;">${tHours.toFixed(1)}</span> H</span>
+      ${tActual>0?`<span>실제시간 <span style="color:#166534;">${tActual.toFixed(1)}</span> H</span>`:''}
+    </div>`;
+  }
 }
 
 function inspDeleteFromHistory(id) {
