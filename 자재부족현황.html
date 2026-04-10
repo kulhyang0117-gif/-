@@ -6122,10 +6122,12 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         if (chk.checked) {
           tr.classList.add('kb-row-ok');
           lackCell.innerHTML = '<span style="color:#16a34a;font-weight:700;">OK</span>';
+          if (!noteInput.value) noteInput.value = '전산오류 확인';
         } else {
           tr.classList.remove('kb-row-ok');
           lackCell.className = 'num kb-lack-cell kb-shortage-neg';
           lackCell.textContent = lackCell.dataset.origLack || lackStr;
+          if (noteInput.value === '전산오류 확인') noteInput.value = '';
         }
         const cnt = tbody.querySelectorAll('.kb-ok-chk:checked').length;
         okCntEl.textContent = `${cnt}건 해제`;
