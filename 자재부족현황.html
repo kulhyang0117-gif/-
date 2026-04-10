@@ -2654,16 +2654,37 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
     }
   }
   if (hRow<0) { c={제품번호:2,제품명:6,레벨:8,모품번:9,자품번:10,자품명:12,규격:13,부품유형:14,단위:15,소요량:16,협력사명:17,고객사PARTNO:-1}; hRow=0; }
+  // ── 1단계: VEND_NAME 정의 행 스캔 (rowIndex(1-based) → 실제 업체명)
+  const vendorRowMap = {};
+  rows.forEach((r, idx) => {
+    const cells = r.map(v => String(v||'').trim());
+    // 어느 셀이든 'VEND_NAME'이 있고 그 외 비어있지 않은 셀이 있으면 업체명으로 간주
+    const hasVN = cells.some(v => v === 'VEND_NAME');
+    if (hasVN) {
+      const vendorName = cells.find(v => v && v !== 'VEND_NAME') || '';
+      if (vendorName) vendorRowMap[idx + 1] = vendorName; // Excel 1-based 행번호
+    }
+  });
+
   const bomMap={};
   const productNameMap={}; // pn → 제품명
   const custPartMap={};    // 고객사 PART NO → 품목코드(시스템 P/N)
   let cur='';
-  let curVendor=''; // VEND_NAME 행에서 추출한 협력사명 (이후 부품에 적용)
   const al = levelFilter==='all'?null:levelFilter.split(',').map(Number);
+
+  // VEND_NAME Row X 패턴 → 실제 업체명 치환 함수
+  const resolveVendor = (raw) => {
+    if (!raw) return '';
+    if (!raw.includes('VEND_NAME')) return raw;
+    const m = raw.match(/(\d+)/);
+    if (m) return vendorRowMap[parseInt(m[1])] || '';
+    return '';
+  };
+
   for (let i=hRow+1; i<rows.length; i++) {
     const r=rows[i];
     const pn=String(r[c.제품번호]||'').trim();
-    if (pn) { cur=pn; curVendor=''; } // 새 제품 시작 시 vendor 초기화
+    if (pn) cur=pn;
     if (!cur) continue;
     // 제품명 수집
     if (cur && c.제품명>=0 && !productNameMap[cur]) {
@@ -2679,22 +2700,15 @@ function parseBOM(wb, levelFilter, partTypeFilter) {
     const jp=String(r[c.자품번]||'').trim();
     const bt=String(r[c.부품유형]||'').trim();
     const qty=parseFloat(r[c.소요량])||0;
-    // VEND_NAME 행: 협력사명을 추출하여 이후 부품에 적용
-    if (jp==='VEND_NAME' || String(r[0]||'').trim()==='VEND_NAME') {
-      // 행에서 VEND_NAME 다음 첫 번째 비어있지 않은 셀을 협력사명으로 사용
-      const vendorVal = r.map(v=>String(v||'').trim()).find((v,idx)=>v&&v!=='VEND_NAME'&&idx>0) || '';
-      if (vendorVal) curVendor = vendorVal;
-      continue;
-    }
     if (!jp||!qty) continue;
     if (al&&!al.includes(lv)) continue;
     if (partTypeFilter!=='all'&&bt!==partTypeFilter) continue;
     if (!bomMap[cur]) bomMap[cur]=[];
-    const vendorFromCol = c.협력사명>=0 ? String(r[c.협력사명]||'').trim() : '';
+    const rawVendor = c.협력사명>=0 ? String(r[c.협력사명]||'').trim() : '';
     bomMap[cur].push({ 자품번:jp, 자품명:String(r[c.자품명]||'').trim(),
       규격:String(r[c.규격]||'').trim(), 부품유형:bt,
       단위:String(r[c.단위]||'').trim(), 소요량:qty,
-      협력사명: vendorFromCol || curVendor });
+      협력사명: resolveVendor(rawVendor) });
   }
   return { bomMap, productNameMap, custPartMap };
 }
