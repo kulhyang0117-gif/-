@@ -2621,7 +2621,8 @@ function parseSupplierMap(wb) {
   for (let i = hIdx + 1; i < rows.length; i++) {
     const r = rows[i];
     const code = String(r[cCode] || '').trim();
-    const supplier = String(r[cSupplier] || '').trim();
+    const rawSupplier = String(r[cSupplier] || '').trim();
+    const supplier = rawSupplier.includes('VEND_NAME') ? '자작' : rawSupplier;
     if (code && supplier && !map[code]) map[code] = supplier;
   }
   return map;
@@ -3032,8 +3033,13 @@ function runAnalysis() {
       // 자품번 → 협력사명 맵: '품목코드' 시트 마스터 우선, BOM 컴포넌트 보완
       const supplierMap = parseSupplierMap(state.bom);
       for (const comps of Object.values(bomMap))
-        for (const comp of comps)
-          if (comp.협력사명 && !supplierMap[comp.자품번]) supplierMap[comp.자품번] = comp.협력사명;
+        for (const comp of comps) {
+          const resolvedVendor = comp.협력사명?.includes('VEND_NAME') ? '자작' : comp.협력사명;
+          if (resolvedVendor) {
+            if (!supplierMap[comp.자품번] || supplierMap[comp.자품번].includes('VEND_NAME'))
+              supplierMap[comp.자품번] = resolvedVendor;
+          }
+        }
       window._kbSupplierMap = supplierMap;
       const hasKit=Object.keys(kitMap).length>0;
       globalHasKit=hasKit;
