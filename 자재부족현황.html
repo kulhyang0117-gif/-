@@ -5278,6 +5278,7 @@ async function renderAdminPanel(){
         <div class="u-actions">
           ${u.status!=='approved'?`<button class="btn-approve" onclick="adminApprove('${u.id}')">✅ 승인</button>`:''}
           ${u.status!=='rejected'?`<button class="btn-reject" onclick="adminReject('${u.id}')">❌ 거부</button>`:''}
+          <button style="padding:3px 10px;background:#6b7280;color:white;border:none;border-radius:4px;font-size:11px;cursor:pointer;" onclick="adminResetPw('${u.email}')">🔑 비밀번호 재설정</button>
         </div>
         <span class="u-date">가입: ${new Date(u.createdAt).toLocaleDateString('ko-KR')}</span>
       </div>
@@ -5302,6 +5303,18 @@ async function adminReject(uid){
   const u=users.find(x=>x.id===uid); if(!u) return;
   u.status='rejected'; await dbUpdateUser(u); await renderAdminPanel();
 }
+async function adminResetPw(email){
+  if(!confirm(`${email} 회원에게 비밀번호 재설정 메일을 발송하시겠습니까?`)) return;
+  try{
+    const redirectTo = window.location.origin + window.location.pathname;
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo });
+    if(error) throw error.message;
+    alert(`✅ ${email} 으로 재설정 메일을 발송했습니다.`);
+  }catch(e){
+    alert('발송 실패: ' + (typeof e==='string'?e:e.message||'오류가 발생했습니다.'));
+  }
+}
+
 async function adminSavePerm(uid){
   const users=await dbGetAllUsers();
   const u=users.find(x=>x.id===uid); if(!u) return;
