@@ -7703,7 +7703,7 @@ function prepRenderHistoryByFilter(line, modelName, itemName) {
         <td style="color:#16a34a;font-weight:600;">${r.goodQty != null ? r.goodQty.toLocaleString() : '-'}</td>
         <td style="color:#dc2626;">${r.defectQty ? r.defectQty.toLocaleString() : '-'}</td>
         <td style="color:#dc2626;font-weight:700;">${defRate}</td>
-        <td style="font-size:10px;color:#7f1d1d;max-width:160px;white-space:normal;word-break:break-word;">${r.defects ? Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join('') : '-'}</td>
+        <td style="font-size:10px;color:#7f1d1d;max-width:320px;white-space:normal;word-break:break-word;">${r.defects ? Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join('') : '-'}</td>
         <td>${r.workers||'-'}</td>
         <td style="color:#e67e22;">${r.hours||'-'}</td>
         <td>${r.startTime||'-'}</td>
@@ -7802,7 +7802,7 @@ function prepRenderAllHistory() {
         <td style="color:#16a34a;font-weight:600;">${r.goodQty!=null?r.goodQty.toLocaleString():'-'}</td>
         <td style="color:#dc2626;">${r.defectQty?r.defectQty.toLocaleString():'-'}</td>
         <td style="color:#dc2626;font-weight:700;">${defRate}</td>
-        <td style="font-size:10px;color:#7f1d1d;max-width:160px;white-space:normal;word-break:break-word;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
+        <td style="font-size:10px;color:#7f1d1d;max-width:320px;white-space:normal;word-break:break-word;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
         <td>${r.workers||'-'}</td>
         <td style="color:#e67e22;">${r.hours||'-'}</td>
         <td>${r.startTime||'-'}</td>
@@ -8874,7 +8874,7 @@ function inspRenderHistoryByFilter(line, modelName, itemName) {
         <td style="color:#16a34a;font-weight:600;">${r.goodQty!=null?r.goodQty.toLocaleString():'-'}</td>
         <td style="color:#dc2626;">${r.defectQty?r.defectQty.toLocaleString():'-'}</td>
         <td style="color:#dc2626;font-weight:700;">${defRate}</td>
-        <td style="font-size:10px;color:#7f1d1d;max-width:160px;white-space:normal;word-break:break-word;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
+        <td style="font-size:10px;color:#7f1d1d;max-width:320px;white-space:normal;word-break:break-word;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
         <td>${r.workers||'-'}</td>
         <td style="color:#e67e22;">${r.hours||'-'}</td>
         <td>${r.startTime||'-'}</td>
@@ -8973,7 +8973,7 @@ function inspRenderAllHistory() {
         <td style="color:#16a34a;font-weight:600;">${r.goodQty!=null?r.goodQty.toLocaleString():'-'}</td>
         <td style="color:#dc2626;">${r.defectQty?r.defectQty.toLocaleString():'-'}</td>
         <td style="color:#dc2626;font-weight:700;">${defRate}</td>
-        <td style="font-size:10px;color:#7f1d1d;max-width:160px;white-space:normal;word-break:break-word;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
+        <td style="font-size:10px;color:#7f1d1d;max-width:320px;white-space:normal;word-break:break-word;">${r.defects?Object.entries(r.defects).map(([t,v])=>`<span style="display:inline-block;background:#fee2e2;border-radius:3px;padding:1px 4px;margin:1px;">${t}:${v}</span>`).join(''):'-'}</td>
         <td>${r.workers||'-'}</td>
         <td style="color:#e67e22;">${r.hours||'-'}</td>
         <td>${r.startTime||'-'}</td>
