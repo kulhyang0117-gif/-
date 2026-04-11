@@ -6936,19 +6936,19 @@ function prepGetInventoryRows() {
     if (r.itemName) groups[key].itemName = r.itemName;
     if (r.modelName) groups[key].models.add(r.modelName);
   });
-  // 출고 수량 매핑 (자품번 기준)
-  const ogMap = {};
+  // 출고 수량 매핑: partNo와 itemName 두 가지 키로 인덱싱 (출고 레코드엔 partNo 없을 수 있음)
+  const ogMapByPartNo = {};
+  const ogMapByItem = {};
   ogRecs.forEach(r => {
-    const key = r.partNo || r.itemName || '';
-    ogMap[key] = (ogMap[key] || 0) + (r.qty || 0);
+    if (r.partNo) ogMapByPartNo[r.partNo] = (ogMapByPartNo[r.partNo] || 0) + (r.qty || 0);
+    if (r.itemName) ogMapByItem[r.itemName] = (ogMapByItem[r.itemName] || 0) + (r.qty || 0);
   });
 
-  return Object.entries(groups).map(([key, g]) => ({
-    ...g,
-    models: [...g.models].join(', '),
-    ogQty: ogMap[key] || 0,
-    stock: g.prepQty - (ogMap[key] || 0)
-  }));
+  return Object.entries(groups).map(([key, g]) => {
+    const ogQty = (g.partNo ? (ogMapByPartNo[g.partNo] || 0) : 0)
+               || (g.itemName ? (ogMapByItem[g.itemName] || 0) : 0);
+    return { ...g, models: [...g.models].join(', '), ogQty, stock: g.prepQty - ogQty };
+  });
 }
 
 function prepRenderInventory() {
@@ -8399,12 +8399,17 @@ function inspGetInventoryRows() {
     if (r.itemName) groups[key].itemName = r.itemName;
     if (r.modelName) groups[key].models.add(r.modelName);
   });
-  const ogMap = {};
+  const ogMapByPartNo = {};
+  const ogMapByItem = {};
   ogRecs.forEach(r => {
-    const key = r.partNo || r.itemName || '';
-    ogMap[key] = (ogMap[key] || 0) + (r.qty || 0);
+    if (r.partNo) ogMapByPartNo[r.partNo] = (ogMapByPartNo[r.partNo] || 0) + (r.qty || 0);
+    if (r.itemName) ogMapByItem[r.itemName] = (ogMapByItem[r.itemName] || 0) + (r.qty || 0);
   });
-  return Object.entries(groups).map(([key, g]) => ({ ...g, models: [...g.models].join(', '), ogQty: ogMap[key]||0, stock: g.prepQty-(ogMap[key]||0) }));
+  return Object.entries(groups).map(([key, g]) => {
+    const ogQty = (g.partNo ? (ogMapByPartNo[g.partNo] || 0) : 0)
+               || (g.itemName ? (ogMapByItem[g.itemName] || 0) : 0);
+    return { ...g, models: [...g.models].join(', '), ogQty, stock: g.prepQty - ogQty };
+  });
 }
 
 function inspRenderInventory() {
