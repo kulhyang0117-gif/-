@@ -4979,14 +4979,14 @@ async function ensureAdminProfile(userId, email) {
   if (profile) {
     if (!profile.is_admin || profile.status !== 'approved') {
       await sb.from('profiles').update({
-        status: 'approved', is_admin: true, permissions: ADMIN_PERMS, approved_at: new Date().toISOString()
+        status: 'approved', is_admin: true, permissions: ADMIN_PERMS, approved_at: nowLocalISO()
       }).eq('id', userId);
     }
     return { ...profile, status: 'approved', is_admin: true, permissions: ADMIN_PERMS };
   }
   await sb.from('profiles').insert({
     id: userId, email, display_name: '관리자',
-    status: 'approved', is_admin: true, permissions: ADMIN_PERMS, approved_at: new Date().toISOString()
+    status: 'approved', is_admin: true, permissions: ADMIN_PERMS, approved_at: nowLocalISO()
   });
   return { display_name: '관리자', status: 'approved', is_admin: true, permissions: ADMIN_PERMS };
 }
@@ -5024,7 +5024,7 @@ async function authRegister(email, pw, name) {
     status: isAdmin ? 'approved' : 'pending',
     is_admin: isAdmin,
     permissions: isAdmin ? ADMIN_PERMS : { read: false, upload: false, modify: false },
-    approved_at: isAdmin ? new Date().toISOString() : null
+    approved_at: isAdmin ? nowLocalISO() : null
   });
   if (isAdmin) return { autoLogin: true };
 }
@@ -5042,7 +5042,7 @@ async function dbGetAllUsers() {
 async function dbUpdateUser(user) {
   await sb.from('profiles').update({
     status: user.status, is_admin: user.isAdmin, permissions: user.permissions,
-    approved_at: user.status === 'approved' ? new Date().toISOString() : null
+    approved_at: user.status === 'approved' ? nowLocalISO() : null
   }).eq('id', user.id);
 }
 
@@ -6165,7 +6165,7 @@ const _kbNoteTimers = {};
 async function _kbSaveOkCheck(dateSerial, partNo, checked, note) {
   const updatedBy = currentUser ? currentUser.displayName : '';
   const payload = { date_serial: dateSerial, part_no: partNo, checked, note,
-    updated_at: new Date().toISOString(), updated_by: updatedBy };
+    updated_at: nowLocalISO(), updated_by: updatedBy };
 
   const _doUpsert = async () =>
     sb.from('kb_ok_checks').upsert(payload, { onConflict: 'date_serial,part_no' });
@@ -6639,6 +6639,13 @@ function outgoingGetRecords() {
 function outgoingSaveRecords(arr) {
   localStorage.setItem(OUTGOING_STORAGE_KEY, JSON.stringify(arr));
   _sbPushRecords('prep_outgoing', arr);
+}
+
+// 로컬 시간 기준 ISO 문자열 (UTC가 아닌 기기 시간대 사용)
+function nowLocalISO() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 function prepFormatDate(d) {
@@ -7585,7 +7592,7 @@ function prepSaveRecord() {
   const actualUpph   = parseFloat(document.getElementById('prep-fActualUpph')?.value)  || null;
 
   const partInfo = window._prepPartInfoMap[modelName + '::' + itemName] || {};
-  const now = new Date().toISOString();
+  const now = nowLocalISO();
   const userName = prepGetCurrentUser();
 
   let records = prepGetRecords();
@@ -8017,7 +8024,7 @@ function outgoingSaveRecord() {
   if (!qty || qty <= 0) { prepShowToast('수량을 입력해주세요', 'error'); return; }
 
   const mk = date.slice(0, 7);
-  const now = new Date().toISOString();
+  const now = nowLocalISO();
   const userName = prepGetCurrentUser();
   let records = outgoingGetRecords();
 
@@ -8797,7 +8804,7 @@ function inspSaveRecord() {
   const actualUph = parseFloat(document.getElementById('insp-fActualUph')?.value) || null;
   const actualUpph = parseFloat(document.getElementById('insp-fActualUpph')?.value) || null;
   const partInfo = window._inspPartInfoMap[modelName+'::'+itemName] || {};
-  const now = new Date().toISOString();
+  const now = nowLocalISO();
   const userName = prepGetCurrentUser();
   let records = inspGetRecords();
   if (_editingInspId !== null) {
@@ -9184,7 +9191,7 @@ function inspOutgoingSaveRecord() {
   if (!itemName) { inspShowToast('품목명을 입력해주세요','error'); return; }
   if (!qty || qty <= 0) { inspShowToast('수량을 입력해주세요','error'); return; }
   const mk = date.slice(0,7);
-  const now = new Date().toISOString();
+  const now = nowLocalISO();
   const userName = prepGetCurrentUser();
   let records = inspOutgoingGetRecords();
   if (_editingInspOgId !== null) {
