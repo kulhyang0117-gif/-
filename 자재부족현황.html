@@ -6114,7 +6114,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       const available = part.available ?? (part.stock ?? 0);
       const cumConsumed = part.cumConsumed ?? 0;
       const remaining   = part.remaining  ?? available;
-      const dayReq      = part.dayReq     ?? (part.modelReq ?? part.totalGlobalReq ?? 0);
+      const dayReq      = part.dayReq ?? part.thisReq ?? part.modelReq ?? part.totalGlobalReq ?? 0;
       const lack = remaining - dayReq;
       const lackStr = Math.round(lack).toLocaleString();
       const remainStyle = lack < 0 ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
