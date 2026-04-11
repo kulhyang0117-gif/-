@@ -374,10 +374,9 @@
   .prep-stat-value { font-size:22px; font-weight:700; color:#1e3a5f; }
   .prep-stat-unit { font-size:11px; color:#999; margin-left:3px; }
   .prep-toolbar { display:flex; align-items:center; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
-  .prep-month-nav { display:flex; align-items:center; gap:6px; background:white; border-radius:8px; padding:6px 12px; box-shadow:0 1px 4px rgba(0,0,0,0.1); }
-  .prep-month-nav .prep-cur-month { font-weight:700; color:#1e3a5f; font-size:15px; min-width:80px; text-align:center; }
-  .prep-month-nav button { background:none; border:none; cursor:pointer; color:#1e3a5f; font-size:16px; padding:2px 6px; border-radius:4px; }
-  .prep-month-nav button:hover { background:#f0f2f5; }
+  .prep-month-nav { display:flex; align-items:center; gap:6px; }
+  .prep-month-picker { font-weight:700; color:#1e3a5f; font-size:14px; padding:5px 10px; border:1px solid #d1d5db; border-radius:8px; background:white; box-shadow:0 1px 4px rgba(0,0,0,0.08); cursor:pointer; outline:none; }
+  .prep-month-picker:focus { border-color:#1e3a5f; }
   .prep-btn-export { padding:8px 16px; background:#27ae60; color:white; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; }
   .prep-btn-export:hover { background:#1e8449; }
   .prep-filter-line { display:flex; gap:6px; }
@@ -1444,9 +1443,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:14px;">
       <div class="prep-month-nav">
-        <button onclick="prepChangeMonth(-1);prepRenderInventory()">◀</button>
-        <span class="prep-cur-month" id="prep-inv-curMonth"></span>
-        <button onclick="prepChangeMonth(1);prepRenderInventory()">▶</button>
+        <input type="month" class="prep-month-picker" id="prep-inv-mp" onchange="prepPickMonth(this.value, prepRenderInventory)">
       </div>
     </div>
     <div class="prep-inv-table-wrap">
@@ -1498,9 +1495,7 @@
     <!-- 툴바 -->
     <div class="prep-toolbar">
       <div class="prep-month-nav">
-        <button onclick="prepChangeMonth(-1)">◀</button>
-        <span class="prep-cur-month" id="prep-curMonth"></span>
-        <button onclick="prepChangeMonth(1)">▶</button>
+        <input type="month" class="prep-month-picker" id="prep-list-mp" onchange="prepPickMonth(this.value, ()=>{prepRenderTable();prepUpdateStats();})">
       </div>
       <button class="prep-btn-export" onclick="prepExportCSV()">💾 CSV 내보내기</button>
       <div class="prep-filter-line">
@@ -1543,9 +1538,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:6px;">
       <div class="prep-month-nav">
-        <button onclick="prepChangeMonth(-1);prepRenderAllHistory()">◀</button>
-        <span class="prep-cur-month" id="prep-hist-curMonth"></span>
-        <button onclick="prepChangeMonth(1);prepRenderAllHistory()">▶</button>
+        <input type="month" class="prep-month-picker" id="prep-hist-mp" onchange="prepPickMonth(this.value, prepRenderAllHistory)">
       </div>
       <span id="prep-hist-count" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
       <div class="prep-filter-line">
@@ -1578,9 +1571,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:14px;">
       <div class="prep-month-nav">
-        <button onclick="prepChangeMonth(-1);outgoingRenderTable()">◀</button>
-        <span class="prep-cur-month" id="prep-og-curMonth"></span>
-        <button onclick="prepChangeMonth(1);outgoingRenderTable()">▶</button>
+        <input type="month" class="prep-month-picker" id="prep-og-mp" onchange="prepPickMonth(this.value, outgoingRenderTable)">
       </div>
       <button class="prep-btn-outgoing" onclick="outgoingOpenModal()">📤 출고 등록</button>
     </div>
@@ -1870,9 +1861,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:14px;">
       <div class="prep-month-nav">
-        <button onclick="inspChangeMonth(-1);inspRenderInventory()">◀</button>
-        <span class="prep-cur-month" id="insp-inv-curMonth"></span>
-        <button onclick="inspChangeMonth(1);inspRenderInventory()">▶</button>
+        <input type="month" class="prep-month-picker" id="insp-inv-mp" onchange="inspPickMonth(this.value, inspRenderInventory)">
       </div>
     </div>
     <div class="prep-inv-table-wrap">
@@ -1924,9 +1913,7 @@
     <!-- 툴바 -->
     <div class="prep-toolbar">
       <div class="prep-month-nav">
-        <button onclick="inspChangeMonth(-1)">◀</button>
-        <span class="prep-cur-month" id="insp-curMonth"></span>
-        <button onclick="inspChangeMonth(1)">▶</button>
+        <input type="month" class="prep-month-picker" id="insp-list-mp" onchange="inspPickMonth(this.value, ()=>{inspRenderTable();inspUpdateStats();})">
       </div>
       <button class="prep-btn-export" onclick="inspExportCSV()">💾 CSV 내보내기</button>
       <div class="prep-filter-line">
@@ -1968,9 +1955,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:6px;">
       <div class="prep-month-nav">
-        <button onclick="inspChangeMonth(-1);inspRenderAllHistory()">◀</button>
-        <span class="prep-cur-month" id="insp-hist-curMonth"></span>
-        <button onclick="inspChangeMonth(1);inspRenderAllHistory()">▶</button>
+        <input type="month" class="prep-month-picker" id="insp-hist-mp" onchange="inspPickMonth(this.value, inspRenderAllHistory)">
       </div>
       <span id="insp-hist-count" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
       <div class="prep-filter-line">
@@ -2002,9 +1987,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:14px;">
       <div class="prep-month-nav">
-        <button onclick="inspChangeMonth(-1);inspOutgoingRenderTable()">◀</button>
-        <span class="prep-cur-month" id="insp-og-curMonth"></span>
-        <button onclick="inspChangeMonth(1);inspOutgoingRenderTable()">▶</button>
+        <input type="month" class="prep-month-picker" id="insp-og-mp" onchange="inspPickMonth(this.value, inspOutgoingRenderTable)">
       </div>
       <button class="prep-btn-outgoing" onclick="inspOutgoingOpenModal()">📤 출고 등록</button>
     </div>
@@ -6671,6 +6654,13 @@ function prepChangeMonth(d) {
   if (prepCurMonthNum < 1) { prepCurMonthNum = 12; prepCurYear--; }
   prepRenderMonthLabel();
 }
+function prepPickMonth(val, renderFn) {
+  if (!val) return;
+  const [y, m] = val.split('-').map(Number);
+  prepCurYear = y; prepCurMonthNum = m;
+  prepRenderMonthLabel();
+  if (renderFn) renderFn();
+}
 function prepSwitchTab(t) {
   prepCurrentTab = t;
   prepFilterLine = t === 'all' ? 'all' : t;
@@ -6874,8 +6864,7 @@ async function prepGotoSubview(name) {
     const sbO = await _sbPullRecords('prep_outgoing', OUTGOING_STORAGE_KEY);
     outgoingRenderTable();
   } else if (name === 'history') {
-    const el = document.getElementById('prep-hist-curMonth');
-    if (el) el.textContent = `${prepCurYear}년 ${prepCurMonthNum}월`;
+    prepRenderMonthLabel();
     const sb = await _sbPullRecords('prep_records', PREP_STORAGE_KEY);
     prepRenderAllHistory();
   }
@@ -6899,9 +6888,10 @@ function prepUpdateHomeCounts() {
 }
 
 function prepRenderMonthLabel() {
-  ['prep-curMonth','prep-inv-curMonth','prep-og-curMonth'].forEach(id => {
+  const val = `${prepCurYear}-${String(prepCurMonthNum).padStart(2,'0')}`;
+  ['prep-inv-mp','prep-list-mp','prep-hist-mp','prep-og-mp'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.textContent = `${prepCurYear}년 ${prepCurMonthNum}월`;
+    if (el) el.value = val;
   });
 }
 function prepRenderInvMonthLabel() { prepRenderMonthLabel(); }
@@ -8222,10 +8212,18 @@ function inspChangeMonth(d) {
   if (inspCurMonthNum < 1) { inspCurMonthNum = 12; inspCurYear--; }
   inspRenderMonthLabel();
 }
+function inspPickMonth(val, renderFn) {
+  if (!val) return;
+  const [y, m] = val.split('-').map(Number);
+  inspCurYear = y; inspCurMonthNum = m;
+  inspRenderMonthLabel();
+  if (renderFn) renderFn();
+}
 function inspRenderMonthLabel() {
-  ['insp-curMonth','insp-inv-curMonth','insp-og-curMonth'].forEach(id => {
+  const val = `${inspCurYear}-${String(inspCurMonthNum).padStart(2,'0')}`;
+  ['insp-inv-mp','insp-list-mp','insp-hist-mp','insp-og-mp'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.textContent = `${inspCurYear}년 ${inspCurMonthNum}월`;
+    if (el) el.value = val;
   });
 }
 
@@ -8349,8 +8347,7 @@ async function inspGotoSubview(name) {
     await _sbPullRecords('insp_outgoing', INSP_OUTGOING_STORAGE_KEY);
     inspOutgoingRenderTable();
   } else if (name === 'history') {
-    const el = document.getElementById('insp-hist-curMonth');
-    if (el) el.textContent = `${inspCurYear}년 ${inspCurMonthNum}월`;
+    inspRenderMonthLabel();
     await _sbPullRecords('insp_records', INSP_STORAGE_KEY);
     inspRenderAllHistory();
   }
