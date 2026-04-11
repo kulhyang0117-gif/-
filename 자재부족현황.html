@@ -1497,7 +1497,7 @@
       <div class="prep-month-nav">
         <input type="month" class="prep-month-picker" id="prep-list-mp" onchange="prepPickMonth(this.value, ()=>{prepRenderTable();prepUpdateStats();})">
       </div>
-      <button class="prep-btn-export" onclick="prepExportCSV()">💾 CSV 내보내기</button>
+      <button class="prep-btn-export" onclick="prepExportExcel()">📥 엑셀 다운로드</button>
       <div class="prep-filter-line">
         <button class="prep-filter-btn active" onclick="prepSetFilter('all', this)">전체</button>
         <button class="prep-filter-btn" onclick="prepSetFilter('A', this)">A라인</button>
@@ -1915,7 +1915,7 @@
       <div class="prep-month-nav">
         <input type="month" class="prep-month-picker" id="insp-list-mp" onchange="inspPickMonth(this.value, ()=>{inspRenderTable();inspUpdateStats();})">
       </div>
-      <button class="prep-btn-export" onclick="inspExportCSV()">💾 CSV 내보내기</button>
+      <button class="prep-btn-export" onclick="inspExportExcel()">📥 엑셀 다운로드</button>
       <div class="prep-filter-line">
         <button class="prep-filter-btn active" onclick="inspSetFilter('all', this)">전체</button>
         <button class="prep-filter-btn" onclick="inspSetFilter('A', this)">A라인</button>
@@ -7926,6 +7926,25 @@ function prepExportCSV() {
   prepShowToast('CSV 내보내기 완료', 'success');
 }
 
+function prepExportExcel() {
+  const mk = prepMonthKey();
+  const records = prepGetRecords().filter(r => r.month === mk);
+  if (records.length === 0) { prepShowToast('내보낼 데이터가 없습니다', 'error'); return; }
+  const defectHeaders = PREP_DEFECT_TYPES.map(t => `불량_${t}`);
+  const header = ['날짜','라인','모델','항목','투입수량(EA)','양품수량(EA)','불량수량(EA)',...defectHeaders,'인원','소요시간(H)','시작시간','종료시간','비고'];
+  const rows = records.map(r => [
+    r.date, r.line||'', r.modelName, r.itemName,
+    r.qty||0, r.goodQty??'', r.defectQty??'',
+    ...PREP_DEFECT_TYPES.map(t => (r.defects&&r.defects[t]) ? r.defects[t] : 0),
+    r.workers, r.hours, r.startTime||'', r.endTime||'', r.memo||''
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '준비작업');
+  XLSX.writeFile(wb, `준비작업_${mk}.xlsx`);
+  prepShowToast('엑셀 다운로드 완료', 'success');
+}
+
 // ── 출고 현황 테이블 렌더링 ──
 function outgoingRenderTable() {
   const mk = prepMonthKey();
@@ -9100,6 +9119,25 @@ function inspExportCSV() {
   a.href=url; a.download=`투입전검사_${mk}.csv`; a.click();
   URL.revokeObjectURL(url);
   inspShowToast('CSV 내보내기 완료','success');
+}
+
+function inspExportExcel() {
+  const mk = inspMonthKey();
+  const records = inspGetRecords().filter(r => r.month === mk);
+  if (records.length === 0) { inspShowToast('내보낼 데이터가 없습니다','error'); return; }
+  const defectHeaders = PREP_DEFECT_TYPES.map(t=>`불량_${t}`);
+  const header = ['날짜','라인','모델','항목','투입수량(EA)','양품수량(EA)','불량수량(EA)',...defectHeaders,'인원','소요시간(H)','시작시간','종료시간','비고'];
+  const rows = records.map(r => [
+    r.date, r.line||'', r.modelName, r.itemName,
+    r.qty||0, r.goodQty??'', r.defectQty??'',
+    ...PREP_DEFECT_TYPES.map(t=>(r.defects&&r.defects[t])?r.defects[t]:0),
+    r.workers, r.hours, r.startTime||'', r.endTime||'', r.memo||''
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '투입전검사');
+  XLSX.writeFile(wb, `투입전검사_${mk}.xlsx`);
+  inspShowToast('엑셀 다운로드 완료','success');
 }
 
 // ── 출고 현황 ──
