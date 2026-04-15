@@ -1443,7 +1443,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:14px;">
       <div class="prep-month-nav">
-        <input type="month" class="prep-month-picker" id="prep-inv-mp" onchange="prepPickMonth(this.value, prepRenderInventory)">
+        <input type="date" class="prep-month-picker" id="prep-inv-mp" onchange="prepPickDate(this.value, prepRenderInventory)">
       </div>
     </div>
     <div class="prep-inv-table-wrap">
@@ -1475,11 +1475,11 @@
         <div class="prep-stat-value" id="prep-statTotal">0<span class="prep-stat-unit">건</span></div>
       </div>
       <div class="prep-stat-card green">
-        <div class="prep-stat-label">금월 총 생산수량</div>
+        <div class="prep-stat-label">금일 총 생산수량</div>
         <div class="prep-stat-value" id="prep-statQty">0<span class="prep-stat-unit">EA</span></div>
       </div>
       <div class="prep-stat-card orange">
-        <div class="prep-stat-label">금월 총 소요시간</div>
+        <div class="prep-stat-label">금일 총 소요시간</div>
         <div class="prep-stat-value" id="prep-statHours">0<span class="prep-stat-unit">H</span></div>
       </div>
       <div class="prep-stat-card purple">
@@ -1495,7 +1495,7 @@
     <!-- 툴바 -->
     <div class="prep-toolbar">
       <div class="prep-month-nav">
-        <input type="month" class="prep-month-picker" id="prep-list-mp" onchange="prepPickMonth(this.value, ()=>{prepRenderTable();prepUpdateStats();})">
+        <input type="date" class="prep-month-picker" id="prep-list-mp" onchange="prepPickDate(this.value, ()=>{prepRenderTable();prepUpdateStats();})">
       </div>
       <button class="prep-btn-export" onclick="prepExportExcel()">📥 엑셀 다운로드</button>
       <div class="prep-filter-line">
@@ -1521,7 +1521,7 @@
           <thead>
             <tr>
               <th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
-              <th>금월 건수</th><th>금월 수량(EA)</th><th>불량률(%)</th><th>실제 소요시간(H)</th><th>조회</th>
+              <th>금일 건수</th><th>금일 수량(EA)</th><th>불량률(%)</th><th>실제 소요시간(H)</th><th>조회</th>
             </tr>
           </thead>
           <tbody id="prep-mainTbody"></tbody>
@@ -1538,7 +1538,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:6px;">
       <div class="prep-month-nav">
-        <input type="month" class="prep-month-picker" id="prep-hist-mp" onchange="prepPickMonth(this.value, prepRenderAllHistory)">
+        <input type="date" class="prep-month-picker" id="prep-hist-mp" onchange="prepPickDate(this.value, prepRenderAllHistory)">
       </div>
       <span id="prep-hist-count" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
       <div class="prep-filter-line">
@@ -1571,7 +1571,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:14px;">
       <div class="prep-month-nav">
-        <input type="month" class="prep-month-picker" id="prep-og-mp" onchange="prepPickMonth(this.value, outgoingRenderTable)">
+        <input type="date" class="prep-month-picker" id="prep-og-mp" onchange="prepPickDate(this.value, outgoingRenderTable)">
       </div>
       <button class="prep-btn-outgoing" onclick="outgoingOpenModal()">📤 출고 등록</button>
     </div>
@@ -1861,7 +1861,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:14px;">
       <div class="prep-month-nav">
-        <input type="month" class="prep-month-picker" id="insp-inv-mp" onchange="inspPickMonth(this.value, inspRenderInventory)">
+        <input type="date" class="prep-month-picker" id="insp-inv-mp" onchange="inspPickDate(this.value, inspRenderInventory)">
       </div>
     </div>
     <div class="prep-inv-table-wrap">
@@ -1893,11 +1893,11 @@
         <div class="prep-stat-value" id="insp-statTotal">0<span class="prep-stat-unit">건</span></div>
       </div>
       <div class="prep-stat-card green">
-        <div class="prep-stat-label">금월 총 생산수량</div>
+        <div class="prep-stat-label">금일 총 생산수량</div>
         <div class="prep-stat-value" id="insp-statQty">0<span class="prep-stat-unit">EA</span></div>
       </div>
       <div class="prep-stat-card orange">
-        <div class="prep-stat-label">금월 총 소요시간</div>
+        <div class="prep-stat-label">금일 총 소요시간</div>
         <div class="prep-stat-value" id="insp-statHours">0<span class="prep-stat-unit">H</span></div>
       </div>
       <div class="prep-stat-card purple">
@@ -1913,7 +1913,7 @@
     <!-- 툴바 -->
     <div class="prep-toolbar">
       <div class="prep-month-nav">
-        <input type="month" class="prep-month-picker" id="insp-list-mp" onchange="inspPickMonth(this.value, ()=>{inspRenderTable();inspUpdateStats();})">
+        <input type="date" class="prep-month-picker" id="insp-list-mp" onchange="inspPickDate(this.value, ()=>{inspRenderTable();inspUpdateStats();})">
       </div>
       <button class="prep-btn-export" onclick="inspExportExcel()">📥 엑셀 다운로드</button>
       <div class="prep-filter-line">
@@ -1938,7 +1938,7 @@
           <thead>
             <tr>
               <th>라인</th><th>모델</th><th>항목</th><th>자품번</th><th>고객사 P/N</th>
-              <th>금월 건수</th><th>금월 수량(EA)</th><th>불량률(%)</th><th>실제 소요시간(H)</th><th>조회</th>
+              <th>금일 건수</th><th>금일 수량(EA)</th><th>불량률(%)</th><th>실제 소요시간(H)</th><th>조회</th>
             </tr>
           </thead>
           <tbody id="insp-mainTbody"></tbody>
@@ -1955,7 +1955,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:6px;">
       <div class="prep-month-nav">
-        <input type="month" class="prep-month-picker" id="insp-hist-mp" onchange="inspPickMonth(this.value, inspRenderAllHistory)">
+        <input type="date" class="prep-month-picker" id="insp-hist-mp" onchange="inspPickDate(this.value, inspRenderAllHistory)">
       </div>
       <span id="insp-hist-count" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
       <div class="prep-filter-line">
@@ -1987,7 +1987,7 @@
     </div>
     <div class="prep-toolbar" style="margin-bottom:14px;">
       <div class="prep-month-nav">
-        <input type="month" class="prep-month-picker" id="insp-og-mp" onchange="inspPickMonth(this.value, inspOutgoingRenderTable)">
+        <input type="date" class="prep-month-picker" id="insp-og-mp" onchange="inspPickDate(this.value, inspOutgoingRenderTable)">
       </div>
       <button class="prep-btn-outgoing" onclick="inspOutgoingOpenModal()">📤 출고 등록</button>
     </div>
@@ -6442,6 +6442,9 @@ document.getElementById('auto-kit-modal').addEventListener('click', function(e) 
 });
 document.addEventListener('DOMContentLoaded', () => { prepRestoreMasterUI(); switchView('kb'); });
 
+// ── 30분 자동 새로고침 ──────────────────────────────
+setTimeout(() => location.reload(), 30 * 60 * 1000);
+
 // ── 앱 설정 모달 ──────────────────────────────────
 function openAppSettings() {
   const overlay = document.getElementById('app-settings-overlay');
@@ -6573,6 +6576,7 @@ const PREP_MODELS = [
 
 let prepCurYear = new Date().getFullYear();
 let prepCurMonthNum = new Date().getMonth() + 1;
+let prepCurDay = new Date().getDate();
 let prepCurrentTab = 'all';
 let prepFilterLine = 'all';
 let prepBomApplied = false;
@@ -6653,21 +6657,22 @@ function prepFormatDate(d) {
   return `${y}-${m}-${dd}`;
 }
 function prepMonthKey() {
-  return `${prepCurYear}-${String(prepCurMonthNum).padStart(2,'0')}`;
+  return `${prepCurYear}-${String(prepCurMonthNum).padStart(2,'0')}-${String(prepCurDay).padStart(2,'0')}`;
 }
 function prepChangeMonth(d) {
-  prepCurMonthNum += d;
-  if (prepCurMonthNum > 12) { prepCurMonthNum = 1; prepCurYear++; }
-  if (prepCurMonthNum < 1) { prepCurMonthNum = 12; prepCurYear--; }
+  const cur = new Date(prepCurYear, prepCurMonthNum - 1, prepCurDay);
+  cur.setDate(cur.getDate() + d);
+  prepCurYear = cur.getFullYear(); prepCurMonthNum = cur.getMonth() + 1; prepCurDay = cur.getDate();
   prepRenderMonthLabel();
 }
-function prepPickMonth(val, renderFn) {
+function prepPickDate(val, renderFn) {
   if (!val) return;
-  const [y, m] = val.split('-').map(Number);
-  prepCurYear = y; prepCurMonthNum = m;
+  const [y, m, dd] = val.split('-').map(Number);
+  prepCurYear = y; prepCurMonthNum = m; prepCurDay = dd;
   prepRenderMonthLabel();
   if (renderFn) renderFn();
 }
+function prepPickMonth(val, renderFn) { prepPickDate(val, renderFn); }
 function prepSwitchTab(t) {
   prepCurrentTab = t;
   prepFilterLine = t === 'all' ? 'all' : t;
@@ -6879,23 +6884,23 @@ async function prepGotoSubview(name) {
 
 function prepUpdateHomeCounts() {
   const mk = prepMonthKey();
-  const recs = prepGetRecords().filter(r => r.month === mk);
+  const recs = prepGetRecords().filter(r => r.date === mk);
   const listCount = recs.length;
-  const ogCount = outgoingGetRecords().filter(r => r.month === mk).length;
+  const ogCount = outgoingGetRecords().filter(r => r.date === mk).length;
   const invItems = prepGetInventoryRows().length;
 
   const lc = document.getElementById('prep-home-list-count');
   const oc = document.getElementById('prep-home-og-count');
   const ic = document.getElementById('prep-home-inv-count');
   const hc = document.getElementById('prep-home-hist-count');
-  if (lc) lc.textContent = `금월 ${listCount}건`;
-  if (oc) oc.textContent = `금월 ${ogCount}건`;
+  if (lc) lc.textContent = `금일 ${listCount}건`;
+  if (oc) oc.textContent = `금일 ${ogCount}건`;
   if (ic) ic.textContent = `${invItems}개 품목`;
-  if (hc) hc.textContent = `금월 ${listCount}건`;
+  if (hc) hc.textContent = `금일 ${listCount}건`;
 }
 
 function prepRenderMonthLabel() {
-  const val = `${prepCurYear}-${String(prepCurMonthNum).padStart(2,'0')}`;
+  const val = `${prepCurYear}-${String(prepCurMonthNum).padStart(2,'0')}-${String(prepCurDay).padStart(2,'0')}`;
   ['prep-inv-mp','prep-list-mp','prep-hist-mp','prep-og-mp'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = val;
@@ -6914,8 +6919,8 @@ function prepInvSetFilter(f, el) {
 
 function prepGetInventoryRows() {
   const mk = prepMonthKey();
-  const prepRecs = prepGetRecords().filter(r => r.month === mk);
-  const ogRecs = outgoingGetRecords().filter(r => r.month === mk);
+  const prepRecs = prepGetRecords().filter(r => r.date === mk);
+  const ogRecs = outgoingGetRecords().filter(r => r.date === mk);
 
   // 그룹: 자품번(partNo) 기준 - 라인 무관 합산
   const groups = {};
@@ -7172,7 +7177,7 @@ function prepApplyBomFromState() {
 // ── 테이블 렌더링 (실적 등록된 라인/모델/항목 조합만 표시) ──
 function prepRenderTable() {
   const mk = prepMonthKey();
-  const allRecords = prepGetRecords().filter(r => r.month === mk);
+  const allRecords = prepGetRecords().filter(r => r.date === mk);
   const tbody = document.getElementById('prep-mainTbody');
   if (!tbody) return;
   tbody.innerHTML = '';
@@ -7236,7 +7241,7 @@ function prepRenderTable() {
 // ── 통계 업데이트 ──
 function prepUpdateStats() {
   const mk = prepMonthKey();
-  const records = prepGetRecords().filter(r => r.month === mk);
+  const records = prepGetRecords().filter(r => r.date === mk);
   const totalQty = records.reduce((s, r) => s + (r.qty || 0), 0);
   const totalHours = records.reduce((s, r) => s + (r.hours || 0), 0);
   const avgWorkers = records.length > 0 ? (records.reduce((s, r) => s + (r.workers || 0), 0) / records.length).toFixed(1) : 0;
@@ -7652,7 +7657,7 @@ function prepSaveRecord() {
 // ── 이력 렌더링 (라인/모델/항목 필터) ──
 function prepRenderHistoryByFilter(line, modelName, itemName) {
   const mk = prepMonthKey();
-  let records = prepGetRecords().filter(r => r.month === mk);
+  let records = prepGetRecords().filter(r => r.date === mk);
   if (line) records = records.filter(r => r.line === line);
   if (modelName) records = records.filter(r => r.modelName === modelName);
   if (itemName) records = records.filter(r => r.itemName === itemName);
@@ -7661,7 +7666,7 @@ function prepRenderHistoryByFilter(line, modelName, itemName) {
   const historyBody = document.getElementById('prep-historyBody');
   const historyMonth = document.getElementById('prep-historyMonth');
   const historyCount = document.getElementById('prep-historyCount');
-  if (historyMonth) historyMonth.textContent = `(${prepCurYear}년 ${prepCurMonthNum}월)`;
+  if (historyMonth) historyMonth.textContent = `(${prepCurYear}년 ${prepCurMonthNum}월 ${prepCurDay}일)`;
   if (historyCount) historyCount.textContent = `총 ${records.length}건 / ${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}EA`;
 
   if (!historyBody) return;
@@ -7743,7 +7748,7 @@ function prepHistSetFilter(f, el) {
 
 function prepRenderAllHistory() {
   const mk = prepMonthKey();
-  let allRecs = prepGetRecords().filter(r => r.month === mk);
+  let allRecs = prepGetRecords().filter(r => r.date === mk);
   if (prepHistFilterLine !== 'all') allRecs = allRecs.filter(r => r.line === prepHistFilterLine);
 
   // datalist 갱신
@@ -7907,7 +7912,7 @@ function prepDeleteRecord(id, eLine, eModel, eItem) {
 // ── CSV 내보내기 ──
 function prepExportCSV() {
   const mk = prepMonthKey();
-  const records = prepGetRecords().filter(r => r.month === mk);
+  const records = prepGetRecords().filter(r => r.date === mk);
   if (records.length === 0) { prepShowToast('내보낼 데이터가 없습니다', 'error'); return; }
   const defectHeaders = PREP_DEFECT_TYPES.map(t => `불량_${t}`);
   const header = ['날짜','라인','모델','항목','투입수량(EA)','양품수량(EA)','불량수량(EA)',...defectHeaders,'인원','소요시간(H)','시작시간','종료시간','비고'];
@@ -7928,7 +7933,7 @@ function prepExportCSV() {
 
 function prepExportExcel() {
   const mk = prepMonthKey();
-  const records = prepGetRecords().filter(r => r.month === mk);
+  const records = prepGetRecords().filter(r => r.date === mk);
   if (records.length === 0) { prepShowToast('내보낼 데이터가 없습니다', 'error'); return; }
   const defectHeaders = PREP_DEFECT_TYPES.map(t => `불량_${t}`);
   const header = ['날짜','라인','모델','항목','투입수량(EA)','양품수량(EA)','불량수량(EA)',...defectHeaders,'인원','소요시간(H)','시작시간','종료시간','비고'];
@@ -7948,7 +7953,7 @@ function prepExportExcel() {
 // ── 출고 현황 테이블 렌더링 ──
 function outgoingRenderTable() {
   const mk = prepMonthKey();
-  const records = outgoingGetRecords().filter(r => r.month === mk);
+  const records = outgoingGetRecords().filter(r => r.date === mk);
   const tbody = document.getElementById('prep-outgoing-tbody');
   if (!tbody) return;
   if (records.length === 0) {
@@ -8069,7 +8074,7 @@ function outgoingSaveRecord() {
 
 function outgoingRenderHistory() {
   const mk = prepMonthKey();
-  const records = outgoingGetRecords().filter(r => r.month === mk)
+  const records = outgoingGetRecords().filter(r => r.date === mk)
     .sort((a,b) => b.date.localeCompare(a.date));
 
   const countEl = document.getElementById('og-historyCount');
@@ -8203,6 +8208,7 @@ async function _sbPullRecords(fileType, storageKey) {
 
 let inspCurYear = new Date().getFullYear();
 let inspCurMonthNum = new Date().getMonth() + 1;
+let inspCurDay = new Date().getDate();
 let inspFilterLine = 'all';
 let inspInvFilterLine = 'all';
 let _editingInspId = null;
@@ -8230,23 +8236,24 @@ function inspOutgoingSaveRecords(arr) {
 }
 
 function inspMonthKey() {
-  return `${inspCurYear}-${String(inspCurMonthNum).padStart(2,'0')}`;
+  return `${inspCurYear}-${String(inspCurMonthNum).padStart(2,'0')}-${String(inspCurDay).padStart(2,'0')}`;
 }
 function inspChangeMonth(d) {
-  inspCurMonthNum += d;
-  if (inspCurMonthNum > 12) { inspCurMonthNum = 1; inspCurYear++; }
-  if (inspCurMonthNum < 1) { inspCurMonthNum = 12; inspCurYear--; }
+  const cur = new Date(inspCurYear, inspCurMonthNum - 1, inspCurDay);
+  cur.setDate(cur.getDate() + d);
+  inspCurYear = cur.getFullYear(); inspCurMonthNum = cur.getMonth() + 1; inspCurDay = cur.getDate();
   inspRenderMonthLabel();
 }
-function inspPickMonth(val, renderFn) {
+function inspPickDate(val, renderFn) {
   if (!val) return;
-  const [y, m] = val.split('-').map(Number);
-  inspCurYear = y; inspCurMonthNum = m;
+  const [y, m, dd] = val.split('-').map(Number);
+  inspCurYear = y; inspCurMonthNum = m; inspCurDay = dd;
   inspRenderMonthLabel();
   if (renderFn) renderFn();
 }
+function inspPickMonth(val, renderFn) { inspPickDate(val, renderFn); }
 function inspRenderMonthLabel() {
-  const val = `${inspCurYear}-${String(inspCurMonthNum).padStart(2,'0')}`;
+  const val = `${inspCurYear}-${String(inspCurMonthNum).padStart(2,'0')}-${String(inspCurDay).padStart(2,'0')}`;
   ['insp-inv-mp','insp-list-mp','insp-hist-mp','insp-og-mp'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = val;
@@ -8381,18 +8388,18 @@ async function inspGotoSubview(name) {
 
 function inspUpdateHomeCounts() {
   const mk = inspMonthKey();
-  const recs = inspGetRecords().filter(r => r.month === mk);
+  const recs = inspGetRecords().filter(r => r.date === mk);
   const listCount = recs.length;
-  const ogCount = inspOutgoingGetRecords().filter(r => r.month === mk).length;
+  const ogCount = inspOutgoingGetRecords().filter(r => r.date === mk).length;
   const invItems = inspGetInventoryRows().length;
   const lc = document.getElementById('insp-home-list-count');
   const oc = document.getElementById('insp-home-og-count');
   const ic = document.getElementById('insp-home-inv-count');
   const hc = document.getElementById('insp-home-hist-count');
-  if (lc) lc.textContent = `금월 ${listCount}건`;
-  if (oc) oc.textContent = `금월 ${ogCount}건`;
+  if (lc) lc.textContent = `금일 ${listCount}건`;
+  if (oc) oc.textContent = `금일 ${ogCount}건`;
   if (ic) ic.textContent = `${invItems}개 품목`;
-  if (hc) hc.textContent = `금월 ${listCount}건`;
+  if (hc) hc.textContent = `금일 ${listCount}건`;
 }
 
 // ── 재고현황 ──
@@ -8405,8 +8412,8 @@ function inspInvSetFilter(f, el) {
 
 function inspGetInventoryRows() {
   const mk = inspMonthKey();
-  const inspRecs = inspGetRecords().filter(r => r.month === mk);
-  const ogRecs = inspOutgoingGetRecords().filter(r => r.month === mk);
+  const inspRecs = inspGetRecords().filter(r => r.date === mk);
+  const ogRecs = inspOutgoingGetRecords().filter(r => r.date === mk);
   // 그룹: 자품번(partNo) 기준 - 라인 무관 합산
   const groups = {};
   inspRecs.forEach(r => {
@@ -8469,7 +8476,7 @@ function inspSetFilter(f, el) {
 
 function inspRenderTable() {
   const mk = inspMonthKey();
-  const allRecords = inspGetRecords().filter(r => r.month === mk);
+  const allRecords = inspGetRecords().filter(r => r.date === mk);
   const tbody = document.getElementById('insp-mainTbody');
   if (!tbody) return;
   tbody.innerHTML = '';
@@ -8524,7 +8531,7 @@ function inspRenderTable() {
 
 function inspUpdateStats() {
   const mk = inspMonthKey();
-  const records = inspGetRecords().filter(r => r.month === mk);
+  const records = inspGetRecords().filter(r => r.date === mk);
   const totalQty = records.reduce((s,r)=>s+(r.qty||0),0);
   const totalHours = records.reduce((s,r)=>s+(r.hours||0),0);
   const avgWorkers = records.length > 0 ? (records.reduce((s,r)=>s+(r.workers||0),0)/records.length).toFixed(1) : 0;
@@ -8857,7 +8864,7 @@ function inspSaveRecord() {
 // ── 이력 렌더링 ──
 function inspRenderHistoryByFilter(line, modelName, itemName) {
   const mk = inspMonthKey();
-  let records = inspGetRecords().filter(r => r.month === mk);
+  let records = inspGetRecords().filter(r => r.date === mk);
   if (line) records = records.filter(r => r.line === line);
   if (modelName) records = records.filter(r => r.modelName === modelName);
   if (itemName) records = records.filter(r => r.itemName === itemName);
@@ -8865,7 +8872,7 @@ function inspRenderHistoryByFilter(line, modelName, itemName) {
   const historyBody = document.getElementById('insp-historyBody');
   const historyMonth = document.getElementById('insp-historyMonth');
   const historyCount = document.getElementById('insp-historyCount');
-  if (historyMonth) historyMonth.textContent = `(${inspCurYear}년 ${inspCurMonthNum}월)`;
+  if (historyMonth) historyMonth.textContent = `(${inspCurYear}년 ${inspCurMonthNum}월 ${inspCurDay}일)`;
   if (historyCount) historyCount.textContent = `총 ${records.length}건 / ${records.reduce((s,r)=>s+(r.qty||0),0).toLocaleString()}EA`;
   if (!historyBody) return;
   if (records.length === 0) {
@@ -8945,7 +8952,7 @@ function inspHistSetFilter(f, el) {
 
 function inspRenderAllHistory() {
   const mk = inspMonthKey();
-  let allRecs = inspGetRecords().filter(r => r.month === mk);
+  let allRecs = inspGetRecords().filter(r => r.date === mk);
   if (inspHistFilterLine !== 'all') allRecs = allRecs.filter(r => r.line === inspHistFilterLine);
 
   // datalist 갱신
@@ -9102,7 +9109,7 @@ function inspDeleteRecord(id, eLine, eModel, eItem) {
 
 function inspExportCSV() {
   const mk = inspMonthKey();
-  const records = inspGetRecords().filter(r => r.month === mk);
+  const records = inspGetRecords().filter(r => r.date === mk);
   if (records.length === 0) { inspShowToast('내보낼 데이터가 없습니다','error'); return; }
   const defectHeaders = PREP_DEFECT_TYPES.map(t=>`불량_${t}`);
   const header = ['날짜','라인','모델','항목','투입수량(EA)','양품수량(EA)','불량수량(EA)',...defectHeaders,'인원','소요시간(H)','시작시간','종료시간','비고'];
@@ -9123,7 +9130,7 @@ function inspExportCSV() {
 
 function inspExportExcel() {
   const mk = inspMonthKey();
-  const records = inspGetRecords().filter(r => r.month === mk);
+  const records = inspGetRecords().filter(r => r.date === mk);
   if (records.length === 0) { inspShowToast('내보낼 데이터가 없습니다','error'); return; }
   const defectHeaders = PREP_DEFECT_TYPES.map(t=>`불량_${t}`);
   const header = ['날짜','라인','모델','항목','투입수량(EA)','양품수량(EA)','불량수량(EA)',...defectHeaders,'인원','소요시간(H)','시작시간','종료시간','비고'];
@@ -9143,7 +9150,7 @@ function inspExportExcel() {
 // ── 출고 현황 ──
 function inspOutgoingRenderTable() {
   const mk = inspMonthKey();
-  const records = inspOutgoingGetRecords().filter(r => r.month === mk);
+  const records = inspOutgoingGetRecords().filter(r => r.date === mk);
   const tbody = document.getElementById('insp-outgoing-tbody');
   if (!tbody) return;
   if (records.length === 0) {
@@ -9251,7 +9258,7 @@ function inspOutgoingSaveRecord() {
 
 function inspOutgoingRenderHistory() {
   const mk = inspMonthKey();
-  const records = inspOutgoingGetRecords().filter(r=>r.month===mk).sort((a,b)=>b.date.localeCompare(a.date));
+  const records = inspOutgoingGetRecords().filter(r=>r.date===mk).sort((a,b)=>b.date.localeCompare(a.date));
   const countEl = document.getElementById('insp-og-historyCount');
   if (countEl) countEl.textContent = `총 ${records.length}건`;
   const body = document.getElementById('insp-og-historyBody');

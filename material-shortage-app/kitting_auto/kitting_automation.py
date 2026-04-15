@@ -17,6 +17,7 @@ from pathlib import Path
 # ──────────────────────────────────────────────────────────────────────────────
 SMES_EXE     = Path(r"C:\Program Files (x86)\I2R\sMES\sMES.exe")
 DOWNLOAD_DIR   = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
+PREV_KIT_DIR   = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\전일키팅")
 INVENTORY_DIR  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\재고현황")
 HTML_FILE      = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
 STOP_FLAG      = Path(__file__).parent / "stop_flag.txt"
@@ -1529,6 +1530,13 @@ def automate_upload(downloaded_files):
         # ── 키팅 자재 업로드 (먼저) ──────────────────────────────────────────
         all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
         all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
+        # 전일키팅 폴더 파일 추가
+        if PREV_KIT_DIR.exists():
+            prev_kit = sorted(PREV_KIT_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
+            prev_kit += sorted(PREV_KIT_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
+            if prev_kit:
+                log(f"  전일키팅 폴더 {len(prev_kit)}개 파일 추가: {[f.name for f in prev_kit]}")
+                all_kit += prev_kit
         valid = [str(f) for f in all_kit if f.exists()]
         log(f"  kitting 자재 폴더 전체 {len(valid)}개 파일 업로드 중...")
         if valid:
