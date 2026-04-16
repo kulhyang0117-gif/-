@@ -16,9 +16,14 @@ from pathlib import Path
 # 설정
 # ──────────────────────────────────────────────────────────────────────────────
 SMES_EXE     = Path(r"C:\Program Files (x86)\I2R\sMES\sMES.exe")
-DOWNLOAD_DIR   = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
-PREV_KIT_DIR   = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\전일키팅")
-INVENTORY_DIR  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\재고현황")
+# ── 기본(fallback) 경로 ── 앱 설정에서 지정하지 않았을 때 사용
+DOWNLOAD_DIR_DEFAULT  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
+PREV_KIT_DIR_DEFAULT  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\전일키팅")
+INVENTORY_DIR_DEFAULT = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\재고현황")
+# ── 런타임 경로 (main() 시작 시 브라우저 localStorage 값으로 덮어씀) ──
+DOWNLOAD_DIR   = DOWNLOAD_DIR_DEFAULT
+PREV_KIT_DIR   = PREV_KIT_DIR_DEFAULT
+INVENTORY_DIR  = INVENTORY_DIR_DEFAULT
 HTML_FILE      = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
 STOP_FLAG      = Path(__file__).parent / "stop_flag.txt"
 
@@ -1622,6 +1627,41 @@ def automate_upload(downloaded_files):
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# 앱 설정에서 폴더 경로 읽기 (브라우저 localStorage → CDP)
+# ──────────────────────────────────────────────────────────────────────────────
+def read_cfg_paths():
+    """
+    이미 열린 브라우저에 CDP로 접속해 localStorage 설정값을 읽는다.
+    성공 시 (download_dir, prev_kit_dir, inv_dir) 반환, 실패 시 (None, None, None).
+    """
+    from playwright.sync_api import sync_playwright
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.connect_over_cdp("http://localhost:9222")
+            page = None
+            for ctx in browser.contexts:
+                for pg in ctx.pages:
+                    if "material-shortage" in pg.url:
+                        page = pg
+                        break
+                if page:
+                    break
+            if not page and browser.contexts:
+                pages = browser.contexts[0].pages
+                if pages:
+                    page = pages[0]
+            if not page:
+                return None, None, None
+            download = page.evaluate("() => localStorage.getItem('ms_cfg_download_dir')")
+            prev_kit = page.evaluate("() => localStorage.getItem('ms_cfg_prev_kit_dir')")
+            inventory = page.evaluate("() => localStorage.getItem('ms_cfg_inv_dir')")
+            return download or None, prev_kit or None, inventory or None
+    except Exception as e:
+        log(f"  [설정 읽기] CDP 연결 실패({e}) — 기본 경로 사용")
+        return None, None, None
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # 메인
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
@@ -1635,6 +1675,17 @@ def main():
     log("=" * 60)
     log(f"sMES 키팅 자동화 시작  ({TODAY})  [step={args.step}]")
     log("=" * 60)
+
+    # ── 앱 설정 경로 적용 (브라우저 localStorage 우선) ──────────────────────
+    global DOWNLOAD_DIR, PREV_KIT_DIR, INVENTORY_DIR
+    log("▶ 앱 설정 경로 읽는 중...")
+    dl, pk, iv = read_cfg_paths()
+    if dl: DOWNLOAD_DIR  = Path(dl);  log(f"  kitting 자재 경로: {DOWNLOAD_DIR}  [설정값]")
+    else:  log(f"  kitting 자재 경로: {DOWNLOAD_DIR}  [기본값]")
+    if pk: PREV_KIT_DIR  = Path(pk);  log(f"  전일키팅 경로:     {PREV_KIT_DIR}  [설정값]")
+    else:  log(f"  전일키팅 경로:     {PREV_KIT_DIR}  [기본값]")
+    if iv: INVENTORY_DIR = Path(iv);  log(f"  재고현황 경로:     {INVENTORY_DIR}  [설정값]")
+    else:  log(f"  재고현황 경로:     {INVENTORY_DIR}  [기본값]")
 
     if not is_admin():
         log("관리자 권한 필요. 재실행 중...")

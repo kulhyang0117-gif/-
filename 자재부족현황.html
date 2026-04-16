@@ -814,6 +814,21 @@
         <input type="text" id="cfg-kit-path" placeholder="C:\경로\kitting_auto\setup_url_protocol.bat">
         <div class="cfg-hint">이 컴퓨터에서 setup_url_protocol.bat 파일이 있는 전체 경로</div>
       </div>
+      <div class="cfg-field" style="margin-top:10px;">
+        <label>📁 kitting 자재 폴더 경로 <span style="color:#9ca3af;font-weight:400;">(sMES 다운로드 저장 폴더)</span></label>
+        <input type="text" id="cfg-download-dir" placeholder="C:\...\kitting 자재">
+        <div class="cfg-hint">sMES에서 Excel 파일을 다운로드할 폴더 경로</div>
+      </div>
+      <div class="cfg-field" style="margin-top:8px;">
+        <label>📁 전일키팅 폴더 경로 <span style="color:#9ca3af;font-weight:400;">(전일 키팅 파일 폴더)</span></label>
+        <input type="text" id="cfg-prev-kit-dir" placeholder="C:\...\전일키팅">
+        <div class="cfg-hint">전일 키팅 자재 파일이 저장된 폴더 경로 (선택)</div>
+      </div>
+      <div class="cfg-field" style="margin-top:8px;">
+        <label>📁 재고현황 폴더 경로 <span style="color:#9ca3af;font-weight:400;">(재고현황 파일 폴더)</span></label>
+        <input type="text" id="cfg-inv-dir" placeholder="C:\...\재고현황">
+        <div class="cfg-hint">재고현황 Excel 파일이 저장된 폴더 경로</div>
+      </div>
     </div>
 
     <div class="cfg-btns">
@@ -6485,11 +6500,13 @@ setTimeout(() => location.reload(), 30 * 60 * 1000);
 function openAppSettings() {
   const overlay = document.getElementById('app-settings-overlay');
   if (!overlay) return;
-  // 현재 설정값 로드 (저장된 값 또는 현재 사용 중인 값)
   document.getElementById('cfg-sb-url').value   = localStorage.getItem('ms_cfg_sb_url')   || _SB_URL_DEFAULT;
   document.getElementById('cfg-sb-key').value   = localStorage.getItem('ms_cfg_sb_key')   || '';
   document.getElementById('cfg-admin-email').value = localStorage.getItem('ms_cfg_admin_email') || (localStorage.getItem('ms_cfg_admin_email') === null ? 'kulhyang0117@gmail.com' : '');
-  document.getElementById('cfg-kit-path').value = localStorage.getItem('ms_cfg_kit_path') || '';
+  document.getElementById('cfg-kit-path').value     = localStorage.getItem('ms_cfg_kit_path')     || '';
+  document.getElementById('cfg-download-dir').value = localStorage.getItem('ms_cfg_download_dir') || '';
+  document.getElementById('cfg-prev-kit-dir').value = localStorage.getItem('ms_cfg_prev_kit_dir') || '';
+  document.getElementById('cfg-inv-dir').value      = localStorage.getItem('ms_cfg_inv_dir')      || '';
   overlay.classList.add('open');
 }
 
@@ -6498,29 +6515,36 @@ function closeAppSettings() {
 }
 
 function saveAppSettings() {
-  const url   = document.getElementById('cfg-sb-url').value.trim();
-  const key   = document.getElementById('cfg-sb-key').value.trim();
-  const email = document.getElementById('cfg-admin-email').value.trim();
-  const path  = document.getElementById('cfg-kit-path').value.trim();
+  const url         = document.getElementById('cfg-sb-url').value.trim();
+  const key         = document.getElementById('cfg-sb-key').value.trim();
+  const email       = document.getElementById('cfg-admin-email').value.trim();
+  const path        = document.getElementById('cfg-kit-path').value.trim();
+  const downloadDir = document.getElementById('cfg-download-dir').value.trim();
+  const prevKitDir  = document.getElementById('cfg-prev-kit-dir').value.trim();
+  const invDir      = document.getElementById('cfg-inv-dir').value.trim();
 
-  if (url)   localStorage.setItem('ms_cfg_sb_url', url);
-  else       localStorage.removeItem('ms_cfg_sb_url');
-
-  if (key)   localStorage.setItem('ms_cfg_sb_key', key);
-  else       localStorage.removeItem('ms_cfg_sb_key');
-
-  if (email) localStorage.setItem('ms_cfg_admin_email', email);
-  else       localStorage.removeItem('ms_cfg_admin_email');
-
-  if (path)  localStorage.setItem('ms_cfg_kit_path', path);
-  else       localStorage.removeItem('ms_cfg_kit_path');
+  if (url)         localStorage.setItem('ms_cfg_sb_url', url);
+  else             localStorage.removeItem('ms_cfg_sb_url');
+  if (key)         localStorage.setItem('ms_cfg_sb_key', key);
+  else             localStorage.removeItem('ms_cfg_sb_key');
+  if (email)       localStorage.setItem('ms_cfg_admin_email', email);
+  else             localStorage.removeItem('ms_cfg_admin_email');
+  if (path)        localStorage.setItem('ms_cfg_kit_path', path);
+  else             localStorage.removeItem('ms_cfg_kit_path');
+  if (downloadDir) localStorage.setItem('ms_cfg_download_dir', downloadDir);
+  else             localStorage.removeItem('ms_cfg_download_dir');
+  if (prevKitDir)  localStorage.setItem('ms_cfg_prev_kit_dir', prevKitDir);
+  else             localStorage.removeItem('ms_cfg_prev_kit_dir');
+  if (invDir)      localStorage.setItem('ms_cfg_inv_dir', invDir);
+  else             localStorage.removeItem('ms_cfg_inv_dir');
 
   location.reload();
 }
 
 function resetAppSettings() {
   if (!confirm('모든 설정을 기본값으로 초기화하시겠습니까?')) return;
-  ['ms_cfg_sb_url','ms_cfg_sb_key','ms_cfg_admin_email','ms_cfg_kit_path'].forEach(k => localStorage.removeItem(k));
+  ['ms_cfg_sb_url','ms_cfg_sb_key','ms_cfg_admin_email','ms_cfg_kit_path',
+   'ms_cfg_download_dir','ms_cfg_prev_kit_dir','ms_cfg_inv_dir'].forEach(k => localStorage.removeItem(k));
   location.reload();
 }
 
