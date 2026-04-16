@@ -5213,20 +5213,25 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
   const bomMap = window._kbBomMap || {};
 
   let totalCnt = 0;
+  let grandTotalShortage = 0;
+
   for (const line of lines) {
-    const seenParts = new Set();
-    const lineShortages = [];
+    // 동일 자품번이 여러 블록에서 danger일 수 있으므로 가장 악화된(remaining 최소) 블록 기준으로 집계
+    const worstPartMap = new Map(); // 자품번 → worst-case part data
     for (const row of lineMap[line]) {
       const dangerParts = getDateDangerParts
         ? getDateDangerParts(row)
         : ((mStatusMap[`${row.sheet}||${row.pn}||${row.model}||${row.lhrh}`] || {}).dangerParts || []);
       for (const part of dangerParts) {
-        if (seenParts.has(part.자품번)) continue;
-        seenParts.add(part.자품번);
-        // 부모 제품 pn 저장 → 렌더링 시 BOM 직접 조회용
-        lineShortages.push({ ...part, _parentPn: row.pn });
+        const cur = worstPartMap.get(part.자품번);
+        const partRem = part.remaining ?? Infinity;
+        const curRem  = cur ? (cur.remaining ?? Infinity) : Infinity;
+        if (!cur || partRem < curRem) {
+          worstPartMap.set(part.자품번, { ...part, _parentPn: row.pn });
+        }
       }
     }
+    const lineShortages = [...worstPartMap.values()];
     if (!lineShortages.length) continue;
     totalCnt += lineShortages.length;
 
@@ -5236,32 +5241,58 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
     container.appendChild(hdr);
     const okCntEl = hdr.querySelector('.kb-st-ok-cnt');
 
-    // 컬럼 헤더 행
+    // _blockParts 데이터 존재 여부 (prevReq/priorToday/thisReq 필드 기준)
+    const hasCumul = lineShortages.some(p => p.prevReq !== undefined || p.priorToday !== undefined || p.thisReq !== undefined);
+
     const tbl = document.createElement('table');
     tbl.className = 'kb-st-table';
-    const hasCumul = lineShortages.some(p => p.cumConsumed !== undefined);
     tbl.innerHTML = `<thead><tr>
       <th class="center">OK</th><th>부품번호</th><th>부품명</th><th>조달</th>
       <th class="num">가용재고</th>
-      ${hasCumul ? '<th class="num" style="color:#888;">이전일누적</th><th class="num">잔여재고</th><th class="num">당일소요</th>' : '<th class="num">필요</th>'}
-      <th class="num">부족</th>
+      ${hasCumul
+        ? '<th class="num" style="color:#d97706;">선행소요</th><th class="num">잔여재고</th><th class="num">당일소요</th>'
+        : '<th class="num">필요</th>'}
+      <th class="num">부족수량</th>
       <th>협력사</th><th>비고</th>
     </tr></thead>`;
     const tbody = document.createElement('tbody');
 
+    let lineTotalShortage = 0;
+
     for (const part of lineShortages) {
       const pi = partInfoMap[part.자품번] || {};
-      // 상세패널(openKbDetail)과 동일 방식: BOM 직접 조회 → 부품유형 우선
       const bomComp = (bomMap[part._parentPn] || []).find(c => c.자품번 === part.자품번);
       const 조달 = bomComp?.부품유형 || part.부품유형 || pi.부품유형 || pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
       const 협력사 = bomComp?.협력사명 || supplierMap[part.자품번] || pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
-      const available = part.available ?? (part.stock ?? 0);
-      const cumConsumed = part.cumConsumed ?? 0;
-      const remaining   = part.remaining  ?? available;
-      const dayReq      = part.dayReq     ?? (part.modelReq ?? part.totalGlobalReq ?? 0);
-      const lack = remaining - dayReq;
-      const lackStr = Math.round(lack).toLocaleString();
-      const remainStyle = lack < 0 ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
+
+      // openKbDetail과 동일 방식으로 필드 추출
+      const available  = part.available  ?? 0;                          // 총 가용재고 (stock+kit)
+      const kit        = part.kit        ?? 0;                          // 키팅 재고
+      const prevReq    = part.prevReq    ?? 0;                          // 이전날 누적 소요
+      const priorToday = part.priorToday ?? 0;                          // 오늘 선행 블록 소요
+      const cumConsumed = prevReq + priorToday;                         // 선행소요 합계
+      const thisReq    = part.thisReq    ?? (part.dayReq ?? (part.modelReq ?? part.totalGlobalReq ?? 0)); // 당일소요
+      const remaining  = (part.remaining !== undefined && part.remaining !== null)
+        ? part.remaining : (available - cumConsumed - thisReq);         // 이 블록 소비 후 잔여
+      const beforeReq  = remaining + thisReq;                           // 이 블록 소비 전 잔여재고
+
+      // 부족수량 (remaining이 음수일 때 shortage 발생)
+      const shortageAmt = remaining < 0 ? Math.abs(remaining) : 0;
+      lineTotalShortage   += shortageAmt;
+      grandTotalShortage  += shortageAmt;
+
+      const lackStr     = Math.round(remaining).toLocaleString();       // 음수로 표시
+      const beforeStyle = beforeReq < 0  ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
+      const lackStyle   = remaining  < 0 ? 'color:#dc2626;font-weight:700;' : 'color:#16a34a;font-weight:700;';
+
+      // 키팅 재고 뱃지 (openKbDetail과 동일)
+      const kitBadge = kit > 0
+        ? ` <span style="font-size:9px;background:#ede9fe;color:#6d28d9;padding:1px 5px;border-radius:3px;">키팅+${Math.round(kit).toLocaleString()}</span>`
+        : '';
+      // 선행소요 뱃지 (가용재고 셀에 표기 — openKbDetail과 동일)
+      const priorBadge = cumConsumed > 0
+        ? ` <span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;" title="이전일+선행블록 소요">선행-${Math.round(cumConsumed).toLocaleString()}</span>`
+        : '';
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -5269,13 +5300,13 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         <td class="kb-st-pn" style="font-family:monospace;font-size:11px;">${part.자품번}</td>
         <td class="kb-st-name">${part.자품명}</td>
         <td>${조달?`<span class="kb-proc-tag">${조달}</span>`:''}</td>
-        <td class="num">${Math.round(available).toLocaleString()}</td>
+        <td class="num">${Math.round(available).toLocaleString()}${kitBadge}${priorBadge}</td>
         ${hasCumul
-          ? `<td class="num" style="color:#888;">${Math.round(cumConsumed).toLocaleString()}</td>
-             <td class="num" style="${remainStyle}">${Math.round(remaining).toLocaleString()}</td>
-             <td class="num" style="font-weight:700;">${Math.round(dayReq).toLocaleString()}</td>`
-          : `<td class="num">${Math.round(dayReq).toLocaleString()}</td>`}
-        <td class="num kb-lack-cell kb-shortage-neg" data-orig-lack="${lackStr}">${lackStr}</td>
+          ? `<td class="num" style="color:#d97706;font-weight:600;">${cumConsumed > 0 ? Math.round(cumConsumed).toLocaleString() : '-'}</td>
+             <td class="num" style="${beforeStyle}">${Math.round(beforeReq).toLocaleString()}</td>
+             <td class="num" style="font-weight:700;">${Math.round(thisReq).toLocaleString()}</td>`
+          : `<td class="num">${Math.round(thisReq).toLocaleString()}</td>`}
+        <td class="num kb-lack-cell kb-shortage-neg" style="${lackStyle}" data-orig-lack="${lackStr}">${lackStr}</td>
         <td style="font-size:11px;color:#6b7280;">${협력사}</td>
         <td><input type="text" class="kb-note-input" placeholder="공급일/수량 등..."></td>
       `;
@@ -5291,6 +5322,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         } else {
           tr.classList.remove('kb-row-ok');
           lackCell.className = 'num kb-lack-cell kb-shortage-neg';
+          lackCell.style.cssText = lackStyle;
           lackCell.textContent = lackCell.dataset.origLack || lackStr;
         }
         const cnt = tbody.querySelectorAll('.kb-ok-chk:checked').length;
@@ -5299,7 +5331,6 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         _kbRefreshBlockColors();
         _kbSaveOkCheck(_kbCurrentDateSerial, part.자품번, chk.checked, noteInput?.value || '');
       };
-      // 비고 입력 debounce 저장
       noteInput.oninput = () => {
         clearTimeout(_kbNoteTimers[part.자품번]);
         _kbNoteTimers[part.자품번] = setTimeout(() => {
@@ -5309,6 +5340,24 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
 
       tbody.appendChild(tr);
     }
+
+    // ── 라인별 총 부족수량 합계 행 ──────────────────────────────────────────
+    if (lineTotalShortage > 0) {
+      const labelColspan = hasCumul ? 8 : 6;
+      const sumRow = document.createElement('tr');
+      sumRow.style.cssText = 'background:#fef2f2;font-weight:700;border-top:2px solid #dc2626;';
+      sumRow.innerHTML = `
+        <td colspan="${labelColspan}" style="text-align:right;padding:5px 10px;color:#7f1d1d;font-size:12px;">
+          Line ${line} 총 부족수량
+        </td>
+        <td class="num" style="color:#dc2626;font-size:13px;padding:5px 8px;">
+          -${Math.round(lineTotalShortage).toLocaleString()}
+        </td>
+        <td colspan="2"></td>
+      `;
+      tbody.appendChild(sumRow);
+    }
+
     tbl.appendChild(tbody);
     container.appendChild(tbl);
   }
@@ -5317,6 +5366,20 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
   if (!totalCnt) {
     container.innerHTML = `<div style="text-align:center;padding:36px;color:#16a34a;font-size:14px;font-weight:700;">✅ 부족자재 없음</div>`;
     document.getElementById('kb-shortage-cnt').textContent = '0';
+    return;
+  }
+
+  // ── 전체 라인 총 부족수량 ─────────────────────────────────────────────────
+  if (grandTotalShortage > 0) {
+    const totalDiv = document.createElement('div');
+    totalDiv.style.cssText = 'background:#7f1d1d;color:white;padding:10px 16px;margin-top:4px;' +
+      'border-radius:0 0 8px 8px;display:flex;align-items:center;justify-content:flex-end;' +
+      'gap:16px;font-weight:700;font-size:13px;';
+    totalDiv.innerHTML = `
+      <span style="opacity:0.8;">전체 라인 총 부족수량</span>
+      <span style="font-size:17px;letter-spacing:-0.5px;">-${Math.round(grandTotalShortage).toLocaleString()}</span>
+    `;
+    container.appendChild(totalDiv);
   }
 }
 
