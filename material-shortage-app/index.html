@@ -3388,7 +3388,7 @@ function buildPkgDetailHtml(s) {
       <td style="padding:3px 8px;border:1px solid #ddd;font-weight:700;">${d.MODEL||'-'}</td>
       <td style="padding:3px 8px;border:1px solid #ddd;color:#666;">${d.사양||'-'}</td>
       <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;font-weight:700;color:#1e3a5f;">${Math.round(d.계획수량).toLocaleString()}</td>
-      <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;font-weight:700;color:${c};">${Number(d.소요량.toFixed(4)).toLocaleString()}</td>
+      <td style="padding:3px 8px;border:1px solid #ddd;text-align:right;font-weight:700;color:${c};">${Math.ceil(d.소요량).toLocaleString()}</td>
     </tr>`;
   });
   html += `<tr style="background:#eaf0fb;font-weight:700;">
@@ -3624,7 +3624,7 @@ function buildPkgDateDetailHtml(d) {
         <td style="padding:3px 6px;font-size:11px;font-weight:600;color:#222;">${x.MODEL}</td>
         <td style="padding:3px 6px;font-size:11px;color:#555;">${x.사양||''}</td>
         <td style="padding:3px 6px;font-size:11px;text-align:right;color:#1e3a5f;font-weight:600;">${Number(Math.round(x.계획수량)).toLocaleString()}</td>
-        <td style="padding:3px 6px;font-size:11px;text-align:right;font-weight:700;color:${col.bg};">${Number(x.소요량.toFixed(2)).toLocaleString()}</td>
+        <td style="padding:3px 6px;font-size:11px;text-align:right;font-weight:700;color:${col.bg};">${Math.ceil(x.소요량).toLocaleString()}</td>
       </tr>`;
     }).join('');
 
@@ -3738,8 +3738,7 @@ function buildPkgOutputData(rows, maxDays) {
 
 function fmtPkgQty(n) {
   if (!n || n <= 0) return '-';
-  // 소수점 1자리 표시 (정수라도 .0 유지)
-  return n.toFixed(1);
+  return Math.ceil(n).toLocaleString();
 }
 
 function buildPkgOutputTableHtml(type, names, dates, pivot, colorMap, styles) {
