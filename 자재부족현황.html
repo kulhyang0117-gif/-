@@ -810,6 +810,11 @@
     <div class="cfg-section">
       <div class="cfg-section-title">🤖 sMES 키팅 자동화 경로</div>
       <div class="cfg-field">
+        <label>🌐 sMES 시스템 경로 <span style="color:#9ca3af;font-weight:400;">(URL 또는 실행 파일 경로)</span></label>
+        <input type="text" id="cfg-mes-url" placeholder="http://smes.company.com 또는 C:\경로\sMES.exe">
+        <div class="cfg-hint">sMES에 접속하거나 실행할 경로 — 자동화 시작 시 바로가기 버튼에 표시됩니다</div>
+      </div>
+      <div class="cfg-field" style="margin-top:8px;">
         <label>setup_url_protocol.bat 파일 경로</label>
         <input type="text" id="cfg-kit-path" placeholder="C:\경로\kitting_auto\setup_url_protocol.bat">
         <div class="cfg-hint">이 컴퓨터에서 setup_url_protocol.bat 파일이 있는 전체 경로</div>
@@ -900,7 +905,9 @@
 <div class="auto-kit-modal" id="auto-kit-modal">
   <div class="auto-kit-box">
     <h3>🤖 sMES 키팅 자동화</h3>
-    <div class="auto-kit-step"><span class="num">1</span><span>sMES 실행 → 로그인 (SSAT045)</span></div>
+    <div class="auto-kit-step"><span class="num">1</span><span>sMES 실행 → 로그인 (SSAT045)
+      <button id="btn-open-mes" onclick="openMesSystem()" style="margin-left:10px;padding:2px 10px;font-size:12px;background:#3b82f6;color:#fff;border:none;border-radius:4px;cursor:pointer;display:none;">🌐 sMES 열기</button>
+    </span></div>
     <div class="auto-kit-step"><span class="num">2</span><span>생산관리 → 조립 자재 kitting → 오늘 날짜 조회</span></div>
     <div class="auto-kit-step"><span class="num">3</span><span>품목 전체 선택 후 Excel 다운로드 반복</span></div>
     <div class="auto-kit-step"><span class="num">4</span><span>자재부족현황 로그인 → 키팅 초기화 → 전체 업로드</span></div>
@@ -5616,7 +5623,15 @@ function exportExcel() {
 }
 // ── 키팅 자동화 모달 ─────────────────────────────────────────────────────────
 function openAutoKitModal() {
+  const mesUrl = localStorage.getItem('ms_cfg_mes_url') || '';
+  const btn = document.getElementById('btn-open-mes');
+  if (btn) btn.style.display = mesUrl ? 'inline-block' : 'none';
   document.getElementById('auto-kit-modal').classList.add('open');
+}
+function openMesSystem() {
+  const mesUrl = localStorage.getItem('ms_cfg_mes_url') || '';
+  if (!mesUrl) return;
+  window.open(mesUrl, '_blank');
 }
 function closeAutoKitModal() {
   document.getElementById('auto-kit-modal').classList.remove('open');
@@ -6503,6 +6518,7 @@ function openAppSettings() {
   document.getElementById('cfg-sb-url').value   = localStorage.getItem('ms_cfg_sb_url')   || _SB_URL_DEFAULT;
   document.getElementById('cfg-sb-key').value   = localStorage.getItem('ms_cfg_sb_key')   || '';
   document.getElementById('cfg-admin-email').value = localStorage.getItem('ms_cfg_admin_email') || (localStorage.getItem('ms_cfg_admin_email') === null ? 'kulhyang0117@gmail.com' : '');
+  document.getElementById('cfg-mes-url').value       = localStorage.getItem('ms_cfg_mes_url')       || '';
   document.getElementById('cfg-kit-path').value     = localStorage.getItem('ms_cfg_kit_path')     || '';
   document.getElementById('cfg-download-dir').value = localStorage.getItem('ms_cfg_download_dir') || '';
   document.getElementById('cfg-prev-kit-dir').value = localStorage.getItem('ms_cfg_prev_kit_dir') || '';
@@ -6518,6 +6534,7 @@ function saveAppSettings() {
   const url         = document.getElementById('cfg-sb-url').value.trim();
   const key         = document.getElementById('cfg-sb-key').value.trim();
   const email       = document.getElementById('cfg-admin-email').value.trim();
+  const mesUrl      = document.getElementById('cfg-mes-url').value.trim();
   const path        = document.getElementById('cfg-kit-path').value.trim();
   const downloadDir = document.getElementById('cfg-download-dir').value.trim();
   const prevKitDir  = document.getElementById('cfg-prev-kit-dir').value.trim();
@@ -6529,6 +6546,8 @@ function saveAppSettings() {
   else             localStorage.removeItem('ms_cfg_sb_key');
   if (email)       localStorage.setItem('ms_cfg_admin_email', email);
   else             localStorage.removeItem('ms_cfg_admin_email');
+  if (mesUrl)      localStorage.setItem('ms_cfg_mes_url', mesUrl);
+  else             localStorage.removeItem('ms_cfg_mes_url');
   if (path)        localStorage.setItem('ms_cfg_kit_path', path);
   else             localStorage.removeItem('ms_cfg_kit_path');
   if (downloadDir) localStorage.setItem('ms_cfg_download_dir', downloadDir);
@@ -6543,7 +6562,7 @@ function saveAppSettings() {
 
 function resetAppSettings() {
   if (!confirm('모든 설정을 기본값으로 초기화하시겠습니까?')) return;
-  ['ms_cfg_sb_url','ms_cfg_sb_key','ms_cfg_admin_email','ms_cfg_kit_path',
+  ['ms_cfg_sb_url','ms_cfg_sb_key','ms_cfg_admin_email','ms_cfg_mes_url','ms_cfg_kit_path',
    'ms_cfg_download_dir','ms_cfg_prev_kit_dir','ms_cfg_inv_dir'].forEach(k => localStorage.removeItem(k));
   location.reload();
 }
