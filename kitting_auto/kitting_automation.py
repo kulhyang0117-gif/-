@@ -261,16 +261,39 @@ def login_smes(_unused_win=None):
         pass
     time.sleep(0.5)
 
-    # ── Edit 컨트롤 수집 & Y좌표 정렬 ──────────────────────────────────────
-    edits = dlg.children(class_name_re="WindowsForms10.EDIT.*")
-    edits = sorted(edits, key=lambda c: c.rectangle().top)
-    log(f"  Edit 컨트롤 {len(edits)}개  (위→아래 순)")
+    # ── Edit 컨트롤 수집 ────────────────────────────────────────────────────
+    all_edits = dlg.children(class_name_re="WindowsForms10.EDIT.*")
+    log(f"  Edit 컨트롤 전체 {len(all_edits)}개")
 
-    if len(edits) < 2:
-        raise RuntimeError(f"Edit 컨트롤 {len(edits)}개 — 2개 필요")
+    # 실제 입력 필드만 필터: 너비 < 500px, 높이 < 60px (컨테이너 패널 제외)
+    small_edits = [
+        e for e in all_edits
+        if e.rectangle().width() < 500 and e.rectangle().height() < 60
+    ]
+    log(f"  입력 크기 필드 {len(small_edits)}개")
 
-    id_field = edits[0]   # 첫 번째(위) = ID 입력란
-    pw_field = edits[1]   # 두 번째(아래) = PW 입력란
+    # 타이틀 텍스트로 ID/PW 식별
+    id_field = None
+    pw_field = None
+    for e in small_edits:
+        txt = e.window_text().strip()
+        log(f"    필드 '{txt}' 위치: {e.rectangle()}")
+        if txt == SMES_ID or (txt and txt.upper() not in ('PASSWORD', '')):
+            if id_field is None:
+                id_field = e
+        if txt.upper() == 'PASSWORD' or txt == '':
+            if pw_field is None:
+                pw_field = e
+
+    # fallback: Y 정렬 후 위=ID, 아래=PW
+    if id_field is None or pw_field is None:
+        sorted_edits = sorted(small_edits, key=lambda c: c.rectangle().top)
+        if len(sorted_edits) >= 2:
+            id_field = sorted_edits[0]
+            pw_field = sorted_edits[1]
+
+    if id_field is None or pw_field is None:
+        raise RuntimeError(f"ID/PW 입력 필드를 찾지 못했습니다. 소형 Edit 수: {len(small_edits)}")
 
     log(f"  ID 필드 위치: {id_field.rectangle()}")
     log(f"  PW 필드 위치: {pw_field.rectangle()}")
