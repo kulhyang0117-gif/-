@@ -273,23 +273,30 @@ def login_smes(_unused_win=None):
     log(f"  입력 크기 필드 {len(small_edits)}개")
 
     # 타이틀 텍스트로 ID/PW 식별
+    # 버튼 텍스트(Exit, Login 등)는 제외하고 실제 입력란만 사용
+    BUTTON_TEXTS = {'exit', 'login', '로그인', '취소', 'cancel', 'ok', '확인'}
     id_field = None
     pw_field = None
     for e in small_edits:
         txt = e.window_text().strip()
         log(f"    필드 '{txt}' 위치: {e.rectangle()}")
-        if txt == SMES_ID or (txt and txt.upper() not in ('PASSWORD', '')):
-            if id_field is None:
-                id_field = e
-        if txt.upper() == 'PASSWORD' or txt == '':
-            if pw_field is None:
-                pw_field = e
+        if txt.lower() in BUTTON_TEXTS:
+            continue  # 버튼 텍스트는 건너뜀
+        if txt == SMES_ID:
+            id_field = e   # ID 값과 정확히 일치 → ID 필드
+        elif txt.upper() == 'PASSWORD':
+            pw_field = e   # 'PASSWORD' 플레이스홀더 → PW 필드
 
-    # fallback: Y 정렬 후 위=ID, 아래=PW
+    # fallback: Y 정렬 후 위=ID, 아래=PW (버튼 제외한 필드 중)
     if id_field is None or pw_field is None:
-        sorted_edits = sorted(small_edits, key=lambda c: c.rectangle().top)
-        if len(sorted_edits) >= 2:
+        input_only = [
+            e for e in small_edits
+            if e.window_text().strip().lower() not in BUTTON_TEXTS
+        ]
+        sorted_edits = sorted(input_only, key=lambda c: c.rectangle().top)
+        if id_field is None and len(sorted_edits) >= 1:
             id_field = sorted_edits[0]
+        if pw_field is None and len(sorted_edits) >= 2:
             pw_field = sorted_edits[1]
 
     if id_field is None or pw_field is None:
