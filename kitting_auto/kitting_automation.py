@@ -16,10 +16,15 @@ from pathlib import Path
 # 설정
 # ──────────────────────────────────────────────────────────────────────────────
 SMES_EXE     = Path(r"C:\Program Files (x86)\I2R\sMES\sMES.exe")
-DOWNLOAD_DIR   = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
-INVENTORY_DIR  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\재고현황")
-HTML_FILE      = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
-LOG_FILE       = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting_auto\kitting_log.txt")
+
+# 스크립트 위치 기준 상대 경로 (어떤 PC에서 실행해도 동작)
+_HERE        = Path(__file__).parent          # kitting_auto 폴더
+_BASE        = _HERE.parent                   # 프로젝트 루트
+
+DOWNLOAD_DIR   = _BASE / "kitting 자재"
+INVENTORY_DIR  = _BASE / "재고현황"
+HTML_FILE      = _BASE / "자재부족현황.html"
+LOG_FILE       = _HERE / "kitting_log.txt"
 
 SMES_ID      = "SSAT045"
 SMES_PW      = "rlatndus1!"
