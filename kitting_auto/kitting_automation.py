@@ -596,13 +596,50 @@ def download_all_items(win):
     return downloaded_files
 
 
+def _click_excel_btn(win):
+    """
+    Excel 버튼 탐색 및 클릭.
+    1순위: win32 child_window  2순위: UIA descendants 전체 스캔
+    성공 시 True 반환.
+    """
+    EXCEL_KEYWORDS = {'excel', 'excel 다운로드', '엑셀', 'excel저장', 'export'}
+
+    # 1) win32 backend
+    if _try_click(win, ["Excel 다운로드", "Excel", "엑셀", "Export", "EXCEL"]):
+        log("    Excel 버튼 클릭 (win32)")
+        return True
+
+    # 2) UIA descendants 전체 스캔
+    try:
+        from pywinauto import Application
+        pid = win.process_id()
+        uia_app = Application(backend='uia').connect(process=pid, timeout=5)
+        for w in uia_app.windows():
+            try:
+                for ctrl in w.descendants():
+                    try:
+                        txt = ctrl.window_text().strip().lower()
+                        if txt in EXCEL_KEYWORDS:
+                            ctrl.click_input()
+                            log(f"    Excel 버튼 클릭 (UIA: '{txt}')")
+                            return True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    except Exception as e:
+        log(f"    UIA 스캔 실패: {e}")
+
+    return False
+
+
 def _click_excel_download(win, idx, item_name):
     """Excel 다운로드 버튼 클릭 및 저장"""
     import pyautogui
     from pywinauto import Desktop
 
-    # Excel 버튼 클릭 — 미발견 시 input() 차단 없이 자동 건너뜀
-    if not _try_click(win, ["Excel 다운로드", "Excel", "엑셀", "엑셀 다운로드", "Export", "EXCEL"]):
+    # Excel 버튼 클릭 — 미발견 시 건너뜀
+    if not _click_excel_btn(win):
         log(f"    ⚠️  [{idx}] Excel 버튼 미발견 — 건너뜀")
         return None
 
@@ -860,10 +897,16 @@ def navigate_and_download_inventory(app):
     hwnds_before = set()
     win32gui.EnumWindows(lambda h, _: hwnds_before.add(h), None)
 
-    log("  Tab×1 → Enter → Excel 다운로드...")
-    pyautogui.press('tab')
-    time.sleep(0.3)
-    pyautogui.press('enter')
+    log("  Excel 버튼 클릭...")
+    _, inv_win = _get_smes_window()
+    if inv_win and _click_excel_btn(inv_win):
+        log("  ✅ Excel 버튼 클릭 성공")
+    else:
+        # fallback: Tab→Enter
+        log("  Excel 버튼 미발견 → Tab×1 → Enter fallback")
+        pyautogui.press('tab')
+        time.sleep(0.3)
+        pyautogui.press('enter')
     time.sleep(EXCEL_DELAY)
 
     # ── 새로 생긴 Save As 다이얼로그 감지 ────────────────────────────────────
