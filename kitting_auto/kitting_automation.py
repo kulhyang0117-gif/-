@@ -196,19 +196,65 @@ def _find_login_dialog(timeout=20):
     raise RuntimeError("로그인 폼을 찾을 수 없습니다.")
 
 
+def _click_field_and_input(field_ctrl, text, label):
+    """
+    C1TextBox 필드를 pyautogui 마우스 클릭 → 전체선택 삭제 → 클립보드 붙여넣기.
+    좌표는 컨트롤 rectangle() 중앙 사용.
+    """
+    import pyautogui, win32clipboard
+
+    rect = field_ctrl.rectangle()
+    cx = (rect.left + rect.right) // 2
+    cy = (rect.top + rect.bottom) // 2
+
+    log(f"  {label} 필드 클릭: ({cx}, {cy})")
+
+    # 1) 마우스로 정확히 클릭
+    pyautogui.click(cx, cy)
+    time.sleep(0.4)
+
+    # 2) 전체 선택 후 삭제
+    pyautogui.hotkey('ctrl', 'a')
+    time.sleep(0.2)
+    pyautogui.press('delete')
+    time.sleep(0.2)
+
+    # 3) 클립보드로 붙여넣기
+    win32clipboard.OpenClipboard()
+    win32clipboard.EmptyClipboard()
+    win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+    win32clipboard.CloseClipboard()
+    time.sleep(0.1)
+    pyautogui.hotkey('ctrl', 'v')
+    time.sleep(0.4)
+
+    log(f"  {label} 입력 완료")
+
+
 def login_smes(_unused_win=None):
     """
     ① PID 로 sMES 연결
     ② Edit 컨트롤 2개 있는 창 = 로그인 폼
     ③ Y좌표 정렬 → 위=ID, 아래=PW
-    ④ set_edit_text() 로 입력 (키보드 우회 → 특수문자 안전)
+    ④ pyautogui 마우스 클릭 + 클립보드 붙여넣기 (C1TextBox 호환)
     ⑤ Login 버튼 클릭
     """
+    import pyautogui
+
     log("  로그인 폼 탐색 중 (PID 방식)...")
     app, dlg = _find_login_dialog(timeout=20)
 
-    dlg.set_focus()
-    time.sleep(0.3)
+    # 창을 맨 앞으로 활성화
+    try:
+        dlg.set_focus()
+    except Exception:
+        pass
+    try:
+        import ctypes
+        ctypes.windll.user32.SetForegroundWindow(dlg.handle)
+    except Exception:
+        pass
+    time.sleep(0.5)
 
     # ── Edit 컨트롤 수집 & Y좌표 정렬 ──────────────────────────────────────
     edits = dlg.children(class_name_re="WindowsForms10.EDIT.*")
@@ -221,58 +267,77 @@ def login_smes(_unused_win=None):
     id_field = edits[0]   # 첫 번째(위) = ID 입력란
     pw_field = edits[1]   # 두 번째(아래) = PW 입력란
 
-    # ── ID 필드 : 클릭 → 전체 삭제 → 타이핑 ───────────────────────────────
-    id_field.set_focus()
-    id_field.click_input()
-    time.sleep(0.3)
-    id_field.type_keys("^a{BACKSPACE}", with_spaces=True)
-    time.sleep(0.2)
-    id_field.type_keys(SMES_ID, with_spaces=True)
-    log(f"  ① ID 입력 완료: {SMES_ID}")
+    log(f"  ID 필드 위치: {id_field.rectangle()}")
+    log(f"  PW 필드 위치: {pw_field.rectangle()}")
+
+    # ── ① ID 입력 ────────────────────────────────────────────────────────
+    _click_field_and_input(id_field, SMES_ID, "① ID")
     time.sleep(0.3)
 
-    # ── PW 필드 : 클릭 → 전체 삭제 → 클립보드 붙여넣기 → Enter ────────────
-    pw_field.set_focus()
-    pw_field.click_input()
+    # ── ② PW 입력 ────────────────────────────────────────────────────────
+    _click_field_and_input(pw_field, SMES_PW, "② PW")
     time.sleep(0.3)
-    pw_field.type_keys("^a{BACKSPACE}", with_spaces=True)
-    time.sleep(0.2)
-    _paste_text(SMES_PW)
-    log(f"  ② PW 입력 완료")
-    time.sleep(0.5)   # 붙여넣기 후 시스템이 인식할 시간 확보
-    pw_field.type_keys("{ENTER}")
+
+    # ── ③ Login 버튼 클릭 ────────────────────────────────────────────────
+    login_btn = None
+    for btn in dlg.children(class_name_re="WindowsForms10.BUTTON.*"):
+        try:
+            if btn.window_text().strip().lower() in ('login', '로그인'):
+                login_btn = btn
+                break
+        except Exception:
+            pass
+
+    if login_btn:
+        rect = login_btn.rectangle()
+        bx = (rect.left + rect.right) // 2
+        by = (rect.top + rect.bottom) // 2
+        log(f"  ③ Login 버튼 클릭: ({bx}, {by})")
+        pyautogui.click(bx, by)
+    else:
+        log("  ③ Login 버튼 미발견 → Enter 키 입력")
+        pyautogui.press('enter')
+    time.sleep(0.5)
 
     # ── 로그인 성공 여부 검증 ────────────────────────────────────────────────
-    # 로그인 폼(Edit 2개 있는 창)이 사라지면 성공, 남아있으면 실패
+    # Login 버튼이 실제로 사라졌는지 확인 (창 핸들 깜빡임 오감지 방지)
     log("  로그인 결과 확인 중...")
-    deadline = time.time() + 10
+    deadline = time.time() + 12
     while time.time() < deadline:
         time.sleep(0.5)
         try:
-            # 창이 사라졌는지 확인
-            if not dlg.exists(timeout=0.5):
-                log("  ✅ 로그인 성공 (로그인 창 닫힘)")
+            # 현재 창 상태 재취득 후 Login 버튼 존재 여부 확인
+            _, cur_win = _get_smes_window()
+            if cur_win is None:
+                log("  ✅ 로그인 성공 (창 재구성)")
+                time.sleep(LOAD_DELAY)
+                return
+            btns = cur_win.children(class_name_re="WindowsForms10.BUTTON.*")
+            login_btn_visible = any(
+                b.window_text().strip().lower() in ('login', '로그인')
+                and b.is_visible()
+                for b in btns
+            )
+            if not login_btn_visible:
+                log("  ✅ 로그인 성공 (Login 버튼 사라짐)")
                 time.sleep(LOAD_DELAY)
                 return
         except Exception:
-            # exists() 자체가 예외 → 창 없어진 것
-            log("  ✅ 로그인 성공 (로그인 창 닫힘)")
-            time.sleep(LOAD_DELAY)
-            return
+            pass
 
-        # 창이 아직 있으면 에러 메시지 확인
+        # 에러 팝업 메시지 확인
         try:
             for child in dlg.children():
                 txt = child.window_text().strip()
-                if txt and txt not in (SMES_ID, '') and len(txt) < 100:
+                if txt and txt not in (SMES_ID, 'PASSWORD', '') and len(txt) < 100:
                     log(f"  ⚠️  화면 메시지: '{txt}'")
         except Exception:
             pass
 
-    # 10초 후에도 창이 남아있으면 실패
+    # 12초 후에도 Login 버튼이 남아있으면 실패 → 중단
     raise RuntimeError(
-        "로그인 실패: 로그인 창이 닫히지 않았습니다.\n"
-        "  → ID/PW 를 확인하거나 수동으로 로그인 후 Enter를 눌러주세요."
+        "❌ 로그인 실패: Login 버튼이 사라지지 않았습니다.\n"
+        "  → ID/PW 확인 후 다시 실행해주세요."
     )
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -342,7 +407,8 @@ def navigate_and_download(app):
     if not clicked:
         try:
             rect = main_win.rectangle()
-            menu_y = rect.top + 7
+            # 최대화 창은 rect.top이 -8 정도로 음수 → max()로 보정
+            menu_y = max(rect.top + 50, 42)
             menu_x = rect.left + 230   # System+기본정보관리+영업관리 이후 위치
             pyautogui.click(menu_x, menu_y)
             clicked = True
@@ -370,9 +436,17 @@ def navigate_and_download(app):
 
     # ── 조회 클릭 ─────────────────────────────────────────────────────────
     log("  조회 버튼 클릭...")
-    if not _try_click(main_win, ["조회", "검색", "Search"]):
-        log("  ⚠️  수동으로 '조회'를 클릭해주세요.")
-        input("  조회 완료 후 Enter → ")
+    import pyautogui as _pag
+    clicked_search = False
+    # 1) child_window 탐색
+    if _try_click(main_win, ["조회", "검색", "Search"]):
+        clicked_search = True
+        log("  ✅ 조회 버튼 클릭 (child_window)")
+    # 2) F5 단축키 (sMES 조회 표준 단축키)
+    if not clicked_search:
+        _pag.press('f5')
+        clicked_search = True
+        log("  ✅ 조회 F5 키 입력")
     time.sleep(LOAD_DELAY)
     log("  ✅ 조회 완료")
 
@@ -701,7 +775,8 @@ def navigate_and_download_inventory(app):
     if not clicked:
         try:
             rect = main_win.rectangle()
-            menu_y = rect.top + 7
+            # 최대화 창은 rect.top이 -8 정도로 음수 → max()로 보정
+            menu_y = max(rect.top + 50, 42)
             # 생산관리(230) 오른쪽 5번째 — 각 메뉴 약 80px 간격
             menu_x = rect.left + 630
             pyautogui.click(menu_x, menu_y)
