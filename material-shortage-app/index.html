@@ -5340,23 +5340,6 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       tbody.appendChild(tr);
     }
 
-    // ── 라인별 총 부족수량 합계 행 ──────────────────────────────────────────
-    if (lineTotalShortage > 0) {
-      const labelColspan = hasCumul ? 9 : 6;
-      const sumRow = document.createElement('tr');
-      sumRow.style.cssText = 'background:#fef2f2;font-weight:700;border-top:2px solid #dc2626;';
-      sumRow.innerHTML = `
-        <td colspan="${labelColspan}" style="text-align:right;padding:5px 10px;color:#7f1d1d;font-size:12px;">
-          Line ${line} 총 부족수량
-        </td>
-        <td class="num" style="color:#dc2626;font-size:13px;padding:5px 8px;">
-          -${Math.round(lineTotalShortage).toLocaleString()}
-        </td>
-        <td colspan="2"></td>
-      `;
-      tbody.appendChild(sumRow);
-    }
-
     tbl.appendChild(tbody);
     container.appendChild(tbl);
   }
