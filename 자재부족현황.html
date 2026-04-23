@@ -6199,17 +6199,13 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       const lackStr     = Math.round(lack).toLocaleString();
       const lackStyle   = lack < 0 ? 'color:#dc2626;font-weight:700;' : 'color:#16a34a;font-weight:700;';
       const beforeStyle = beforeReq < 0 ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
-      const kitBadge    = kit > 0
-        ? ` <span style="font-size:9px;background:#ede9fe;color:#6d28d9;padding:1px 5px;border-radius:3px;">키팅+${Math.round(kit).toLocaleString()}</span>`
-        : '';
-
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="center"><input type="checkbox" class="kb-ok-chk" style="cursor:pointer;width:15px;height:15px;"></td>
         <td class="kb-st-pn" style="font-family:monospace;font-size:11px;">${part.자품번}</td>
         <td class="kb-st-name">${part.자품명}</td>
         <td>${조달?`<span class="kb-proc-tag">${조달}</span>`:''}</td>
-        <td class="num">${Math.round(available).toLocaleString()}${kitBadge}</td>
+        <td class="num">${Math.round(available).toLocaleString()}</td>
         ${hasCumul
           ? (hasBlockParts
               ? `<td class="num" style="color:#b45309;font-weight:600;">${prevReq > 0 ? Math.round(prevReq).toLocaleString() : '-'}</td>
