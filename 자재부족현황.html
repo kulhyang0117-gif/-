@@ -6115,8 +6115,8 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
   const supplierMap = window._kbSupplierMap || {};
   const bomMap = window._kbBomMap || {};
 
-  let totalCnt = 0;
-  let grandTotalShortage = 0;
+  // ── 1단계: 전체 라인 부족자재 수집 ─────────────────────────────────────────
+  const allLineData = []; // [{ line, lineShortages }]
   for (const line of lines) {
     const seenParts = new Set();
     const lineShortages = [];
@@ -6127,58 +6127,69 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       for (const part of dangerParts) {
         if (seenParts.has(part.자품번)) continue;
         seenParts.add(part.자품번);
-        // 부모 제품 pn 저장 → 렌더링 시 BOM 직접 조회용
         lineShortages.push({ ...part, _parentPn: row.pn });
       }
     }
-    if (!lineShortages.length) continue;
-    totalCnt += lineShortages.length;
+    if (lineShortages.length) allLineData.push({ line, lineShortages });
+  }
 
-    const hdr = document.createElement('div');
-    hdr.className = 'kb-st-line-hdr';
-    hdr.innerHTML = `Line ${line} <span class="kb-st-badge">${lineShortages.length}건 부족</span><span class="kb-st-ok-cnt" style="display:none;"></span>`;
-    container.appendChild(hdr);
-    const okCntEl = hdr.querySelector('.kb-st-ok-cnt');
+  const totalCnt = allLineData.reduce((s, d) => s + d.lineShortages.length, 0);
+  document.getElementById('kb-shortage-cnt').textContent = totalCnt;
+  if (!totalCnt) {
+    container.innerHTML = `<div style="text-align:center;padding:36px;color:#16a34a;font-size:14px;font-weight:700;">✅ 부족자재 없음</div>`;
+    document.getElementById('kb-shortage-cnt').textContent = '0';
+    return;
+  }
 
-    // 컬럼 헤더 행
-    const tbl = document.createElement('table');
-    tbl.className = 'kb-st-table';
-    // _blockParts 경로: prevReq/priorToday/thisReq 필드 존재
-    // partDayStat 경로: cumConsumed/remaining/dayReq 필드 존재
-    const hasBlockParts = lineShortages.some(p => p.prevReq !== undefined || p.priorToday !== undefined);
-    const hasCumul = hasBlockParts || lineShortages.some(p => p.cumConsumed !== undefined);
-    tbl.innerHTML = `<thead><tr>
-      <th class="center">OK</th><th>부품번호</th><th>부품명</th><th>조달</th>
-      <th class="num">가용재고</th>
-      ${hasCumul ? '<th class="num">잔여재고</th><th class="num">당일소요</th>' : '<th class="num">필요</th>'}
-      <th class="num">부족</th>
-      <th>협력사</th><th>비고</th>
-    </tr></thead>`;
-    const tbody = document.createElement('tbody');
+  // ── 2단계: 전체 기준으로 컬럼 구조 결정 (모든 라인 동일 테이블) ───────────
+  const allParts = allLineData.flatMap(d => d.lineShortages);
+  const hasBlockParts = allParts.some(p => p.prevReq !== undefined || p.priorToday !== undefined);
+  const hasCumul = hasBlockParts || allParts.some(p => p.cumConsumed !== undefined);
 
-    let lineTotalShortage = 0;
+  // ── 3단계: 단일 테이블 렌더링 ──────────────────────────────────────────────
+  const tbl = document.createElement('table');
+  tbl.className = 'kb-st-table';
+  tbl.innerHTML = `<thead><tr>
+    <th class="center">OK</th><th>부품번호</th><th>부품명</th><th>조달</th>
+    <th class="num">가용재고</th>
+    ${hasCumul ? '<th class="num">잔여재고</th><th class="num">당일소요</th>' : '<th class="num">필요</th>'}
+    <th class="num">부족</th>
+    <th>협력사</th><th>비고</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  container.appendChild(tbl);
+
+  let grandTotalShortage = 0;
+
+  for (const { line, lineShortages } of allLineData) {
+    // 라인 구분 헤더 행
+    const colSpan = hasCumul ? 9 : 8;
+    const lineHdrRow = document.createElement('tr');
+    lineHdrRow.className = 'kb-st-line-sep';
+    lineHdrRow.innerHTML = `<td colspan="${colSpan}" style="background:#f0f4ff;padding:5px 12px;font-weight:700;font-size:12px;color:#1e3a5f;border-top:2px solid #c7d2fe;">
+      Line ${line} <span class="kb-st-badge">${lineShortages.length}건 부족</span>
+      <span class="kb-st-ok-cnt" style="display:none;margin-left:6px;font-size:11px;color:#16a34a;"></span>
+    </td>`;
+    tbody.appendChild(lineHdrRow);
+    const okCntEl = lineHdrRow.querySelector('.kb-st-ok-cnt');
 
     for (const part of lineShortages) {
       const pi = partInfoMap[part.자품번] || {};
-      // 상세패널(openKbDetail)과 동일 방식: BOM 직접 조회 → 부품유형 우선
       const bomComp = (bomMap[part._parentPn] || []).find(c => c.자품번 === part.자품번);
       const 조달 = bomComp?.부품유형 || part.부품유형 || pi.부품유형 || pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
       const 협력사 = bomComp?.협력사명 || supplierMap[part.자품번] || pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
       const available = part.available ?? (part.stock ?? 0);
-      const kit       = part.kit ?? 0;
 
       let prevReq, priorToday, thisReq, remaining, lack, beforeReq;
       if (hasBlockParts) {
-        // _blockParts 경로: prevReq/priorToday/thisReq 별도 제공
         prevReq    = part.prevReq    ?? 0;
         priorToday = part.priorToday ?? 0;
         thisReq    = part.thisReq    ?? (part.dayReq ?? (part.modelReq ?? part.totalGlobalReq ?? 0));
         remaining  = (part.remaining !== undefined && part.remaining !== null)
           ? part.remaining : (available - prevReq - priorToday - thisReq);
-        beforeReq  = remaining + thisReq;  // 이 블록 소비 전 잔여
+        beforeReq  = remaining + thisReq;
         lack       = remaining;
       } else {
-        // partDayStat 경로: cumConsumed/remaining/dayReq 제공
         const cumConsumed = part.cumConsumed ?? 0;
         prevReq    = cumConsumed;
         priorToday = 0;
@@ -6189,19 +6200,18 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       }
 
       const shortageAmt = lack < 0 ? Math.abs(lack) : 0;
-      lineTotalShortage  += shortageAmt;
       grandTotalShortage += shortageAmt;
 
       const lackStr     = Math.round(lack).toLocaleString();
       const lackStyle   = lack < 0 ? 'color:#dc2626;font-weight:700;' : 'color:#16a34a;font-weight:700;';
       const beforeStyle = beforeReq < 0 ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
-      // 이전일선행/당일선행 뱃지 (값이 있을 때만 잔여재고 셀에 표시)
       const prevBadge  = prevReq > 0
         ? ` <span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;" title="이전일 선행소요">이전일-${Math.round(prevReq).toLocaleString()}</span>`
         : '';
       const priorBadge = priorToday > 0
         ? ` <span style="font-size:9px;background:#fff7ed;color:#c2410c;padding:1px 5px;border-radius:3px;" title="당일 선행소요">당일-${Math.round(priorToday).toLocaleString()}</span>`
         : '';
+
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td class="center"><input type="checkbox" class="kb-ok-chk" style="cursor:pointer;width:15px;height:15px;"></td>
@@ -6234,21 +6244,21 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
           lackCell.textContent = lackCell.dataset.origLack || lackStr;
           if (noteInput.value === '전산오류 확인') noteInput.value = '';
         }
-        const cnt = tbody.querySelectorAll('.kb-ok-chk:checked').length;
-        okCntEl.textContent = `${cnt}건 해제`;
-        okCntEl.style.display = cnt > 0 ? '' : 'none';
+        const lineCnt = Array.from(tbody.querySelectorAll('tr[data-partno]'))
+          .filter(r => r.closest && r.dataset.line === line && r.querySelector('.kb-ok-chk')?.checked).length;
+        const allCheckedInLine = Array.from(tbody.querySelectorAll(`tr[data-line="${line}"] .kb-ok-chk:checked`)).length;
+        okCntEl.textContent = `${allCheckedInLine}건 해제`;
+        okCntEl.style.display = allCheckedInLine > 0 ? '' : 'none';
         _kbRefreshBlockColors();
         _kbSaveOkCheck(_kbCurrentDateSerial, part.자품번, chk.checked, noteInput?.value || '');
-        // 전체 총 부족수량 재계산 (OK 체크된 항목 제외)
         const valEl = container.querySelector('.kb-grand-total-val');
         if (valEl) {
-          const remaining = Array.from(container.querySelectorAll('tr[data-shortage]'))
+          const rem = Array.from(container.querySelectorAll('tr[data-shortage]'))
             .filter(r => !r.querySelector('.kb-ok-chk')?.checked)
             .reduce((s, r) => s + Number(r.dataset.shortage), 0);
-          valEl.textContent = `-${Math.round(remaining).toLocaleString()}`;
+          valEl.textContent = `-${Math.round(rem).toLocaleString()}`;
         }
       };
-      // 비고 입력 debounce 저장
       noteInput.oninput = () => {
         clearTimeout(_kbNoteTimers[part.자품번]);
         _kbNoteTimers[part.자품번] = setTimeout(() => {
@@ -6256,19 +6266,12 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         }, 800);
       };
 
+      tr.dataset.line = line;
       tbody.appendChild(tr);
     }
-
-    tbl.appendChild(tbody);
-    container.appendChild(tbl);
   }
 
-  document.getElementById('kb-shortage-cnt').textContent = totalCnt;
-  if (!totalCnt) {
-    container.innerHTML = `<div style="text-align:center;padding:36px;color:#16a34a;font-size:14px;font-weight:700;">✅ 부족자재 없음</div>`;
-    document.getElementById('kb-shortage-cnt').textContent = '0';
-    return;
-  }
+  tbl.appendChild(tbody);
 
   // ── 전체 라인 총 부족수량 ────────────────────────────────────────────────
   if (grandTotalShortage > 0) {
