@@ -6219,6 +6219,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       `;
 
       tr.dataset.partno = part.자품번;
+      tr.dataset.shortage = shortageAmt;
       const chk      = tr.querySelector('.kb-ok-chk');
       const lackCell = tr.querySelector('.kb-lack-cell');
       const noteInput = tr.querySelector('.kb-note-input');
@@ -6238,6 +6239,14 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         okCntEl.style.display = cnt > 0 ? '' : 'none';
         _kbRefreshBlockColors();
         _kbSaveOkCheck(_kbCurrentDateSerial, part.자품번, chk.checked, noteInput?.value || '');
+        // 전체 총 부족수량 재계산 (OK 체크된 항목 제외)
+        const valEl = container.querySelector('.kb-grand-total-val');
+        if (valEl) {
+          const remaining = Array.from(container.querySelectorAll('tr[data-shortage]'))
+            .filter(r => !r.querySelector('.kb-ok-chk')?.checked)
+            .reduce((s, r) => s + Number(r.dataset.shortage), 0);
+          valEl.textContent = `-${Math.round(remaining).toLocaleString()}`;
+        }
       };
       // 비고 입력 debounce 저장
       noteInput.oninput = () => {
@@ -6269,7 +6278,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       'gap:16px;font-weight:700;font-size:13px;';
     totalDiv.innerHTML = `
       <span style="opacity:0.8;">전체 라인 총 부족수량</span>
-      <span style="font-size:17px;letter-spacing:-0.5px;">-${Math.round(grandTotalShortage).toLocaleString()}</span>
+      <span class="kb-grand-total-val" style="font-size:17px;letter-spacing:-0.5px;">-${Math.round(grandTotalShortage).toLocaleString()}</span>
     `;
     container.appendChild(totalDiv);
   }
