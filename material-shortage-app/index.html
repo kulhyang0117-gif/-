@@ -5250,9 +5250,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
     tbl.innerHTML = `<thead><tr>
       <th class="center">OK</th><th>부품번호</th><th>부품명</th><th>조달</th>
       <th class="num">가용재고</th>
-      ${hasCumul
-        ? '<th class="num" style="color:#b45309;">이전일선행</th><th class="num" style="color:#d97706;">당일선행</th><th class="num">잔여재고</th><th class="num">당일소요</th>'
-        : '<th class="num">필요</th>'}
+      ${hasCumul ? '<th class="num">잔여재고</th><th class="num">당일소요</th>' : '<th class="num">필요</th>'}
       <th class="num">부족수량</th>
       <th>협력사</th><th>비고</th>
     </tr></thead>`;
@@ -5285,6 +5283,13 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       const lackStr     = Math.round(remaining).toLocaleString();       // 음수로 표시
       const beforeStyle = beforeReq < 0  ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
       const lackStyle   = remaining  < 0 ? 'color:#dc2626;font-weight:700;' : 'color:#16a34a;font-weight:700;';
+      // 이전일선행/당일선행 뱃지 (값이 있을 때만 잔여재고 셀에 표시)
+      const prevBadge  = prevReq > 0
+        ? ` <span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;" title="이전일 선행소요">이전일-${Math.round(prevReq).toLocaleString()}</span>`
+        : '';
+      const priorBadge = priorToday > 0
+        ? ` <span style="font-size:9px;background:#fff7ed;color:#c2410c;padding:1px 5px;border-radius:3px;" title="당일 선행소요">당일-${Math.round(priorToday).toLocaleString()}</span>`
+        : '';
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -5294,13 +5299,9 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         <td>${조달?`<span class="kb-proc-tag">${조달}</span>`:''}</td>
         <td class="num">${Math.round(available).toLocaleString()}</td>
         ${hasCumul
-          ? `<td class="num" style="color:#b45309;font-weight:600;">${prevReq > 0 ? Math.round(prevReq).toLocaleString() : '-'}</td>
-             <td class="num" style="color:#d97706;font-weight:600;">${priorToday > 0 ? Math.round(priorToday).toLocaleString() : '-'}</td>
-             <td class="num" style="${beforeStyle}">${Math.round(beforeReq).toLocaleString()}</td>
+          ? `<td class="num" style="${beforeStyle}">${Math.round(beforeReq).toLocaleString()}${prevBadge}${priorBadge}</td>
              <td class="num" style="font-weight:700;">${Math.round(thisReq).toLocaleString()}</td>`
-          : `<td class="num">${prevReq > 0
-              ? `${Math.round(prevReq + thisReq).toLocaleString()}<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:3px;margin-left:3px;" title="이전일선행 ${Math.round(prevReq).toLocaleString()} 포함">이전일+${Math.round(prevReq).toLocaleString()}</span>`
-              : Math.round(thisReq).toLocaleString()}</td>`}
+          : `<td class="num">${Math.round(thisReq).toLocaleString()}${prevBadge}</td>`}
         <td class="num kb-lack-cell kb-shortage-neg" style="${lackStyle}" data-orig-lack="${lackStr}">${lackStr}</td>
         <td style="font-size:11px;color:#6b7280;">${협력사}</td>
         <td><input type="text" class="kb-note-input" placeholder="공급일/수량 등..."></td>
