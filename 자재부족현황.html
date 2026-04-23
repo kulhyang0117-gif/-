@@ -564,15 +564,16 @@
   .kb-gantt { background:white; border-radius:12px; padding:0; box-shadow:0 1px 4px rgba(0,0,0,0.08); overflow:hidden; margin-bottom:20px; }
   .kb-gantt-inner { overflow-x:auto; }
   .kb-tl-header { display:flex; align-items:center; border-bottom:1px solid #e5e7eb; background:#f9fafb; }
-  .kb-line-label { width:72px; min-width:72px; padding:8px 12px; border-right:1px solid #e5e7eb; flex-shrink:0; }
+  .kb-line-label { width:90px; min-width:90px; padding:8px 12px; border-right:1px solid #e5e7eb; flex-shrink:0; }
   .kb-tl-track { flex:1; position:relative; height:32px; }
   .kb-tl-mark { position:absolute; top:50%; transform:translate(-50%,-50%); font-size:11px; color:#9ca3af; white-space:nowrap; }
   .kb-tl-mark::before { content:''; position:absolute; top:100%; left:50%; width:1px; height:6px; background:#e5e7eb; }
   .kb-row { display:flex; align-items:stretch; border-bottom:1px solid #f3f4f6; min-height:58px; }
   .kb-row:last-child { border-bottom:none; }
-  .kb-line-label { width:72px; min-width:72px; padding:8px 12px; border-right:1px solid #e5e7eb; flex-shrink:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .kb-line-label { width:90px; min-width:90px; padding:8px 12px; border-right:1px solid #e5e7eb; flex-shrink:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
   .kb-ln { font-size:16px; font-weight:800; color:#1e3a5f; }
   .kb-ln-sub { font-size:10px; color:#9ca3af; }
+  .kb-ln-totalqty { font-size:10px; color:#2563eb; font-weight:700; margin-top:2px; white-space:nowrap; }
   .kb-track { flex:1; position:relative; background:repeating-linear-gradient(90deg, transparent, transparent calc(100%/10 - 1px), #f3f4f6 calc(100%/10 - 1px), #f3f4f6 calc(100%/10)); min-height:58px; }
   .kb-block { position:absolute; top:4px; bottom:4px; border-radius:6px; padding:4px 7px; overflow:hidden; cursor:default; transition:opacity 0.15s; display:flex; flex-direction:column; justify-content:center; min-width:2%; }
   .kb-block:hover { opacity:0.85; z-index:10; }
@@ -6031,13 +6032,14 @@ function _kbRenderGantt(lines, lineMap, mStatusMap, getDateStatus, getDateDanger
 
     const lineTotal = blocks.length;
     const lineReady = blocks.filter(b => b.status === 'ok').length;
+    const lineTotalQty = blocks.reduce((sum, b) => sum + (b.qty || 0), 0);
 
     const rowEl = document.createElement('div');
     rowEl.className = 'kb-row';
 
     const labelEl = document.createElement('div');
     labelEl.className = 'kb-line-label';
-    labelEl.innerHTML = `<div class="kb-ln">${line}</div><div class="kb-ln-sub">${lineReady}/${lineTotal}</div>`;
+    labelEl.innerHTML = `<div class="kb-ln">${line}</div><div class="kb-ln-sub">${lineReady}/${lineTotal}</div><div class="kb-ln-totalqty">${lineTotalQty.toLocaleString()}ea</div>`;
     rowEl.appendChild(labelEl);
 
     const trackEl = document.createElement('div');
@@ -6114,6 +6116,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
   const bomMap = window._kbBomMap || {};
 
   let totalCnt = 0;
+  let grandTotalShortage = 0;
   for (const line of lines) {
     const seenParts = new Set();
     const lineShortages = [];
@@ -6140,15 +6143,24 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
     // 컬럼 헤더 행
     const tbl = document.createElement('table');
     tbl.className = 'kb-st-table';
-    const hasCumul = lineShortages.some(p => p.cumConsumed !== undefined);
+    // _blockParts 경로: prevReq/priorToday/thisReq 필드 존재
+    // partDayStat 경로: cumConsumed/remaining/dayReq 필드 존재
+    const hasBlockParts = lineShortages.some(p => p.prevReq !== undefined || p.priorToday !== undefined);
+    const hasCumul = hasBlockParts || lineShortages.some(p => p.cumConsumed !== undefined);
     tbl.innerHTML = `<thead><tr>
       <th class="center">OK</th><th>부품번호</th><th>부품명</th><th>조달</th>
       <th class="num">가용재고</th>
-      ${hasCumul ? '<th class="num" style="color:#888;">이전일누적</th><th class="num">잔여재고</th><th class="num">당일소요</th>' : '<th class="num">필요</th>'}
+      ${hasCumul
+        ? (hasBlockParts
+            ? '<th class="num" style="color:#b45309;">이전일선행</th><th class="num" style="color:#d97706;">당일선행</th><th class="num">잔여재고</th><th class="num">당일소요</th>'
+            : '<th class="num" style="color:#b45309;">이전일누적</th><th class="num">잔여재고</th><th class="num">당일소요</th>')
+        : '<th class="num">필요</th>'}
       <th class="num">부족</th>
       <th>협력사</th><th>비고</th>
     </tr></thead>`;
     const tbody = document.createElement('tbody');
+
+    let lineTotalShortage = 0;
 
     for (const part of lineShortages) {
       const pi = partInfoMap[part.자품번] || {};
@@ -6157,12 +6169,39 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
       const 조달 = bomComp?.부품유형 || part.부품유형 || pi.부품유형 || pi.조달||pi.조달구분||pi['조달방법']||pi['구매구분']||'';
       const 협력사 = bomComp?.협력사명 || supplierMap[part.자품번] || pi.협력사||pi['거래처']||pi['공급업체']||pi['벤더']||'';
       const available = part.available ?? (part.stock ?? 0);
-      const cumConsumed = part.cumConsumed ?? 0;
-      const remaining   = part.remaining  ?? available;
-      const dayReq      = part.dayReq ?? part.thisReq ?? part.modelReq ?? part.totalGlobalReq ?? 0;
-      const lack = remaining - dayReq;
-      const lackStr = Math.round(lack).toLocaleString();
-      const remainStyle = lack < 0 ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
+      const kit       = part.kit ?? 0;
+
+      let prevReq, priorToday, thisReq, remaining, lack, beforeReq;
+      if (hasBlockParts) {
+        // _blockParts 경로: prevReq/priorToday/thisReq 별도 제공
+        prevReq    = part.prevReq    ?? 0;
+        priorToday = part.priorToday ?? 0;
+        thisReq    = part.thisReq    ?? (part.dayReq ?? (part.modelReq ?? part.totalGlobalReq ?? 0));
+        remaining  = (part.remaining !== undefined && part.remaining !== null)
+          ? part.remaining : (available - prevReq - priorToday - thisReq);
+        beforeReq  = remaining + thisReq;  // 이 블록 소비 전 잔여
+        lack       = remaining;
+      } else {
+        // partDayStat 경로: cumConsumed/remaining/dayReq 제공
+        const cumConsumed = part.cumConsumed ?? 0;
+        prevReq    = cumConsumed;
+        priorToday = 0;
+        thisReq    = part.dayReq ?? part.thisReq ?? part.modelReq ?? part.totalGlobalReq ?? 0;
+        remaining  = part.remaining ?? available;
+        beforeReq  = remaining;
+        lack       = remaining - thisReq;
+      }
+
+      const shortageAmt = lack < 0 ? Math.abs(lack) : 0;
+      lineTotalShortage  += shortageAmt;
+      grandTotalShortage += shortageAmt;
+
+      const lackStr     = Math.round(lack).toLocaleString();
+      const lackStyle   = lack < 0 ? 'color:#dc2626;font-weight:700;' : 'color:#16a34a;font-weight:700;';
+      const beforeStyle = beforeReq < 0 ? 'color:#c0392b;font-weight:700;' : 'color:#1e8449;font-weight:700;';
+      const kitBadge    = kit > 0
+        ? ` <span style="font-size:9px;background:#ede9fe;color:#6d28d9;padding:1px 5px;border-radius:3px;">키팅+${Math.round(kit).toLocaleString()}</span>`
+        : '';
 
       const tr = document.createElement('tr');
       tr.innerHTML = `
@@ -6170,13 +6209,20 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
         <td class="kb-st-pn" style="font-family:monospace;font-size:11px;">${part.자품번}</td>
         <td class="kb-st-name">${part.자품명}</td>
         <td>${조달?`<span class="kb-proc-tag">${조달}</span>`:''}</td>
-        <td class="num">${Math.round(available).toLocaleString()}</td>
+        <td class="num">${Math.round(available).toLocaleString()}${kitBadge}</td>
         ${hasCumul
-          ? `<td class="num" style="color:#888;">${Math.round(cumConsumed).toLocaleString()}</td>
-             <td class="num" style="${remainStyle}">${Math.round(remaining).toLocaleString()}</td>
-             <td class="num" style="font-weight:700;">${Math.round(dayReq).toLocaleString()}</td>`
-          : `<td class="num">${Math.round(dayReq).toLocaleString()}</td>`}
-        <td class="num kb-lack-cell kb-shortage-neg" data-orig-lack="${lackStr}">${lackStr}</td>
+          ? (hasBlockParts
+              ? `<td class="num" style="color:#b45309;font-weight:600;">${prevReq > 0 ? Math.round(prevReq).toLocaleString() : '-'}</td>
+                 <td class="num" style="color:#d97706;font-weight:600;">${priorToday > 0 ? Math.round(priorToday).toLocaleString() : '-'}</td>
+                 <td class="num" style="${beforeStyle}">${Math.round(beforeReq).toLocaleString()}</td>
+                 <td class="num" style="font-weight:700;">${Math.round(thisReq).toLocaleString()}</td>`
+              : `<td class="num" style="color:#b45309;font-weight:600;">${prevReq > 0 ? Math.round(prevReq).toLocaleString() : '-'}</td>
+                 <td class="num" style="${beforeStyle}">${Math.round(beforeReq).toLocaleString()}</td>
+                 <td class="num" style="font-weight:700;">${Math.round(thisReq).toLocaleString()}</td>`)
+          : `<td class="num">${prevReq > 0
+              ? `${Math.round(prevReq + thisReq).toLocaleString()}<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:3px;margin-left:3px;" title="이전일선행 포함">이전일+${Math.round(prevReq).toLocaleString()}</span>`
+              : Math.round(thisReq).toLocaleString()}</td>`}
+        <td class="num kb-lack-cell kb-shortage-neg" style="${lackStyle}" data-orig-lack="${lackStr}">${lackStr}</td>
         <td style="font-size:11px;color:#6b7280;">${협력사}</td>
         <td><input type="text" class="kb-note-input" placeholder="공급일/수량 등..."></td>
       `;
@@ -6212,6 +6258,24 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
 
       tbody.appendChild(tr);
     }
+
+    // ── 라인별 총 부족수량 합계 행 ─────────────────────────────────────────
+    if (lineTotalShortage > 0) {
+      const colCount = hasCumul ? (hasBlockParts ? 9 : 8) : 7;
+      const sumRow = document.createElement('tr');
+      sumRow.style.cssText = 'background:#fef2f2;font-weight:700;border-top:2px solid #dc2626;';
+      sumRow.innerHTML = `
+        <td colspan="${colCount - 1}" style="text-align:right;padding:5px 10px;color:#7f1d1d;font-size:12px;">
+          Line ${line} 총 부족수량
+        </td>
+        <td class="num" style="color:#dc2626;font-size:13px;padding:5px 8px;">
+          -${Math.round(lineTotalShortage).toLocaleString()}
+        </td>
+        <td colspan="2"></td>
+      `;
+      tbody.appendChild(sumRow);
+    }
+
     tbl.appendChild(tbody);
     container.appendChild(tbl);
   }
@@ -6220,6 +6284,20 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
   if (!totalCnt) {
     container.innerHTML = `<div style="text-align:center;padding:36px;color:#16a34a;font-size:14px;font-weight:700;">✅ 부족자재 없음</div>`;
     document.getElementById('kb-shortage-cnt').textContent = '0';
+    return;
+  }
+
+  // ── 전체 라인 총 부족수량 ────────────────────────────────────────────────
+  if (grandTotalShortage > 0) {
+    const totalDiv = document.createElement('div');
+    totalDiv.style.cssText = 'background:#7f1d1d;color:white;padding:10px 16px;margin-top:4px;' +
+      'border-radius:0 0 8px 8px;display:flex;align-items:center;justify-content:flex-end;' +
+      'gap:16px;font-weight:700;font-size:13px;';
+    totalDiv.innerHTML = `
+      <span style="opacity:0.8;">전체 라인 총 부족수량</span>
+      <span style="font-size:17px;letter-spacing:-0.5px;">-${Math.round(grandTotalShortage).toLocaleString()}</span>
+    `;
+    container.appendChild(totalDiv);
   }
 }
 
