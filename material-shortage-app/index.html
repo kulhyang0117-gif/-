@@ -5263,6 +5263,7 @@ function _kbRenderShortage(lines, lineMap, mStatusMap, getDateDangerParts) {
     const colSpan = hasCumul ? 9 : 8;
     const lineHdrRow = document.createElement('tr');
     lineHdrRow.className = 'kb-st-line-sep';
+    lineHdrRow.dataset.line = line;
     lineHdrRow.innerHTML = `<td colspan="${colSpan}" style="background:#f0f4ff;padding:5px 12px;font-weight:700;font-size:12px;color:#1e3a5f;border-top:2px solid #c7d2fe;">
       Line ${line} <span class="kb-st-badge">${lineShortages.length}건 부족</span>
       <span class="kb-st-ok-cnt" style="display:none;margin-left:6px;font-size:11px;color:#16a34a;"></span>
@@ -5442,13 +5443,25 @@ function _kbApplyOkRow(partNo, checked, note) {
         lackCell.textContent = lackCell.dataset.origLack || '';
       }
     }
-    // OK 해제 카운터 갱신
+    // OK 해제 카운터 갱신 (단일 테이블: 같은 라인의 kb-st-line-sep tr 탐색)
     const tbody = tr.closest('tbody');
-    const hdr   = tr.closest('table')?.previousElementSibling;
-    if (tbody && hdr) {
-      const cnt = tbody.querySelectorAll('.kb-ok-chk:checked').length;
-      const okCntEl = hdr.querySelector('.kb-st-ok-cnt');
-      if (okCntEl) { okCntEl.textContent = `${cnt}건 해제`; okCntEl.style.display = cnt > 0 ? '' : 'none'; }
+    if (tbody && tr.dataset.line) {
+      const lineSep = tbody.querySelector(`tr.kb-st-line-sep[data-line="${tr.dataset.line}"]`);
+      const okCntEl = lineSep?.querySelector('.kb-st-ok-cnt');
+      if (okCntEl) {
+        const cnt = tbody.querySelectorAll(`tr[data-line="${tr.dataset.line}"] .kb-ok-chk:checked`).length;
+        okCntEl.textContent = `${cnt}건 해제`;
+        okCntEl.style.display = cnt > 0 ? '' : 'none';
+      }
+    }
+    // 전체 총 부족수량 재계산
+    const container = document.getElementById('kb-shortage-body');
+    const valEl = container?.querySelector('.kb-grand-total-val');
+    if (valEl) {
+      const rem = Array.from(container.querySelectorAll('tr[data-shortage]'))
+        .filter(r => !r.querySelector('.kb-ok-chk')?.checked)
+        .reduce((s, r) => s + Number(r.dataset.shortage), 0);
+      valEl.textContent = `-${Math.round(rem).toLocaleString()}`;
     }
   }
   if (noteInput && note !== undefined && noteInput.value !== note) noteInput.value = note;
