@@ -930,14 +930,14 @@ def navigate_and_download_inventory(app):
         time.sleep(0.5)
 
     if dialog_hwnd:
-        log(f"  Save As 다이얼로그 감지 → {file_name}.xlsx 저장...")
+        log(f"  Save As 다이얼로그 감지 → 파일명 변경 없이 {save_folder}에 저장...")
         try:
             win32gui.SetForegroundWindow(dialog_hwnd)
         except Exception:
             pass
         time.sleep(0.4)
 
-        # Alt+D → 주소창 → Ctrl+V(폴더경로) → Enter
+        # Alt+D → 폴더경로 → Enter → Alt+S (파일명 변경 없이 바로 저장)
         win32clipboard.OpenClipboard()
         win32clipboard.EmptyClipboard()
         win32clipboard.SetClipboardText(save_folder, win32clipboard.CF_UNICODETEXT)
@@ -949,17 +949,7 @@ def navigate_and_download_inventory(app):
         pyautogui.press('enter')
         time.sleep(1.5)
 
-        # 파일명 입력 (Ctrl+A → 클립보드로 붙여넣기)
-        win32clipboard.OpenClipboard()
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardText(file_name, win32clipboard.CF_UNICODETEXT)
-        win32clipboard.CloseClipboard()
-        pyautogui.hotkey('ctrl', 'a')
-        time.sleep(0.1)
-        pyautogui.hotkey('ctrl', 'v')
-        time.sleep(0.3)
-
-        # Alt+S → 저장
+        # 파일명 변경 없이 바로 저장 (Alt+S)
         pyautogui.hotkey('alt', 's')
         time.sleep(1.5)
 
@@ -973,7 +963,7 @@ def navigate_and_download_inventory(app):
         except Exception:
             pass
 
-        log(f"  ✅ 저장 완료: {file_name}.xlsx")
+        log(f"  ✅ 저장 완료 → {save_folder}")
     else:
         log("  ⚠️  Save As 다이얼로그 미감지 — Downloads 폴더 폴백")
         latest = _find_latest_download()
@@ -1015,7 +1005,11 @@ def navigate_and_download_inventory(app):
         time.sleep(0.5)
 
     log("  ✅ 재고현황 저장 및 닫기 완료")
-    return str(INVENTORY_DIR / f"{file_name}.xlsx")
+    # 실제 저장된 최신 파일 반환
+    inv_latest = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+    if inv_latest:
+        return str(inv_latest[0])
+    return str(INVENTORY_DIR)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
