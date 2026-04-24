@@ -599,17 +599,17 @@ def download_all_items(win):
 def _click_excel_btn(win):
     """
     Excel 버튼 탐색 및 클릭.
-    1순위: win32 child_window  2순위: UIA descendants 전체 스캔
-    성공 시 True 반환.
+    1순위: win32 child_window  2순위: UIA 부분텍스트/automation_id 스캔
+    3순위: ToolBar 항목 스캔    성공 시 True 반환.
     """
-    EXCEL_KEYWORDS = {'excel', 'excel 다운로드', '엑셀', 'excel저장', 'export'}
+    EXCEL_CONTAINS = ['excel', '엑셀', 'xls', 'export', '다운로드']
 
     # 1) win32 backend
-    if _try_click(win, ["Excel 다운로드", "Excel", "엑셀", "Export", "EXCEL"]):
+    if _try_click(win, ["Excel 다운로드", "Excel", "엑셀", "Export", "EXCEL", "다운로드"]):
         log("    Excel 버튼 클릭 (win32)")
         return True
 
-    # 2) UIA descendants 전체 스캔
+    # 2) UIA descendants 전체 스캔 — 부분 텍스트 / automation_id / name 포함 검사
     try:
         from pywinauto import Application
         pid = win.process_id()
@@ -618,10 +618,18 @@ def _click_excel_btn(win):
             try:
                 for ctrl in w.descendants():
                     try:
-                        txt = ctrl.window_text().strip().lower()
-                        if txt in EXCEL_KEYWORDS:
+                        txt  = (ctrl.window_text() or '').strip().lower()
+                        name = ''
+                        aid  = ''
+                        try:
+                            name = (ctrl.element_info.name or '').lower()
+                            aid  = (ctrl.element_info.automation_id or '').lower()
+                        except Exception:
+                            pass
+                        combined = f"{txt} {name} {aid}"
+                        if any(k in combined for k in EXCEL_CONTAINS):
                             ctrl.click_input()
-                            log(f"    Excel 버튼 클릭 (UIA: '{txt}')")
+                            log(f"    Excel 버튼 클릭 (UIA 부분일치: '{txt or name}')")
                             return True
                     except Exception:
                         pass
@@ -629,6 +637,36 @@ def _click_excel_btn(win):
                 pass
     except Exception as e:
         log(f"    UIA 스캔 실패: {e}")
+
+    # 3) ToolBar / ToolStripButton 항목 스캔 (아이콘 전용 버튼 대응)
+    try:
+        from pywinauto import Application
+        pid = win.process_id()
+        uia_app = Application(backend='uia').connect(process=pid, timeout=5)
+        for w in uia_app.windows():
+            try:
+                toolbars = w.descendants(control_type="ToolBar")
+                for tb in toolbars:
+                    try:
+                        items = tb.descendants(control_type="Button")
+                        for item in items:
+                            try:
+                                iname = (item.element_info.name or '').lower()
+                                iaid  = (item.element_info.automation_id or '').lower()
+                                itxt  = (item.window_text() or '').strip().lower()
+                                combined = f"{iname} {iaid} {itxt}"
+                                if any(k in combined for k in EXCEL_CONTAINS):
+                                    item.click_input()
+                                    log(f"    Excel 버튼 클릭 (ToolBar: '{iname or iaid}')")
+                                    return True
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    except Exception as e:
+        log(f"    ToolBar 스캔 실패: {e}")
 
     return False
 
@@ -689,7 +727,8 @@ def _download_by_keyboard(win):
     log(f"  스캔 region: y={region_top}~{region_top+region_h}  grid_bottom={grid_bottom}")
 
     downloaded = []
-    same_count = 0   # 연속으로 화면 변화 없는 횟수 카운트
+    same_count = 0        # 연속으로 화면 변화 없는 횟수 카운트
+    last_sel_y = ROW_Y    # 마지막으로 알려진 선택 행 Y (fallback용)
 
     for i in range(500):
         log(f"  [{i+1}] Excel 다운로드 시도...")
@@ -702,12 +741,18 @@ def _download_by_keyboard(win):
 
         before = pyautogui.screenshot(region=region)
 
-        # 선택 행 클릭 후 Down (원래 방식 — fallback 클릭 없음)
+        # 선택 행 탐지 — 탐지 실패(포커스 해제 후 회색으로 변한 경우)에도
+        # 마지막 위치를 클릭해 grid 포커스를 복구하고 Down 키가 동작하도록 함
         sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=grid_bottom, row_height=ROW_HEIGHT)
         if sel_y is not None:
+            last_sel_y = sel_y
             log(f"    현재 선택 행 클릭: ({ROW_X}, {sel_y}) → ↓")
             pyautogui.click(ROW_X, sel_y)
-            time.sleep(0.2)
+        else:
+            # 탐지 실패 → 마지막 위치로 클릭해 grid 포커스 확보
+            log(f"    선택 행 탐지 실패 → 마지막 위치 클릭: ({ROW_X}, {last_sel_y})")
+            pyautogui.click(ROW_X, last_sel_y)
+        time.sleep(0.2)
 
         pyautogui.press('down')   # 다음 품목으로 이동
         time.sleep(0.5)
@@ -930,28 +975,16 @@ def navigate_and_download_inventory(app):
         time.sleep(0.5)
 
     if dialog_hwnd:
-        log(f"  Save As 다이얼로그 감지 → 파일명 변경 없이 {save_folder}에 저장...")
+        log(f"  Save As 다이얼로그 감지 → 파일명 그대로 저장버튼 클릭...")
         try:
             win32gui.SetForegroundWindow(dialog_hwnd)
         except Exception:
             pass
         time.sleep(0.4)
 
-        # Alt+D → 폴더경로 → Enter → Alt+S (파일명 변경 없이 바로 저장)
-        win32clipboard.OpenClipboard()
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardText(save_folder, win32clipboard.CF_UNICODETEXT)
-        win32clipboard.CloseClipboard()
-        pyautogui.hotkey('alt', 'd')
-        time.sleep(0.3)
-        pyautogui.hotkey('ctrl', 'v')
-        time.sleep(0.3)
-        pyautogui.press('enter')
-        time.sleep(1.5)
-
-        # 파일명 변경 없이 바로 저장 (Alt+S)
+        # 파일명/경로 변경 없이 바로 저장 버튼 클릭 (Alt+S)
         pyautogui.hotkey('alt', 's')
-        time.sleep(1.5)
+        time.sleep(2.0)
 
         # 덮어쓰기 확인 팝업
         try:
@@ -963,7 +996,15 @@ def navigate_and_download_inventory(app):
         except Exception:
             pass
 
-        log(f"  ✅ 저장 완료 → {save_folder}")
+        # 저장된 파일을 재고현황 폴더로 이동
+        import shutil as _shutil
+        latest = _find_latest_download()
+        if latest:
+            dest = INVENTORY_DIR / f"{file_name}.xlsx"
+            _shutil.move(str(latest), str(dest))
+            log(f"  ✅ 저장 완료: {dest.name}")
+        else:
+            log(f"  ✅ 저장 완료 (파일이 기본 위치에 저장됨)")
     else:
         log("  ⚠️  Save As 다이얼로그 미감지 — Downloads 폴더 폴백")
         latest = _find_latest_download()
