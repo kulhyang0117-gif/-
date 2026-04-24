@@ -596,12 +596,14 @@ def download_all_items(win):
     return downloaded_files
 
 
-def _click_excel_btn(win):
+def _click_excel_btn(win, row_y=None):
     """
     Excel 버튼 탐색 및 클릭.
     1순위: win32 child_window  2순위: UIA 부분텍스트/automation_id 스캔
-    3순위: ToolBar 항목 스캔    성공 시 True 반환.
+    3순위: ToolBar 항목 스캔  4순위: 우클릭 컨텍스트 메뉴
+    실패 시 발견된 컨트롤 목록을 로그에 덤프.  성공 시 True 반환.
     """
+    import pyautogui
     EXCEL_CONTAINS = ['excel', '엑셀', 'xls', 'export', '다운로드']
 
     # 1) win32 backend
@@ -610,6 +612,7 @@ def _click_excel_btn(win):
         return True
 
     # 2) UIA descendants 전체 스캔 — 부분 텍스트 / automation_id / name 포함 검사
+    _dump_controls = []   # 진단용 컨트롤 목록
     try:
         from pywinauto import Application
         pid = win.process_id()
@@ -621,12 +624,17 @@ def _click_excel_btn(win):
                         txt  = (ctrl.window_text() or '').strip().lower()
                         name = ''
                         aid  = ''
+                        ctype = ''
                         try:
-                            name = (ctrl.element_info.name or '').lower()
-                            aid  = (ctrl.element_info.automation_id or '').lower()
+                            name  = (ctrl.element_info.name or '').lower()
+                            aid   = (ctrl.element_info.automation_id or '').lower()
+                            ctype = (ctrl.element_info.control_type or '')
                         except Exception:
                             pass
                         combined = f"{txt} {name} {aid}"
+                        # 진단 목록에 추가 (Button/MenuItem/Custom 계열만)
+                        if ctype in ('Button', 'MenuItem', 'SplitButton', 'Custom') or any(k in combined for k in ['btn', 'button', 'menu', 'tool']):
+                            _dump_controls.append(f"[{ctype}] txt='{txt}' name='{name}' aid='{aid}'")
                         if any(k in combined for k in EXCEL_CONTAINS):
                             ctrl.click_input()
                             log(f"    Excel 버튼 클릭 (UIA 부분일치: '{txt or name}')")
@@ -655,6 +663,7 @@ def _click_excel_btn(win):
                                 iaid  = (item.element_info.automation_id or '').lower()
                                 itxt  = (item.window_text() or '').strip().lower()
                                 combined = f"{iname} {iaid} {itxt}"
+                                _dump_controls.append(f"[ToolBar/Button] txt='{itxt}' name='{iname}' aid='{iaid}'")
                                 if any(k in combined for k in EXCEL_CONTAINS):
                                     item.click_input()
                                     log(f"    Excel 버튼 클릭 (ToolBar: '{iname or iaid}')")
@@ -668,16 +677,53 @@ def _click_excel_btn(win):
     except Exception as e:
         log(f"    ToolBar 스캔 실패: {e}")
 
+    # 4) 우클릭 컨텍스트 메뉴 → Excel/엑셀 항목 클릭
+    if row_y is not None:
+        try:
+            from pywinauto import Desktop
+            log(f"    우클릭 컨텍스트 메뉴 시도: (1000, {row_y})")
+            pyautogui.rightClick(1000, row_y)
+            time.sleep(0.8)
+            desktop = Desktop(backend='uia')
+            # 컨텍스트 메뉴에서 Excel 관련 항목 탐색
+            for attempt in range(10):
+                try:
+                    menus = desktop.windows(control_type='Menu')
+                    for menu in menus:
+                        for item in menu.descendants(control_type='MenuItem'):
+                            itxt = (item.window_text() or '').strip().lower()
+                            iname = (item.element_info.name or '').lower()
+                            if any(k in f"{itxt} {iname}" for k in EXCEL_CONTAINS):
+                                item.click_input()
+                                log(f"    Excel 컨텍스트 메뉴 클릭: '{itxt or iname}'")
+                                return True
+                except Exception:
+                    pass
+                time.sleep(0.3)
+            # 메뉴에서 못 찾으면 Escape로 닫기
+            pyautogui.press('escape')
+            time.sleep(0.3)
+        except Exception as e:
+            log(f"    우클릭 시도 실패: {e}")
+
+    # 진단: 발견된 컨트롤 목록 로그 출력 (최대 60개)
+    if _dump_controls:
+        log(f"    [진단] 발견된 컨트롤 목록 ({len(_dump_controls)}개, 최대 60개 출력):")
+        for line in _dump_controls[:60]:
+            log(f"      {line}")
+    else:
+        log("    [진단] UIA에서 발견된 Button/MenuItem 컨트롤 없음")
+
     return False
 
 
-def _click_excel_download(win, idx, item_name):
+def _click_excel_download(win, idx, item_name, row_y=None):
     """Excel 다운로드 버튼 클릭 및 저장"""
     import pyautogui
     from pywinauto import Desktop
 
     # Excel 버튼 클릭 — 미발견 시 건너뜀
-    if not _click_excel_btn(win):
+    if not _click_excel_btn(win, row_y=row_y):
         log(f"    ⚠️  [{idx}] Excel 버튼 미발견 — 건너뜀")
         return None
 
@@ -732,7 +778,7 @@ def _download_by_keyboard(win):
 
     for i in range(500):
         log(f"  [{i+1}] Excel 다운로드 시도...")
-        saved = _click_excel_download(win, i + 1, f"kitting_{i+1:03d}")
+        saved = _click_excel_download(win, i + 1, f"kitting_{i+1:03d}", row_y=last_sel_y)
         if saved:
             downloaded.append(saved)
 
