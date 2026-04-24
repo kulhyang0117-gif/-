@@ -1123,10 +1123,14 @@ def _download_by_keyboard(win):
     ROW_Y      = 172    # 첫 번째 행 중심 Y — 2560x1600 스크린 실측값
     ROW_HEIGHT = 33     # 행 높이 — 2560x1600 스크린 실측값
     GRID_BOT   = 750    # 그리드 하단 경계 Y (스크롤 여유 포함)
+    MAX_VIS_IDX = (GRID_BOT - ROW_HEIGHT // 2 - ROW_Y) // ROW_HEIGHT  # 클릭 가능한 마지막 인덱스
 
     def row_click_y(idx):
+        """가시 영역 안에서만 Y 계산. 범위 초과 시 None 반환 → 클릭 생략."""
         y = ROW_Y + idx * ROW_HEIGHT
-        return min(y, GRID_BOT - ROW_HEIGHT // 2)
+        if y > GRID_BOT - ROW_HEIGHT // 2:
+            return None  # 그리드 스크롤로 가시 영역 벗어남 → 클릭 생략하고 ↓만 사용
+        return y
 
     # ── 총 행 수 읽기 ──────────────────────────────────────────────────────
     total_rows = _get_total_rows(win)
@@ -1169,9 +1173,12 @@ def _download_by_keyboard(win):
         time.sleep(0.4)
 
         cy = row_click_y(row_index)
-        log(f"    행[{row_index+1}] 클릭: ({ROW_X}, {cy}) → ↓")
-        pyautogui.click(ROW_X, cy)
-        time.sleep(0.2)
+        if cy is not None:
+            log(f"    행[{row_index+1}] 클릭: ({ROW_X}, {cy}) → ↓")
+            pyautogui.click(ROW_X, cy)
+            time.sleep(0.2)
+        else:
+            log(f"    행[{row_index+1}] 가시 영역 초과 — 클릭 생략, ↓만 사용")
         pyautogui.press('down')
         row_index += 1
         time.sleep(0.5)
@@ -1194,8 +1201,11 @@ def _download_by_keyboard(win):
             time.sleep(0.4)
             before = pyautogui.screenshot(region=region)
             cy = row_click_y(row_index)
-            pyautogui.click(ROW_X, cy)
-            time.sleep(0.2)
+            if cy is not None:
+                pyautogui.click(ROW_X, cy)
+                time.sleep(0.2)
+            else:
+                log(f"    행[{row_index+1}] 가시 영역 초과 — 클릭 생략, ↓만 사용")
             pyautogui.press('down')
             row_index += 1
             time.sleep(0.5)
@@ -1208,8 +1218,6 @@ def _download_by_keyboard(win):
                     break
             else:
                 same_count = 0
-
-    return downloaded
 
     return downloaded
 
