@@ -707,6 +707,33 @@ def _click_excel_btn(win, row_y=None):
             log(f"    우클릭 시도 실패: {e}")
 
     # 진단: 발견된 컨트롤 목록 로그 출력 (최대 60개)
+    # 5) win32 EnumChildWindows — MDI 자식 폼 포함 전체 버튼 탐색
+    try:
+        import win32gui, win32con
+        _excel_hwnd = None
+
+        def _enum_btn(hwnd, _):
+            nonlocal _excel_hwnd
+            if _excel_hwnd:
+                return
+            try:
+                cls = win32gui.GetClassName(hwnd)
+                txt = win32gui.GetWindowText(hwnd)
+                if 'BUTTON' in cls.upper() and any(k in txt.lower() for k in EXCEL_CONTAINS):
+                    _excel_hwnd = hwnd
+            except Exception:
+                pass
+
+        win32gui.EnumChildWindows(win.handle, _enum_btn, None)
+
+        if _excel_hwnd:
+            btn_txt = win32gui.GetWindowText(_excel_hwnd)
+            win32gui.SendMessage(_excel_hwnd, win32con.BM_CLICK, 0, 0)
+            log(f"    Excel 버튼 클릭 (win32 EnumChild: '{btn_txt}')")
+            return True
+    except Exception as e:
+        log(f"    win32 EnumChild 실패: {e}")
+
     if _dump_controls:
         log(f"    [진단] 발견된 컨트롤 목록 ({len(_dump_controls)}개, 최대 60개 출력):")
         for line in _dump_controls[:60]:
@@ -760,9 +787,33 @@ def _download_by_keyboard(win):
     ROW_HEIGHT = 22     # 행 높이 픽셀 — 실제 MES 그리드 행 높이에 맞게 조정
 
     win.set_focus(); time.sleep(0.3)
-    pyautogui.click(ROW_X, ROW_Y)
-    log(f"  첫 번째 행 클릭: ({ROW_X}, {ROW_Y})")
-    time.sleep(0.5)
+
+    # UIA로 첫 번째 행 클릭 (해상도/위치 무관 — 좌표 fallback보다 우선)
+    _uia_first_clicked = False
+    try:
+        from pywinauto import Application as _UA
+        _ua = _UA(backend='uia').connect(process=win.process_id(), timeout=5)
+        for _uw in _ua.windows():
+            try:
+                _rows = [c for c in _uw.descendants(control_type='Custom')
+                         if (c.element_info.name or '').lower().startswith('row ')]
+                _rows.sort(key=lambda r: int(r.element_info.name.split()[-1])
+                           if r.element_info.name and r.element_info.name.split()[-1].isdigit() else 999)
+                if _rows:
+                    _rows[0].click_input()
+                    log(f"  UIA 첫 행 클릭: '{_rows[0].element_info.name}'")
+                    _uia_first_clicked = True
+                    time.sleep(0.5)
+                    break
+            except Exception:
+                pass
+    except Exception as _e:
+        log(f"  UIA 첫 행 클릭 실패: {_e}")
+
+    if not _uia_first_clicked:
+        pyautogui.click(ROW_X, ROW_Y)
+        log(f"  첫 번째 행 좌표 클릭: ({ROW_X}, {ROW_Y})")
+        time.sleep(0.5)
 
     # 화면 전체 높이를 동적으로 읽어 region 설정 (해상도 무관)
     screen_w, screen_h = pyautogui.size()
