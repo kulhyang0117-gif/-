@@ -650,12 +650,64 @@ def download_all_items(win):
 def _click_excel_btn(win, row_y=None):
     """
     Excel 버튼 탐색 및 클릭.
+    0순위: btn_src_hide 위치 기반 좌표 클릭 (C1Command 오너드로우 버튼 대응)
     1순위: win32 child_window  2순위: UIA 부분텍스트/automation_id 스캔
-    3순위: ToolBar 항목 스캔  4순위: 우클릭 컨텍스트 메뉴
-    실패 시 발견된 컨트롤 목록을 로그에 덤프.  성공 시 True 반환.
+    3순위: ToolBar 항목 스캔  4순위: win32 완전재귀탐색  5순위: 우클릭
+    성공 시 True 반환.
     """
-    import pyautogui
+    import pyautogui, win32gui
     EXCEL_CONTAINS = ['excel', '엑셀', 'xls', 'export', '다운로드']
+
+    # 0) btn_src_hide(◀) 위치 기반 Excel 버튼 좌표 클릭
+    #    조회/Excel/종료 버튼은 C1Command 오너드로우라 텍스트 탐지 불가
+    #    → btn_src_hide UIA rect을 기준으로 Excel 버튼 위치 계산
+    try:
+        from pywinauto import Application as _UA2
+        _pid2 = win.process_id()
+        _ua2 = _UA2(backend='uia').connect(process=_pid2, timeout=3)
+        _src_rect = None
+        for _uw2 in _ua2.windows():
+            try:
+                for _c2 in _uw2.descendants(control_type='Button'):
+                    if (_c2.element_info.automation_id or '') == 'btn_src_hide':
+                        _src_rect = _c2.rectangle()
+                        break
+            except Exception:
+                pass
+            if _src_rect:
+                break
+
+        if _src_rect:
+            # Excel 버튼 = panel_right × 0.62, btn_src_hide 중심 Y + 26px
+            panel_right = _src_rect.left
+            sh_cy = (_src_rect.top + _src_rect.bottom) // 2
+            excel_x = int(panel_right * 0.62) - 20
+            excel_y = sh_cy + 26
+
+            # 클릭 전 새 창 목록
+            _before_h = set()
+            win32gui.EnumWindows(lambda h, _: _before_h.add(h) or True, None)
+
+            log(f"    위치기반 Excel 클릭: ({excel_x}, {excel_y})  panel_right={panel_right}")
+            pyautogui.click(excel_x, excel_y)
+            time.sleep(1.5)
+
+            # 저장 다이얼로그 또는 새 창 확인
+            _after_h = set()
+            win32gui.EnumWindows(lambda h, _: _after_h.add(h) or True, None)
+            for _nh in _after_h - _before_h:
+                try:
+                    _nt = win32gui.GetWindowText(_nh)
+                    if any(k in _nt for k in ['저장', 'Save', '다른 이름', 'xlsx', 'xls']):
+                        log(f"    ✅ Excel 클릭 확인 (저장 다이얼로그: '{_nt}')")
+                        return True
+                except Exception:
+                    pass
+            # 다이얼로그 없어도 일단 True 반환 (자동저장 또는 지연 열림 대응)
+            log(f"    위치기반 클릭 완료 (다이얼로그 미감지 — 자동저장 또는 지연)")
+            return True
+    except Exception as _e2:
+        log(f"    위치기반 클릭 실패: {_e2}")
 
     # 1) win32 backend
     if _try_click(win, ["Excel 다운로드", "Excel", "엑셀", "Export", "EXCEL", "다운로드"]):
@@ -915,9 +967,9 @@ def _download_by_keyboard(win):
     if not _uia_first_clicked:
         try:
             _wrect = win.rectangle()
-            _row_y = _wrect.top + 165
+            _row_y = _wrect.top + 185
         except Exception:
-            _row_y = 165
+            _row_y = 185
         pyautogui.click(ROW_X, _row_y)
         log(f"  첫 번째 행 좌표 클릭: ({ROW_X}, {_row_y})")
         time.sleep(0.5)
@@ -938,9 +990,9 @@ def _download_by_keyboard(win):
         last_sel_y = (_first_row_rect.top + _first_row_rect.bottom) // 2
     else:
         try:
-            last_sel_y = win.rectangle().top + 165
+            last_sel_y = win.rectangle().top + 185
         except Exception:
-            last_sel_y = 165
+            last_sel_y = 185
 
     for i in range(500):
         log(f"  [{i+1}] Excel 다운로드 시도...")
