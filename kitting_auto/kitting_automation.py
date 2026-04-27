@@ -967,9 +967,9 @@ def _download_by_keyboard(win):
     if not _uia_first_clicked:
         try:
             _wrect = win.rectangle()
-            _row_y = _wrect.top + 185
+            _row_y = _wrect.top + 205
         except Exception:
-            _row_y = 185
+            _row_y = 205
         pyautogui.click(ROW_X, _row_y)
         log(f"  첫 번째 행 좌표 클릭: ({ROW_X}, {_row_y})")
         time.sleep(0.5)
@@ -990,9 +990,9 @@ def _download_by_keyboard(win):
         last_sel_y = (_first_row_rect.top + _first_row_rect.bottom) // 2
     else:
         try:
-            last_sel_y = win.rectangle().top + 185
+            last_sel_y = win.rectangle().top + 205
         except Exception:
-            last_sel_y = 185
+            last_sel_y = 205
 
     for i in range(500):
         log(f"  [{i+1}] Excel 다운로드 시도...")
