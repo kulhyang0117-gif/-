@@ -941,20 +941,28 @@ def _download_by_keyboard(win):
     try:
         from pywinauto import Application as _UA
         _ua = _UA(backend='uia').connect(process=win.process_id(), timeout=5)
+        # 컬럼 헤더 제외 기준: 창 상단으로부터 195px 이하는 헤더 영역
+        try:
+            _win_top = win.rectangle().top
+        except Exception:
+            _win_top = 0
+        _data_min_y = _win_top + 195
         for _uw in _ua.windows():
             try:
-                # DataItem / ListItem / Custom 중 가장 위에 있는 행 선택
+                # DataItem / ListItem / Custom 중 헤더 영역 아래 행만 선택
                 _candidates = []
                 for _ct in ('DataItem', 'ListItem', 'Custom'):
                     _cands = [c for c in _uw.descendants(control_type=_ct)
-                              if c.rectangle().width() > 50 and c.rectangle().height() > 5]
+                              if c.rectangle().width() > 50
+                              and c.rectangle().height() > 5
+                              and c.rectangle().top >= _data_min_y]
                     _candidates.extend(_cands)
                 if _candidates:
                     _candidates.sort(key=lambda c: c.rectangle().top)
                     _first = _candidates[0]
                     _first.click_input()
                     _first_row_rect = _first.rectangle()
-                    log(f"  UIA 첫 행 클릭: y={_first_row_rect.top}")
+                    log(f"  UIA 첫 행 클릭: y={_first_row_rect.top} (헤더 제외 min_y={_data_min_y})")
                     _uia_first_clicked = True
                     time.sleep(0.5)
                     break
@@ -1017,8 +1025,13 @@ def _download_by_keyboard(win):
         before = pyautogui.screenshot(region=region)
 
         # 1순위: UIA로 선택된 행의 실제 bounding rectangle Y 좌표 사용
+        # 헤더 영역(win.top+195 미만)이면 무시
+        try:
+            _cur_win_top = win.rectangle().top
+        except Exception:
+            _cur_win_top = 0
         uia_rect = _uia_selected_row_rect(win)
-        if uia_rect is not None:
+        if uia_rect is not None and (uia_rect.top + uia_rect.bottom) // 2 >= _cur_win_top + 195:
             sel_y = (uia_rect.top + uia_rect.bottom) // 2
             sel_x = (uia_rect.left + uia_rect.right) // 2
             last_sel_y = sel_y
