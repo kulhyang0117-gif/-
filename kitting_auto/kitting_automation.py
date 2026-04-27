@@ -742,14 +742,21 @@ def _click_excel_btn(win, row_y=None):
             return not bool(_excel_hwnd[0])
 
         def _scan_hwnd(hwnd):
-            """hwnd 및 모든 자손을 재귀 탐색"""
+            """hwnd 및 모든 자손을 재귀 탐색.
+            C1Input.C1Button  → 클래스에 'BUTTON' 포함
+            C1Command 리본버튼 → 클래스에 'WINDOW'/'FORMS' 포함, BUTTON 미포함
+            두 유형 모두 탐색.
+            """
             if _excel_hwnd[0]:
                 return
             try:
                 cls = win32gui.GetClassName(hwnd)
                 txt = win32gui.GetWindowText(hwnd) or ''
-                if 'BUTTON' in cls.upper():
-                    _all_btns.append(txt or '<empty>')
+                cls_up = cls.upper()
+                # WinForms 계열 컨트롤은 모두 검사 (BUTTON + Window 형 모두)
+                if 'WINDOWSFORMS10' in cls_up or 'BUTTON' in cls_up:
+                    if txt:
+                        _all_btns.append(f"[{cls[:30]}] '{txt}'")
                     if any(k in txt.lower() for k in EXCEL_CONTAINS):
                         _excel_hwnd[0] = hwnd
                         return
@@ -775,7 +782,15 @@ def _click_excel_btn(win, row_y=None):
 
         if _excel_hwnd[0]:
             btn_txt = win32gui.GetWindowText(_excel_hwnd[0])
-            win32gui.SendMessage(_excel_hwnd[0], win32con.BM_CLICK, 0, 0)
+            btn_cls = win32gui.GetClassName(_excel_hwnd[0]).upper()
+            if 'BUTTON' in btn_cls:
+                # 표준 버튼: BM_CLICK
+                win32gui.SendMessage(_excel_hwnd[0], win32con.BM_CLICK, 0, 0)
+            else:
+                # C1Command 리본 버튼: 좌표 기반 마우스 클릭
+                rc = win32gui.GetWindowRect(_excel_hwnd[0])
+                cx, cy = (rc[0] + rc[2]) // 2, (rc[1] + rc[3]) // 2
+                pyautogui.click(cx, cy)
             log(f"    Excel 버튼 클릭 (win32 완전재귀탐색: '{btn_txt}')")
             return True
         else:
@@ -933,7 +948,18 @@ def _download_by_keyboard(win):
         if saved:
             downloaded.append(saved)
 
-        win.set_focus()
+        # win 핸들 스테일 방지: set_focus 실패 시 재취득
+        try:
+            win.set_focus()
+        except Exception:
+            _, win = _get_smes_window()
+            if not win:
+                log("  ⚠️  창 재취득 실패 — 루프 종료")
+                break
+            try:
+                win.set_focus()
+            except Exception:
+                pass
         time.sleep(0.4)
 
         before = pyautogui.screenshot(region=region)
