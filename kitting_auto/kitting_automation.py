@@ -681,7 +681,7 @@ def _click_excel_btn(win, row_y=None):
             # Excel 버튼 = panel_right × 0.62, btn_src_hide 중심 Y + 26px
             panel_right = _src_rect.left
             sh_cy = (_src_rect.top + _src_rect.bottom) // 2
-            excel_x = int(panel_right * 0.62) - 20
+            excel_x = int(panel_right * 0.62)
             excel_y = sh_cy + 26
 
             # 클릭 전 새 창 목록
