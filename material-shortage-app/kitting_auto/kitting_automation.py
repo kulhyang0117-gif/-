@@ -8,7 +8,7 @@ sMES 키팅 자재 자동 다운로드 & 자재부족현황 자동 업로드
   playwright install chromium
 """
 
-import os, sys, time, ctypes, subprocess, argparse
+import os, sys, time, ctypes, subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -16,25 +16,15 @@ from pathlib import Path
 # 설정
 # ──────────────────────────────────────────────────────────────────────────────
 SMES_EXE     = Path(r"C:\Program Files (x86)\I2R\sMES\sMES.exe")
-# ── 기본(fallback) 경로 ── 앱 설정에서 지정하지 않았을 때 사용
-DOWNLOAD_DIR_DEFAULT  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\kitting 자재")
-PREV_KIT_DIR_DEFAULT  = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\전일키팅")
-INVENTORY_DIR_DEFAULT = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\재고현황")
-# ── 런타임 경로 (main() 시작 시 브라우저 localStorage 값으로 덮어씀) ──
-DOWNLOAD_DIR   = DOWNLOAD_DIR_DEFAULT
-PREV_KIT_DIR   = PREV_KIT_DIR_DEFAULT
-INVENTORY_DIR  = INVENTORY_DIR_DEFAULT
-HTML_FILE      = Path(r"C:\Users\조립\Desktop\claude\Material Shortage Status vs. Production Plan\자재부족현황.html")
-STOP_FLAG      = Path(__file__).parent / "stop_flag.txt"
 
-# Microsoft Edge 실행 경로 (64bit 우선, 없으면 32bit)
-EDGE_EXE = next(
-    (p for p in [
-        Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
-        Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
-    ] if p.exists()),
-    None
-)
+# 스크립트 위치 기준 상대 경로 (어떤 PC에서 실행해도 동작)
+_HERE        = Path(__file__).parent          # kitting_auto 폴더
+_BASE        = _HERE.parent                   # 프로젝트 루트
+
+DOWNLOAD_DIR   = _BASE / "kitting 자재"
+INVENTORY_DIR  = _BASE / "재고현황"
+HTML_FILE      = _BASE / "자재부족현황.html"
+LOG_FILE       = _HERE / "kitting_log.txt"
 
 SMES_ID      = "SSAT045"
 SMES_PW      = "rlatndus1!"
@@ -52,15 +42,24 @@ EXCEL_DELAY  = 5.0
 # ──────────────────────────────────────────────────────────────────────────────
 # 유틸
 # ──────────────────────────────────────────────────────────────────────────────
-def log(msg):
-    print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
+_log_file = None
 
-def check_stop():
-    """긴급정지 플래그 파일이 있으면 삭제 후 StopIteration 발생"""
-    if STOP_FLAG.exists():
-        STOP_FLAG.unlink(missing_ok=True)
-        log("🛑 긴급정지 요청 감지 — 자동화를 중단합니다.")
-        raise StopIteration("긴급정지")
+def _init_log():
+    global _log_file
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    _log_file = open(LOG_FILE, "a", encoding="utf-8")
+    log(f"{'='*60}")
+    log(f"로그 파일: {LOG_FILE}")
+
+def log(msg):
+    line = f"[{datetime.now():%H:%M:%S}] {msg}"
+    try:
+        print(line, flush=True)
+    except UnicodeEncodeError:
+        print(line.encode('utf-8', errors='replace').decode('ascii', errors='replace'), flush=True)
+    if _log_file:
+        _log_file.write(line + "\n")
+        _log_file.flush()
 
 def is_admin():
     try: return ctypes.windll.shell32.IsUserAnAdmin()
@@ -161,669 +160,220 @@ def _paste_text(text):
     time.sleep(0.2)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Step 2 : sMES 로그인  (PDF 3단계 우선순위 구현)
+# Step 2 : sMES 로그인  (IMMES MEMBERS LOGIN 창)
 # ──────────────────────────────────────────────────────────────────────────────
-
-def _type_password(pwd: str):
-    """
-    비밀번호 직접 키 입력.
-    일반 문자는 typewrite, Shift 조합 특수문자는 hotkey로 각각 타이핑.
-    """
-    import pyautogui
-
-    # Shift+키 조합이 필요한 특수문자 매핑
-    SHIFT_MAP = {
-        '!': '1', '@': '2', '#': '3', '$': '4', '%': '5',
-        '^': '6', '&': '7', '*': '8', '(': '9', ')': '0',
-        '_': '-', '+': '=', '{': '[', '}': ']', '|': '\\',
-        ':': ';', '"': "'", '<': ',', '>': '.', '?': '/',
-        '~': '`',
-    }
-
-    for ch in pwd:
-        if ch in SHIFT_MAP:
-            pyautogui.hotkey('shift', SHIFT_MAP[ch])
-        else:
-            pyautogui.typewrite(ch, interval=0.0)
-        time.sleep(0.05)
-
-
-def _check_caps_lock():
-    """Caps Lock 켜져 있으면 자동 해제"""
-    import pyautogui
-    if ctypes.windll.user32.GetKeyState(0x14) & 1:
-        log("  ⚠️  Caps Lock 켜져 있음 → 자동 해제")
-        pyautogui.press("capslock")
-
-
-def _verify_foreground(hwnd, fallback_hwnd=None):
-    """
-    클릭 전 MES 창이 포그라운드인지 검증.
-    실패 시 자동 재활성화 1회 재시도 → 그래도 실패 시 False.
-    """
-    mes_hwnds = set()
-    if hwnd:
-        mes_hwnds.add(hwnd)
-    if fallback_hwnd:
-        mes_hwnds.add(fallback_hwnd)
-
-    if not mes_hwnds:
-        log("  MES 창 HWND 확인 불가 — 강제 진행")
-        return True  # HWND 모를 땐 일단 허용
-
-    fg_hwnd = ctypes.windll.user32.GetForegroundWindow()
-    if fg_hwnd not in mes_hwnds:
-        log(f"  ⚠️  포그라운드 아님 (fg={fg_hwnd}) → 자동 재활성화 시도")
-        _force_foreground(hwnd)
-        time.sleep(0.4)
-        fg_hwnd = ctypes.windll.user32.GetForegroundWindow()
-        if fg_hwnd not in mes_hwnds:
-            log(f"  ⚠️  재활성화 후에도 불일치 (fg={fg_hwnd}) — 그대로 진행")
-            # 차단하지 않고 진행 (입력 시도)
-    return True
-
-
-def _force_foreground(hwnd):
-    """UAC 환경에서도 창 강제 활성화 (AttachThreadInput 방식, ctypes 전용)"""
-    try:
-        fg_tid = ctypes.windll.user32.GetWindowThreadProcessId(
-            ctypes.windll.user32.GetForegroundWindow(), None)
-        my_tid = ctypes.windll.kernel32.GetCurrentThreadId()
-        if fg_tid != my_tid:
-            ctypes.windll.user32.AttachThreadInput(fg_tid, my_tid, True)
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-        ctypes.windll.user32.BringWindowToTop(hwnd)
-        if fg_tid != my_tid:
-            ctypes.windll.user32.AttachThreadInput(fg_tid, my_tid, False)
-    except Exception as e:
-        log(f"  _force_foreground 실패: {e}")
-
-
-def _check_and_dismiss_error_popup():
-    """
-    MES 에러 팝업 감지 및 자동 닫기.
-    'PASSWORD를 입력하십시오' 등의 에러 다이얼로그가 뜨면 Enter로 닫고 메시지를 반환.
-    에러 없으면 None 반환.
-    """
-    import pyautogui
-    from pywinauto import Application
-
-    ERROR_KEYWORDS = [
-        "PASSWORD", "비밀번호", "오류", "실패", "틀렸", "error", "invalid",
-        "wrong", "입력하십시오", "확인하십시오", "불일치"
-    ]
-
-    pid = _get_smes_pid()
-    if not pid:
-        return None
-
-    try:
-        app = Application(backend='win32').connect(process=pid, timeout=3)
-        for w in app.windows():
-            title = w.window_text().strip()
-            # 작은 창 = 팝업 (메인 창 제외)
-            rect = w.rectangle()
-            is_small = rect.width() < 600 and rect.height() < 300
-
-            found_msg = None
-            # 창 제목에 에러 키워드
-            if any(kw in title for kw in ERROR_KEYWORDS):
-                found_msg = title
-            # 작은 팝업 창의 내부 텍스트 확인
-            if is_small and not found_msg:
-                try:
-                    for child in w.children():
-                        txt = child.window_text().strip()
-                        if txt and any(kw in txt for kw in ERROR_KEYWORDS):
-                            found_msg = txt
-                            break
-                except Exception:
-                    pass
-
-            if found_msg:
-                log(f"  ❌ 에러 팝업 감지: '{found_msg}' → 자동 닫기")
-                try:
-                    # 확인/OK 버튼 클릭
-                    for btn in w.children(class_name_re=".*BUTTON.*"):
-                        btn_txt = btn.window_text().strip().lower()
-                        if btn_txt in ("확인", "ok", "닫기", "close", "예", "yes"):
-                            btn.click_input()
-                            time.sleep(0.3)
-                            return found_msg
-                    # 버튼 못 찾으면 Enter
-                    pyautogui.press("enter")
-                    time.sleep(0.3)
-                except Exception:
-                    pyautogui.press("enter")
-                    time.sleep(0.3)
-                return found_msg
-    except Exception as e:
-        log(f"  팝업 감지 중 오류: {e}")
-
-    return None
-
-
 def _find_login_dialog(timeout=20):
     """
-    로그인 창 감지 — 4단계 탐지 (Desktop 전체 스캔 포함):
-      1) Desktop 전체에서 제목 키워드 매칭 (가장 확실)
-      2) Desktop 전체에서 Edit 2개 이상인 작은 창 (로그인 폼 특성)
-      3) PID로 연결된 app.windows() 스캔
-      4) PID 창 중 가장 큰 창 (메인 창에 패널 내장 구조)
+    sMES 프로세스의 모든 창을 순회해
+    'WindowsForms10.EDIT.*' 컨트롤이 2개 이상인 창을 로그인 다이얼로그로 반환.
+    타이틀바 없는 borderless form 도 탐지 가능.
     """
-    from pywinauto import Application, Desktop
-
-    # 창 제목 키워드
-    TITLE_KEYWORDS = ["Shinsung", "IMMES", "sMES", "MES", "LOGIN", "로그인", "Login"]
+    from pywinauto import Application
 
     pid = _get_smes_pid()
     if not pid:
         raise RuntimeError("sMES 프로세스를 찾을 수 없습니다.")
 
-    log(f"  sMES PID={pid} — 로그인 창 탐색 시작...")
     app = Application(backend='win32').connect(process=pid, timeout=10)
+    log(f"  sMES PID={pid} 연결 완료")
 
     deadline = time.time() + timeout
     while time.time() < deadline:
-
-        # ── 1) Desktop 전체 창 스캔 (가장 확실한 방법) ──────────────────────
-        try:
-            desktop = Desktop(backend='win32')
-            all_wins = desktop.windows()
-            log(f"  Desktop 전체 창 {len(all_wins)}개 스캔 중...")
-            for w in all_wins:
-                try:
-                    title = w.window_text().strip()
-                    if not title:
-                        continue
-                    # 제목 키워드 매칭
-                    if any(kw.lower() in title.lower() for kw in TITLE_KEYWORDS):
-                        log(f"  ✅ 로그인 창 감지 (Desktop 제목): '{title}'")
-                        # 이 창이 sMES 프로세스 소속인지 확인 (아니어도 허용)
-                        try:
-                            win_pid = ctypes.c_ulong()
-                            ctypes.windll.user32.GetWindowThreadProcessId(
-                                w.handle, ctypes.byref(win_pid))
-                            if win_pid.value == pid:
-                                log(f"    → sMES 프로세스 소속 확인")
-                        except Exception:
-                            pass
-                        return app, w
-                except Exception:
-                    pass
-        except Exception as e:
-            log(f"  Desktop 스캔 오류: {e}")
-
-        # ── 2) Desktop 전체에서 Edit 2개 이상인 창 ─────────────────────────
-        try:
-            desktop = Desktop(backend='win32')
-            for w in desktop.windows():
-                try:
-                    # 창 크기 기준: 로그인 창은 보통 200~800px 범위
-                    rect = w.rectangle()
-                    if rect.width() < 100 or rect.height() < 100:
-                        continue
-                    edits = w.children(class_name_re="WindowsForms10.EDIT.*")
-                    if 2 <= len(edits) <= 20:
-                        title = w.window_text().strip()
-                        log(f"  ✅ 로그인 창 감지 (Desktop Edit {len(edits)}개): '{title}'")
-                        return app, w
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        # ── 3) PID 연결 창 스캔 ─────────────────────────────────────────────
-        try:
-            for w in app.windows():
-                title = w.window_text().strip()
-                if any(kw.lower() in title.lower() for kw in TITLE_KEYWORDS):
-                    log(f"  ✅ 로그인 창 감지 (PID 창 제목): '{title}'")
+        for w in app.windows():
+            try:
+                edits = w.children(class_name_re="WindowsForms10.EDIT.*")
+                if len(edits) >= 2:
+                    log(f"  로그인 폼 발견: title='{w.window_text()}' "
+                        f"/ Edit {len(edits)}개")
                     return app, w
-                try:
-                    edits = w.children(class_name_re="WindowsForms10.EDIT.*")
-                    if len(edits) >= 2:
-                        log(f"  ✅ 로그인 창 감지 (PID Edit {len(edits)}개): '{title}'")
-                        return app, w
-                except Exception:
-                    pass
-        except Exception as e:
-            log(f"  PID 스캔 오류: {e}")
-
+            except Exception:
+                pass
         time.sleep(0.5)
 
-    # ── 4) 최후 수단: sMES PID에서 가장 큰 창 ───────────────────────────────
-    try:
-        wins = app.windows()
-        if wins:
-            biggest = max(wins, key=lambda w: w.rectangle().width() * w.rectangle().height())
-            log(f"  ⚠️  탐지 실패 → sMES 메인 창 사용: '{biggest.window_text()}'")
-            return app, biggest
-    except Exception:
-        pass
+    # 마지막 수단: 가장 작은 창 (로그인 다이얼로그는 메인보다 작음)
+    wins = app.windows()
+    if wins:
+        smallest = min(wins,
+                       key=lambda w: w.rectangle().width() * w.rectangle().height())
+        log(f"  폼 자동 탐지 실패 → 가장 작은 창 사용: '{smallest.window_text()}'")
+        return app, smallest
 
     raise RuntimeError("로그인 폼을 찾을 수 없습니다.")
 
 
-def _find_login_controls(dlg):
+def _click_field_and_input(field_ctrl, text, label):
     """
-    Login 버튼 + ID/PW Edit 컨트롤 반환.
-    ① window_text 기반: SMES_ID 값 = ID필드, 'PASSWORD' = PW필드(플레이스홀더)
-    ② 위치 기반 fallback: Login 버튼 바로 위 2개 컨트롤
-    반환: (id_ctrl, pw_ctrl), login_btn
+    C1TextBox 필드를 pyautogui 마우스 클릭 → 전체선택 삭제 → 클립보드 붙여넣기.
+    좌표는 컨트롤 rectangle() 중앙 사용.
     """
-    # Login 버튼
-    login_btn = None
-    for btn in dlg.children(class_name_re="WindowsForms10.BUTTON.*"):
-        try:
-            if btn.window_text().strip().lower() in ("login", "로그인"):
-                login_btn = btn
-                break
-        except Exception:
-            pass
+    import pyautogui, win32clipboard
 
-    all_edits = list(dlg.children(class_name_re="WindowsForms10.EDIT.*"))
-    log(f"  children() Edit 총 {len(all_edits)}개")
+    rect = field_ctrl.rectangle()
+    cx = (rect.left + rect.right) // 2
+    cy = (rect.top + rect.bottom) // 2
 
-    id_ctrl = None
-    pw_ctrl = None
+    log(f"  {label} 필드 클릭: ({cx}, {cy})")
 
-    # ① 텍스트로 식별 (가장 신뢰도 높음)
-    for e in all_edits:
-        try:
-            val = e.window_text().strip()
-            if val == SMES_ID and id_ctrl is None:
-                id_ctrl = e
-                log(f"    → ID 필드 확인 (text='{val}')")
-            elif val.upper() == 'PASSWORD' and pw_ctrl is None:
-                pw_ctrl = e
-                log(f"    → PW 필드 확인 (placeholder='PASSWORD')")
-        except Exception:
-            pass
+    # 1) 마우스로 정확히 클릭
+    pyautogui.click(cx, cy)
+    time.sleep(0.4)
 
-    # ② 위치 기반 fallback: Login 버튼 바로 위 2개
-    if (id_ctrl is None or pw_ctrl is None) and login_btn:
-        btn_y = login_btn.rectangle().top
-        above = sorted(
-            [e for e in all_edits if e.rectangle().top < btn_y],
-            key=lambda e: e.rectangle().top
-        )
-        if pw_ctrl is None and len(above) >= 1:
-            pw_ctrl = above[-1]   # 버튼 바로 위 = PW
-            log(f"    → PW 필드 위치 fallback (Y={pw_ctrl.rectangle().top})")
-        if id_ctrl is None and len(above) >= 2:
-            id_ctrl = above[-2]   # PW 위 = ID
-            log(f"    → ID 필드 위치 fallback (Y={id_ctrl.rectangle().top})")
+    # 2) 전체 선택 후 삭제
+    pyautogui.hotkey('ctrl', 'a')
+    time.sleep(0.2)
+    pyautogui.press('delete')
+    time.sleep(0.2)
 
-    return (id_ctrl, pw_ctrl), login_btn
+    # 3) 클립보드로 붙여넣기
+    win32clipboard.OpenClipboard()
+    win32clipboard.EmptyClipboard()
+    win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+    win32clipboard.CloseClipboard()
+    time.sleep(0.1)
+    pyautogui.hotkey('ctrl', 'v')
+    time.sleep(0.4)
 
-
-def _login_by_autoid(dlg, hwnd):
-    """1순위: children() 직접 스캔 — C1TextBox ID/PW + C1Button Login"""
-    import pyautogui
-    log("  [1순위] children() 직접 스캔 방식 시도...")
-
-    try:
-        (id_ctrl, pw_ctrl), login_btn = _find_login_controls(dlg)
-
-        if id_ctrl is None or pw_ctrl is None:
-            raise RuntimeError(f"컨트롤 식별 실패 (id={id_ctrl}, pw={pw_ctrl})")
-        if not login_btn:
-            raise RuntimeError("Login 버튼 없음")
-
-        log(f"  ID ctrl: '{id_ctrl.window_text()[:20]}' / PW ctrl: 확인됨")
-
-        # ① ID
-        existing_id = id_ctrl.window_text().strip()
-        if existing_id and existing_id.upper() != 'PASSWORD':
-            log(f"  ① ID '{existing_id}' 이미 있음 → 스킵")
-        else:
-            _verify_foreground(hwnd)
-            id_ctrl.click_input(); time.sleep(0.3)
-            pyautogui.hotkey("ctrl", "a")
-            pyautogui.press("delete")
-            time.sleep(0.1)
-            pyautogui.typewrite(SMES_ID, interval=0.05)
-            log(f"  ① ID 입력: {SMES_ID}")
-            time.sleep(0.3)
-            # 입력 확인
-            entered = id_ctrl.window_text().strip()
-            if not entered or entered.upper() == 'PASSWORD':
-                raise RuntimeError(f"ID 입력 실패 (현재: '{entered}')")
-            log(f"  ① ID 입력 확인: '{entered}'")
-
-        _check_caps_lock()
-
-        # ② PW
-        _verify_foreground(hwnd)
-        pw_ctrl.click_input(); time.sleep(0.3)
-        pyautogui.hotkey("ctrl", "a")
-        pyautogui.press("delete")
-        time.sleep(0.1)
-        _type_password(SMES_PW)
-        log(f"  ② PW 입력 완료 ({len(SMES_PW)}자)")
-        time.sleep(0.3)
-
-        # ③ Login 버튼
-        _verify_foreground(hwnd)
-        login_btn.click_input()
-        log("  ③ Login 버튼 클릭")
-        return True
-
-    except Exception as e:
-        log(f"  [1순위] 실패: {e}")
-        return False
-
-
-def _login_by_coords(dlg, hwnd):
-    """2순위: 창 기준 상대 좌표 방식 (비율 계산)"""
-    import pyautogui, pyperclip
-    log("  [2순위] 창 기준 상대 좌표 방식 시도...")
-
-    try:
-        import pygetwindow as gw
-
-        # 창 객체 확보 (pygetwindow)
-        title = dlg.window_text()
-        wins = gw.getWindowsWithTitle(title) if title else []
-        login_win = wins[0] if wins else None
-
-        if not login_win:
-            # pywinauto rectangle로 직접 계산
-            rect = dlg.rectangle()
-            left, top = rect.left, rect.top
-            width = rect.width()
-            height = rect.height()
-        else:
-            if login_win.isMinimized:
-                login_win.restore()
-            login_win.activate()
-            time.sleep(0.5)
-            left   = login_win.left
-            top    = login_win.top
-            width  = login_win.width
-            height = login_win.height
-
-        cx      = left + int(width * 0.509)
-        id_pos  = (cx, top + int(height * 0.544))
-        pwd_pos = (cx, top + int(height * 0.649))
-        btn_pos = (left + int(width * 0.318), top + int(height * 0.765))
-
-        log(f"  창 위치: left={left} top={top} w={width} h={height}")
-        log(f"  ID 좌표: {id_pos} / PW 좌표: {pwd_pos} / 버튼 좌표: {btn_pos}")
-
-        # ① ID 필드 — Edit 컨트롤 값 읽어 기존 값 있으면 스킵
-        try:
-            edits = sorted(
-                dlg.descendants(class_name_re="WindowsForms10.EDIT.*"),
-                key=lambda c: c.rectangle().top
-            )
-            existing_id = edits[0].window_text().strip() if edits else ""
-        except Exception:
-            existing_id = ""
-
-        if existing_id:
-            log(f"  ① ID 필드에 '{existing_id}' 있음 → 스킵, 패스워드로 이동")
-            if not _verify_foreground(hwnd):
-                return False
-            pyautogui.click(*pwd_pos)
-            time.sleep(0.3)
-        else:
-            if not _verify_foreground(hwnd):
-                return False
-            pyperclip.copy(SMES_ID)
-            pyautogui.click(*id_pos)
-            time.sleep(0.4)
-            pyautogui.hotkey("ctrl", "a")
-            pyautogui.hotkey("ctrl", "v")
-            log(f"  ① ID 입력: {SMES_ID}")
-
-        # Caps Lock 확인
-        _check_caps_lock()
-
-        # ② PW 입력 — 클릭 전 포그라운드 재검증 (ID 스킵 시 이미 pwd_pos 클릭됨)
-        if existing_id:
-            pass  # 이미 pwd_pos로 이동됨
-        else:
-            if not _verify_foreground(hwnd):
-                return False
-            pyautogui.press("tab")
-        time.sleep(0.3)
-        pyautogui.hotkey("ctrl", "a")
-        pyautogui.press("delete")
-        _type_password(SMES_PW)
-        log("  ② PW 입력 완료")
-
-        # ③ 로그인 버튼 — children()에서 먼저 탐색, 없으면 좌표
-        _verify_foreground(hwnd)
-        btn_clicked = False
-        try:
-            _, login_btn = _find_login_controls(dlg)
-            if login_btn:
-                login_btn.click_input()
-                log("  ③ 로그인 버튼 클릭 (children)")
-                btn_clicked = True
-        except Exception:
-            pass
-        if not btn_clicked:
-            pyautogui.click(*btn_pos)
-            log(f"  ③ 로그인 버튼 클릭 (좌표 fallback) {btn_pos}")
-        return True
-
-    except Exception as e:
-        log(f"  [2순위] 실패: {e}")
-        return False
-
-
-def _login_by_edit_scan(dlg, hwnd):
-    """3순위: children() 직접 스캔 — 로그 덤프 확인 기반 (C1TextBox + C1Button)"""
-    import pyautogui, pyperclip
-    log("  [3순위] children() 직접 스캔 방식 시도...")
-
-    try:
-        # ── Edit 컨트롤 (C1TextBox) — 직접 자식만, Y좌표 정렬 ──────────────
-        edits = []
-        # 1차: children() 직접 자식 (로그 덤프 확인: 2개만 존재)
-        try:
-            edits = sorted(
-                dlg.children(class_name_re="WindowsForms10.EDIT.*"),
-                key=lambda c: c.rectangle().top
-            )
-            log(f"  children() Edit {len(edits)}개")
-        except Exception:
-            pass
-
-        # 2차: 그래도 부족하면 descendants() fallback
-        if len(edits) < 2:
-            try:
-                all_edits = sorted(
-                    dlg.descendants(class_name_re="WindowsForms10.EDIT.*"),
-                    key=lambda c: c.rectangle().top
-                )
-                # 로그인 패널 Edit만 필터: 빈 값이거나 ID/PW 후보인 것
-                login_edits = [
-                    e for e in all_edits
-                    if e.window_text().strip() in ('', SMES_ID, SMES_PW)
-                    or len(e.window_text().strip()) <= 20
-                ][:4]  # 최대 4개
-                edits = login_edits
-                log(f"  descendants() Edit 후보 {len(edits)}개")
-            except Exception:
-                pass
-
-        if len(edits) < 2:
-            log(f"  Edit 컨트롤 2개 미만 → 실패")
-            return False
-
-        id_ctrl = edits[0]   # Y 작은 = 위쪽 = ID
-        pw_ctrl = edits[1]   # Y 큰  = 아래쪽 = PW
-        log(f"  ID: class='{id_ctrl.class_name()}' val='{id_ctrl.window_text()[:10]}' pos={id_ctrl.rectangle().top}")
-        log(f"  PW: class='{pw_ctrl.class_name()}' val='****' pos={pw_ctrl.rectangle().top}")
-
-        # ── ① ID 입력 ────────────────────────────────────────────────────
-        existing_id = ""
-        try:
-            existing_id = id_ctrl.window_text().strip()
-        except Exception:
-            pass
-
-        if existing_id:
-            log(f"  ① ID '{existing_id}' 이미 있음 → 스킵")
-        else:
-            _verify_foreground(hwnd)
-            try:
-                id_ctrl.click_input()
-                time.sleep(0.2)
-                pyautogui.hotkey("ctrl", "a")
-                pyperclip.copy(SMES_ID)
-                pyautogui.hotkey("ctrl", "v")
-                log(f"  ① ID 입력: {SMES_ID}")
-            except Exception:
-                try:
-                    id_ctrl.set_edit_text(SMES_ID)
-                    log(f"  ① ID set_edit_text: {SMES_ID}")
-                except Exception as e2:
-                    log(f"  ① ID 입력 실패: {e2}")
-            time.sleep(0.3)
-
-        _check_caps_lock()
-
-        # ── ② PW 입력 ────────────────────────────────────────────────────
-        _verify_foreground(hwnd)
-        try:
-            pw_ctrl.click_input()
-            time.sleep(0.2)
-            pyautogui.hotkey("ctrl", "a")
-            pyautogui.press("delete")
-            _type_password(SMES_PW)
-            log("  ② PW 입력 완료")
-        except Exception:
-            try:
-                pw_ctrl.set_edit_text(SMES_PW)
-                log("  ② PW set_edit_text 완료")
-            except Exception as e2:
-                log(f"  ② PW 입력 실패: {e2}")
-        time.sleep(0.3)
-
-        # ── ③ 로그인 버튼 — title='Login' 직접 탐색 ─────────────────────
-        _verify_foreground(hwnd)
-        btn_found = False
-        # children() 에서 BUTTON 중 'Login' 찾기 (덤프 확인됨)
-        try:
-            for btn in dlg.children(class_name_re="WindowsForms10.BUTTON.*"):
-                try:
-                    txt = btn.window_text().strip()
-                    if txt.lower() in ("login", "로그인", "확인", "ok"):
-                        btn.click_input()
-                        log(f"  ③ 버튼 클릭: '{txt}'")
-                        btn_found = True
-                        break
-                except Exception:
-                    pass
-        except Exception:
-            pass
-
-        if not btn_found:
-            # descendants 에서도 탐색
-            try:
-                for btn_kw in ["Login", "로그인", "LOGIN"]:
-                    b = dlg.child_window(title=btn_kw, class_name_re="WindowsForms10.BUTTON.*")
-                    if b.exists(timeout=0.5):
-                        b.click_input()
-                        log(f"  ③ 버튼 클릭 (child_window): '{btn_kw}'")
-                        btn_found = True
-                        break
-            except Exception:
-                pass
-
-        if not btn_found:
-            pw_ctrl.type_keys("{ENTER}")
-            log("  ③ Enter 키로 로그인")
-
-        return True
-
-    except Exception as e:
-        log(f"  [3순위] 실패: {e}")
-        return False
+    log(f"  {label} 입력 완료")
 
 
 def login_smes(_unused_win=None):
     """
-    MES 자동 로그인 — 3단계 우선순위
-      1순위: pywinauto auto_id (txt_id / txt_pw / btn_login)
-      2순위: 창 기준 상대 좌표 (비율 방식)
-      3순위: Edit 컨트롤 자동 스캔 (auto_id·좌표 불필요)
-      최후: 수동 로그인 요청
+    ① PID 로 sMES 연결
+    ② Edit 컨트롤 2개 있는 창 = 로그인 폼
+    ③ Y좌표 정렬 → 위=ID, 아래=PW
+    ④ pyautogui 마우스 클릭 + 클립보드 붙여넣기 (C1TextBox 호환)
+    ⑤ Login 버튼 클릭
     """
     import pyautogui
 
-    log("  로그인 폼 탐색 중...")
+    log("  로그인 폼 탐색 중 (PID 방식)...")
     app, dlg = _find_login_dialog(timeout=20)
 
-    # 창 활성화
+    # 창을 맨 앞으로 활성화
     try:
         dlg.set_focus()
     except Exception:
         pass
     try:
-        hwnd = dlg.handle
-        _force_foreground(hwnd)
+        import ctypes
+        ctypes.windll.user32.SetForegroundWindow(dlg.handle)
     except Exception:
-        hwnd = None
+        pass
     time.sleep(0.5)
 
-    # ── 1순위: auto_id (텍스트 기반 컨트롤 식별) ──────────────────────────
-    login_attempted = False
-    if _login_by_autoid(dlg, hwnd):
-        login_attempted = True
-    # ── 2순위: 창 기준 상대 좌표 ────────────────────────────────────────────
-    elif _login_by_coords(dlg, hwnd):
-        login_attempted = True
-    # ── 3순위: Edit 컨트롤 자동 스캔 ────────────────────────────────────────
-    elif _login_by_edit_scan(dlg, hwnd):
-        login_attempted = True
-    # ── 최후: 수동 로그인 ───────────────────────────────────────────────────
+    # ── Edit 컨트롤 수집 ────────────────────────────────────────────────────
+    all_edits = dlg.children(class_name_re="WindowsForms10.EDIT.*")
+    log(f"  Edit 컨트롤 전체 {len(all_edits)}개")
+
+    # 실제 입력 필드만 필터: 너비 < 500px, 높이 < 60px (컨테이너 패널 제외)
+    small_edits = [
+        e for e in all_edits
+        if e.rectangle().width() < 500 and e.rectangle().height() < 60
+    ]
+    log(f"  입력 크기 필드 {len(small_edits)}개")
+
+    # 타이틀 텍스트로 ID/PW 식별
+    # 버튼 텍스트(Exit, Login 등)는 제외하고 실제 입력란만 사용
+    BUTTON_TEXTS = {'exit', 'login', '로그인', '취소', 'cancel', 'ok', '확인'}
+    id_field = None
+    pw_field = None
+    for e in small_edits:
+        txt = e.window_text().strip()
+        log(f"    필드 '{txt}' 위치: {e.rectangle()}")
+        if txt.lower() in BUTTON_TEXTS:
+            continue  # 버튼 텍스트는 건너뜀
+        if txt == SMES_ID:
+            id_field = e   # ID 값과 정확히 일치 → ID 필드
+        elif txt.upper() == 'PASSWORD':
+            pw_field = e   # 'PASSWORD' 플레이스홀더 → PW 필드
+
+    # fallback: Y 정렬 후 위=ID, 아래=PW (버튼 제외한 필드 중)
+    if id_field is None or pw_field is None:
+        input_only = [
+            e for e in small_edits
+            if e.window_text().strip().lower() not in BUTTON_TEXTS
+        ]
+        sorted_edits = sorted(input_only, key=lambda c: c.rectangle().top)
+        if id_field is None and len(sorted_edits) >= 1:
+            id_field = sorted_edits[0]
+        if pw_field is None and len(sorted_edits) >= 2:
+            pw_field = sorted_edits[1]
+
+    if id_field is None or pw_field is None:
+        raise RuntimeError(f"ID/PW 입력 필드를 찾지 못했습니다. 소형 Edit 수: {len(small_edits)}")
+
+    log(f"  ID 필드 위치: {id_field.rectangle()}")
+    log(f"  PW 필드 위치: {pw_field.rectangle()}")
+
+    # ── ① ID 입력 ────────────────────────────────────────────────────────
+    _click_field_and_input(id_field, SMES_ID, "① ID")
+    time.sleep(0.3)
+
+    # ── ② PW 입력 ────────────────────────────────────────────────────────
+    _click_field_and_input(pw_field, SMES_PW, "② PW")
+    time.sleep(0.3)
+
+    # ── ③ Login 버튼 클릭 ────────────────────────────────────────────────
+    login_btn = None
+    for btn in dlg.children(class_name_re="WindowsForms10.BUTTON.*"):
+        try:
+            if btn.window_text().strip().lower() in ('login', '로그인'):
+                login_btn = btn
+                break
+        except Exception:
+            pass
+
+    if login_btn:
+        rect = login_btn.rectangle()
+        bx = (rect.left + rect.right) // 2
+        by = (rect.top + rect.bottom) // 2
+        log(f"  ③ Login 버튼 클릭: ({bx}, {by})")
+        pyautogui.click(bx, by)
     else:
-        log("  ⚠️  자동 로그인 실패 → 수동으로 로그인해주세요.")
-        input("  로그인 완료 후 Enter → ")
-        time.sleep(LOAD_DELAY)
-        return
+        log("  ③ Login 버튼 미발견 → Enter 키 입력")
+        pyautogui.press('enter')
+    time.sleep(0.5)
 
-    if not login_attempted:
-        return
-
-    # ── 로그인 성공 여부 확인 ────────────────────────────────────────────────
+    # ── 로그인 성공 여부 검증 ────────────────────────────────────────────────
+    # Login 버튼이 실제로 사라졌는지 확인 (창 핸들 깜빡임 오감지 방지)
     log("  로그인 결과 확인 중...")
     deadline = time.time() + 12
     while time.time() < deadline:
         time.sleep(0.5)
-
-        # ① 에러 팝업 먼저 감지 (가장 중요)
-        err_msg = _check_and_dismiss_error_popup()
-        if err_msg:
-            raise RuntimeError(f"MES 로그인 오류 팝업: {err_msg}")
-
-        # ② Login 버튼이 사라졌는지 확인 (가장 신뢰도 높음)
         try:
-            _, login_btn = _find_login_controls(dlg)
-            if not login_btn or not login_btn.is_visible():
-                log("  ✅ 로그인 성공 (Login 버튼 비가시)")
+            # 현재 창 상태 재취득 후 Login 버튼 존재 여부 확인
+            _, cur_win = _get_smes_window()
+            if cur_win is None:
+                log("  ✅ 로그인 성공 (창 재구성)")
+                time.sleep(LOAD_DELAY)
+                return
+            btns = cur_win.children(class_name_re="WindowsForms10.BUTTON.*")
+            login_btn_visible = any(
+                b.window_text().strip().lower() in ('login', '로그인')
+                and b.is_visible()
+                for b in btns
+            )
+            if not login_btn_visible:
+                log("  ✅ 로그인 성공 (Login 버튼 사라짐)")
                 time.sleep(LOAD_DELAY)
                 return
         except Exception:
             pass
 
-        # ③ Edit 컨트롤(ID/PW)이 사라졌는지 확인
+        # 에러 팝업 메시지 확인
         try:
-            (id_c, pw_c), _ = _find_login_controls(dlg)
-            if id_c is None and pw_c is None:
-                log("  ✅ 로그인 성공 (로그인 패널 사라짐)")
-                time.sleep(LOAD_DELAY)
-                return
+            for child in dlg.children():
+                txt = child.window_text().strip()
+                if txt and txt not in (SMES_ID, 'PASSWORD', '') and len(txt) < 100:
+                    log(f"  ⚠️  화면 메시지: '{txt}'")
         except Exception:
             pass
 
-    raise RuntimeError("로그인 확인 실패 — Login 버튼이 12초 내에 사라지지 않음")
+    # 12초 후에도 Login 버튼이 남아있으면 실패 → 중단
+    raise RuntimeError(
+        "❌ 로그인 실패: Login 버튼이 사라지지 않았습니다.\n"
+        "  → ID/PW 확인 후 다시 실행해주세요."
+    )
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Step 3~5 : 메뉴 이동 → 조회 → Excel 다운로드
@@ -849,47 +399,55 @@ def navigate_and_download(app):
     main_win.set_focus()
     time.sleep(0.5)
 
-    # ── 생산관리 클릭 (C1MainMenu 대응) ────────────────────────────────────
+    # ── 생산관리 클릭 (다중 방법) ───────────────────────────────────────────
     log("  생산관리 클릭...")
     clicked = False
 
-    # Method 1: descendants() 전체 순회 - C1MainMenu 아이템 탐색
+    # Method 1: pywinauto menu_select
+    try:
+        main_win.menu_select("생산관리")
+        clicked = True
+        log("  ✅ menu_select 성공")
+    except Exception as e:
+        log(f"  menu_select 실패: {e}")
+
+    # Method 2: UIA 백엔드로 MenuItem 탐색
     if not clicked:
         try:
-            for ctrl in main_win.descendants():
+            from pywinauto import Application as _App
+            _pid = main_win.process_id()
+            _uia = _App(backend='uia').connect(process=_pid, timeout=5)
+            for _w in _uia.windows():
                 try:
-                    if ctrl.window_text().strip() == "생산관리":
-                        ctrl.click_input()
-                        clicked = True
-                        log("  ✅ descendants 탐색 성공")
-                        break
+                    for _d in _w.descendants(control_type="MenuItem"):
+                        if "생산관리" in (_d.window_text() or ""):
+                            _d.click_input()
+                            clicked = True
+                            log("  ✅ UIA MenuItem 성공")
+                            break
                 except Exception:
                     pass
+                if clicked:
+                    break
         except Exception as e:
-            log(f"  descendants 탐색 실패: {e}")
+            log(f"  UIA MenuItem 실패: {e}")
 
-    # Method 2: child_window title_re 탐색
+    # Method 3: 기존 child_window 탐색
     if not clicked:
         clicked = _try_click(main_win, ["생산관리"])
         if clicked:
             log("  ✅ child_window 탐색 성공")
 
-    # Method 3: 창 좌표 기준 메뉴바 클릭 (생산관리 = 3번째 항목)
-    # 이미지 기준: System(~40) → 기본정보관리(~100) → 생산관리(~160~175)
-    # 최대화 창은 rect.top/left 가 음수 → max()로 화면 내 좌표 보정
+    # Method 4: 창 좌표 기준 메뉴바 클릭 (4번째 항목)
     if not clicked:
         try:
             rect = main_win.rectangle()
-            # 최대화 창: rect.top이 -8~-12 → 타이틀바(~22) 아래 메뉴바는 화면 Y=42 근처
-            menu_y = max(rect.top + 42, 42)
-            visible_left = max(rect.left, 0)
-            for x_offset in [360, 355, 370, 345, 375]:
-                menu_x = visible_left + x_offset
-                pyautogui.click(menu_x, menu_y)
-                time.sleep(0.5)
-                clicked = True
-                log(f"  ✅ 좌표 클릭: ({menu_x}, {menu_y})")
-                break
+            # 최대화 창은 rect.top이 -8 정도로 음수 → max()로 보정
+            menu_y = max(rect.top + 50, 42)
+            menu_x = rect.left + 230   # System+기본정보관리+영업관리 이후 위치
+            pyautogui.click(menu_x, menu_y)
+            clicked = True
+            log(f"  ✅ 좌표 클릭 성공: ({menu_x}, {menu_y})")
         except Exception as e:
             log(f"  좌표 클릭 실패: {e}")
 
@@ -907,24 +465,30 @@ def navigate_and_download(app):
     pyautogui.press('enter')
     time.sleep(LOAD_DELAY)
 
-    # ── 생산일자 설정 (Tab x2 → 날짜입력 → Tab x5 → Enter) ───────────────
+    # ── 생산일자 설정 ──────────────────────────────────────────────────────
     log(f"  생산일자 설정: {TODAY}")
-    import pyautogui
-    # Tab 5회: 생산일자 필드로 포커스 이동
-    for _ in range(5):
-        pyautogui.press('tab'); time.sleep(0.15)
-    # 날짜 전체 선택 후 당일 날짜 입력 (YYYY-MM-DD)
-    pyautogui.hotkey('ctrl', 'a'); time.sleep(0.1)
-    pyautogui.typewrite(TODAY, interval=0.05)
-    log(f"  날짜 입력 완료: {TODAY}")
-    time.sleep(0.2)
-    # Tab 5회: 조회 버튼으로 포커스 이동
-    for _ in range(5):
-        pyautogui.press('tab'); time.sleep(0.15)
-    # Enter: 조회 실행
-    pyautogui.press('enter')
+    set_date(main_win)
+
+    # ── 조회 클릭 ─────────────────────────────────────────────────────────
+    log("  조회 버튼 클릭...")
+    import pyautogui as _pag
+    clicked_search = False
+    # 1) child_window 탐색
+    if _try_click(main_win, ["조회", "검색", "Search"]):
+        clicked_search = True
+        log("  ✅ 조회 버튼 클릭 (child_window)")
+    # 2) F5 단축키 (sMES 조회 표준 단축키)
+    if not clicked_search:
+        _pag.press('f5')
+        clicked_search = True
+        log("  ✅ 조회 F5 키 입력")
     time.sleep(LOAD_DELAY)
     log("  ✅ 조회 완료")
+
+    # 수동 조작 등으로 창 핸들이 스테일해질 수 있으므로 재취득
+    _, main_win = _get_smes_window()
+    if not main_win:
+        raise RuntimeError("조회 후 메인 창을 찾을 수 없습니다.")
 
     # ── 품목별 다운로드 ────────────────────────────────────────────────────
     log("  품목별 Excel 다운로드 시작...")
@@ -972,6 +536,44 @@ def _try_click(win, candidates):
     return False
 
 
+def _uia_selected_row_rect(win):
+    """
+    UIA로 현재 선택/포커스된 그리드 행의 bounding rectangle 반환.
+    DataItem → ListItem → Custom 순으로 시도.
+    성공 시 pywinauto RECT 반환, 실패 시 None.
+    """
+    try:
+        from pywinauto import Application
+        pid = win.process_id()
+        uia_app = Application(backend='uia').connect(process=pid, timeout=3)
+        for w in uia_app.windows():
+            try:
+                for ct in ('DataItem', 'ListItem', 'Custom'):
+                    for row in w.descendants(control_type=ct):
+                        try:
+                            selected = False
+                            try:
+                                selected = row.is_selected()
+                            except Exception:
+                                pass
+                            if not selected:
+                                try:
+                                    selected = row.has_keyboard_focus()
+                                except Exception:
+                                    pass
+                            if selected:
+                                rect = row.rectangle()
+                                if rect.width() > 50 and rect.height() > 5:
+                                    return rect
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return None
+
+
 def _find_selected_row_y(col_x, grid_top=150, grid_bottom=560, row_height=22):
     """
     그리드에서 현재 선택된(하이라이트) 행의 Y 좌표를 색상으로 탐지.
@@ -986,7 +588,6 @@ def _find_selected_row_y(col_x, grid_top=150, grid_bottom=560, row_height=22):
     except Exception:
         return None
 
-    # row_height 단위로 각 행의 평균 '파란색 점수' 계산
     row_scores = {}
     for y in range(h):
         row_idx = y // row_height
@@ -995,241 +596,418 @@ def _find_selected_row_y(col_x, grid_top=150, grid_bottom=560, row_height=22):
             r, g, b = pixel[0], pixel[1], pixel[2]
         except Exception:
             continue
-        blue_score = b - (r + g) / 2   # 파란색이 강할수록 높음
+        blue_score = b - (r + g) / 2
         row_scores.setdefault(row_idx, []).append(blue_score)
 
     if not row_scores:
         return None
 
-    # 평균 blue_score 최대 행
     best_row, scores = max(row_scores.items(), key=lambda kv: sum(kv[1]) / len(kv[1]))
     avg = sum(scores) / len(scores)
-    if avg < 20:          # 임계값 미달 → 감지 실패
+    if avg < 20:
         return None
 
-    selected_y = grid_top + best_row * row_height + row_height // 2
-    return selected_y
+    return grid_top + best_row * row_height + row_height // 2
 
 
 def download_all_items(win):
-    # 좌표 기준 첫 번째 행 클릭 후 Down 방식으로 전체 다운로드
-    log("  좌표 기준 첫 번째 행 클릭 후 다운로드 시작...")
-    count = _download_by_keyboard(win)
-    log(f"  ✅ {count}개 파일 다운로드 완료")
-    # 실제 파일 목록은 DOWNLOAD_DIR 스캔으로 반환 (automate_upload에서 사용)
-    return []
+    import pyautogui
+
+    # 그리드 첫 번째 행만 클릭 (선택 상태 만들기)
+    # children()은 화면에 보이는 행만 반환하므로 전체 순회에 사용 불가
+    for ct in ["DataItem", "ListItem", "TreeItem", "Custom"]:
+        try:
+            candidates = win.children(control_type=ct)
+            if len(candidates) > 0:
+                log(f"  그리드 첫 행 클릭 (type={ct}, 화면 표시 {len(candidates)}개)")
+                candidates[0].click_input()
+                time.sleep(0.5)
+                break
+        except Exception:
+            pass
+
+    # 키보드 Down 방식으로 전체 품목 순환 — 스크롤도 자동 처리됨
+    log("  키보드 Down 방식으로 전체 품목 다운로드 시작...")
+    downloaded_files = _download_by_keyboard(win)
+
+    log(f"  ✅ {len(downloaded_files)}개 파일 다운로드 완료")
+    return downloaded_files
 
 
-def _click_excel_download(win, idx, item_name):
+def _click_excel_btn(win, row_y=None):
+    """
+    Excel 버튼 탐색 및 클릭.
+    1순위: win32 child_window  2순위: UIA 부분텍스트/automation_id 스캔
+    3순위: ToolBar 항목 스캔  4순위: 우클릭 컨텍스트 메뉴
+    실패 시 발견된 컨트롤 목록을 로그에 덤프.  성공 시 True 반환.
+    """
+    import pyautogui
+    EXCEL_CONTAINS = ['excel', '엑셀', 'xls', 'export', '다운로드']
+
+    # 1) win32 backend
+    if _try_click(win, ["Excel 다운로드", "Excel", "엑셀", "Export", "EXCEL", "다운로드"]):
+        log("    Excel 버튼 클릭 (win32)")
+        return True
+
+    # 2) UIA descendants 전체 스캔 — 부분 텍스트 / automation_id / name 포함 검사
+    _dump_controls = []   # 진단용 컨트롤 목록
+    try:
+        from pywinauto import Application
+        pid = win.process_id()
+        uia_app = Application(backend='uia').connect(process=pid, timeout=5)
+        for w in uia_app.windows():
+            try:
+                for ctrl in w.descendants():
+                    try:
+                        txt  = (ctrl.window_text() or '').strip().lower()
+                        name = ''
+                        aid  = ''
+                        ctype = ''
+                        try:
+                            name  = (ctrl.element_info.name or '').lower()
+                            aid   = (ctrl.element_info.automation_id or '').lower()
+                            ctype = (ctrl.element_info.control_type or '')
+                        except Exception:
+                            pass
+                        combined = f"{txt} {name} {aid}"
+                        # 진단 목록에 추가 (Button/MenuItem/Custom 계열만)
+                        if ctype in ('Button', 'MenuItem', 'SplitButton', 'Custom') or any(k in combined for k in ['btn', 'button', 'menu', 'tool']):
+                            _dump_controls.append(f"[{ctype}] txt='{txt}' name='{name}' aid='{aid}'")
+                        if any(k in combined for k in EXCEL_CONTAINS):
+                            ctrl.click_input()
+                            log(f"    Excel 버튼 클릭 (UIA 부분일치: '{txt or name}')")
+                            return True
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    except Exception as e:
+        log(f"    UIA 스캔 실패: {e}")
+
+    # 3) ToolBar / ToolStripButton 항목 스캔 (아이콘 전용 버튼 대응)
+    try:
+        from pywinauto import Application
+        pid = win.process_id()
+        uia_app = Application(backend='uia').connect(process=pid, timeout=5)
+        for w in uia_app.windows():
+            try:
+                toolbars = w.descendants(control_type="ToolBar")
+                for tb in toolbars:
+                    try:
+                        items = tb.descendants(control_type="Button")
+                        for item in items:
+                            try:
+                                iname = (item.element_info.name or '').lower()
+                                iaid  = (item.element_info.automation_id or '').lower()
+                                itxt  = (item.window_text() or '').strip().lower()
+                                combined = f"{iname} {iaid} {itxt}"
+                                _dump_controls.append(f"[ToolBar/Button] txt='{itxt}' name='{iname}' aid='{iaid}'")
+                                if any(k in combined for k in EXCEL_CONTAINS):
+                                    item.click_input()
+                                    log(f"    Excel 버튼 클릭 (ToolBar: '{iname or iaid}')")
+                                    return True
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+    except Exception as e:
+        log(f"    ToolBar 스캔 실패: {e}")
+
+    # 4) 우클릭 컨텍스트 메뉴 → Excel/엑셀 항목 클릭
+    if row_y is not None:
+        try:
+            from pywinauto import Desktop
+            log(f"    우클릭 컨텍스트 메뉴 시도: (1000, {row_y})")
+            pyautogui.rightClick(1000, row_y)
+            time.sleep(0.8)
+            desktop = Desktop(backend='uia')
+            # 컨텍스트 메뉴에서 Excel 관련 항목 탐색
+            for attempt in range(10):
+                try:
+                    menus = desktop.windows(control_type='Menu')
+                    for menu in menus:
+                        for item in menu.descendants(control_type='MenuItem'):
+                            itxt = (item.window_text() or '').strip().lower()
+                            iname = (item.element_info.name or '').lower()
+                            if any(k in f"{itxt} {iname}" for k in EXCEL_CONTAINS):
+                                item.click_input()
+                                log(f"    Excel 컨텍스트 메뉴 클릭: '{itxt or iname}'")
+                                return True
+                except Exception:
+                    pass
+                time.sleep(0.3)
+            # 메뉴에서 못 찾으면 Escape로 닫기
+            pyautogui.press('escape')
+            time.sleep(0.3)
+        except Exception as e:
+            log(f"    우클릭 시도 실패: {e}")
+
+    # 진단: 발견된 컨트롤 목록 로그 출력 (최대 60개)
+    # 5) win32 EnumWindows + PID 필터 — MDI 자식 폼 포함 프로세스 전체 버튼 탐색
+    try:
+        import win32gui, win32con, win32process
+        _excel_hwnd = [None]
+        _pid = win.process_id()
+
+        def _check_btn(hwnd):
+            if _excel_hwnd[0]:
+                return
+            try:
+                cls = win32gui.GetClassName(hwnd)
+                txt = win32gui.GetWindowText(hwnd)
+                if 'BUTTON' in cls.upper() and any(k in txt.lower() for k in EXCEL_CONTAINS):
+                    _excel_hwnd[0] = hwnd
+                    return
+            except Exception:
+                pass
+            # 자식도 재귀 탐색
+            try:
+                win32gui.EnumChildWindows(hwnd, lambda ch, _: _check_btn(ch), None)
+            except Exception:
+                pass
+
+        def _enum_top(hwnd, _):
+            if _excel_hwnd[0]:
+                return
+            try:
+                _, h_pid = win32process.GetWindowThreadProcessId(hwnd)
+                if h_pid != _pid:
+                    return
+                _check_btn(hwnd)
+                win32gui.EnumChildWindows(hwnd, lambda ch, _: _check_btn(ch), None)
+            except Exception:
+                pass
+
+        win32gui.EnumWindows(_enum_top, None)
+
+        if _excel_hwnd[0]:
+            btn_txt = win32gui.GetWindowText(_excel_hwnd[0])
+            win32gui.SendMessage(_excel_hwnd[0], win32con.BM_CLICK, 0, 0)
+            log(f"    Excel 버튼 클릭 (win32 PID전체탐색: '{btn_txt}')")
+            return True
+    except Exception as e:
+        log(f"    win32 PID전체탐색 실패: {e}")
+
+    if _dump_controls:
+        log(f"    [진단] 발견된 컨트롤 목록 ({len(_dump_controls)}개, 최대 60개 출력):")
+        for line in _dump_controls[:60]:
+            log(f"      {line}")
+    else:
+        log("    [진단] UIA에서 발견된 Button/MenuItem 컨트롤 없음")
+
+    return False
+
+
+def _click_excel_download(win, idx, item_name, row_y=None):
     """Excel 다운로드 버튼 클릭 및 저장"""
     import pyautogui
-    import pyperclip
-    import win32gui
+    from pywinauto import Desktop
 
-    # 클릭 전 창 목록 수집
-    hwnds_before = set()
-    win32gui.EnumWindows(lambda h, _: hwnds_before.add(h), None)
+    # Excel 버튼 클릭 — 미발견 시 건너뜀
+    if not _click_excel_btn(win, row_y=row_y):
+        log(f"    ⚠️  [{idx}] Excel 버튼 미발견 — 건너뜀")
+        return None
 
-    # Excel 버튼 클릭 - pywinauto 탐색 우선, 실패 시 절대 좌표 fallback
-    excel_clicked = False
-    try:
-        excel_clicked = _try_click(win, ["Excel", "엑셀", "EXCEL"])
-        if excel_clicked:
-            log(f"    Excel 버튼 탐색 클릭")
-    except Exception:
-        pass
-    if not excel_clicked:
-        pyautogui.click(365, 538)
-        log(f"    Excel 절대 좌표 클릭: (365, 538)")
+    time.sleep(EXCEL_DELAY)
 
-    # 저장 다이얼로그 등장 여부 확인 (최대 3초)
-    dialog_hwnd = None
-    for _ in range(6):
+    # 저장 다이얼로그 처리 — idx 포함으로 파일명 중복 방지
+    save_path = str(DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}_{idx:03d}.xlsx")
+    if _handle_save_dialog(save_path):
+        log(f"    ✅ 저장: {Path(save_path).name}")
+        pyautogui.hotkey('ctrl', 'w')   # Excel 현재 창 닫기
         time.sleep(0.5)
-        hwnds_after = set()
-        win32gui.EnumWindows(lambda h, _: hwnds_after.add(h), None)
-        for h in hwnds_after - hwnds_before:
-            try:
-                title = win32gui.GetWindowText(h)
-                if any(k in title for k in ["저장", "Save", "다른 이름"]):
-                    dialog_hwnd = h
-                    break
-            except Exception:
-                pass
-        if dialog_hwnd:
-            break
+        return save_path
 
-    if dialog_hwnd is None:
-        log(f"    ⚠️  [{idx}] 저장 창 없음 → 키팅 자재 없음, 다음 품목으로")
-        return False   # 다운로드 없음
+    # 다이얼로그 없이 자동 저장된 경우 — Downloads 폴더에서 이동
+    latest = _find_latest_download()
+    if latest:
+        import shutil
+        dest = DOWNLOAD_DIR / f"{_safe(item_name)}_{TODAY_KR}_{idx:03d}.xlsx"
+        shutil.move(str(latest), str(dest))
+        log(f"    ✅ 이동: {dest.name}")
+        pyautogui.hotkey('ctrl', 'w')   # Excel 현재 창 닫기
+        time.sleep(0.5)
+        return str(dest)
 
-    # 저장 다이얼로그 포커스 → Alt+D → Ctrl+V → Alt+S
-    try:
-        win32gui.SetForegroundWindow(dialog_hwnd)
-    except Exception:
-        pass
-    time.sleep(0.4)
-
-    save_folder = str(DOWNLOAD_DIR)
-    pyperclip.copy(save_folder)
-    pyautogui.hotkey('alt', 'd'); time.sleep(0.4)
-    pyautogui.hotkey('ctrl', 'v'); time.sleep(0.3)
-    pyautogui.hotkey('alt', 's')
-    log(f"    ✅ [{idx}] 저장 완료 → {save_folder}")
-
-    time.sleep(LOAD_DELAY)
-
-    # Excel 현재 창 닫기 (Ctrl+W)
-    try:
-        excel_hwnds = []
-        def _collect_excel(hwnd, _):
-            title = win32gui.GetWindowText(hwnd)
-            cls   = win32gui.GetClassName(hwnd)
-            if win32gui.IsWindowVisible(hwnd) and (
-                'Excel' in title or cls.startswith('XLMAIN')
-            ):
-                excel_hwnds.append(hwnd)
-        win32gui.EnumWindows(_collect_excel, None)
-        for hwnd in excel_hwnds:
-            win32gui.SetForegroundWindow(hwnd)
-            time.sleep(0.3)
-            pyautogui.hotkey('ctrl', 'w')
-            time.sleep(0.8)
-            # 저장 여부 묻는 경우 '저장 안 함(N)' 처리
-            pyautogui.press('n')
-            time.sleep(0.3)
-            log(f"    Excel 창 닫기 완료")
-    except Exception as e:
-        log(f"    ⚠️  Excel 닫기 실패: {e}")
-
-    return True   # 다운로드 성공
-
-
-def _get_total_rows(win):
-    """MES 창에서 '조회 결과 : N Rows' 텍스트를 읽어 총 행 수 반환. 실패 시 None."""
-    import re
-    try:
-        for ctrl in win.descendants():
-            try:
-                txt = ctrl.window_text().strip()
-                if not txt:
-                    continue
-                m = re.search(r'(\d+)\s*Rows', txt, re.IGNORECASE)
-                if m:
-                    return int(m.group(1))
-            except Exception:
-                pass
-    except Exception:
-        pass
+    log(f"    ⚠️  [{idx}] 파일 저장 실패 — 건너뜀")
     return None
 
 
 def _download_by_keyboard(win):
     import pyautogui
 
-    ROW_X      = 1000   # 품목명 컬럼 X (절대 좌표)
-    ROW_Y      = 172    # 첫 번째 행 중심 Y — 2560x1600 스크린 실측값
-    ROW_HEIGHT = 33     # 행 높이 — 2560x1600 스크린 실측값
-    GRID_BOT   = 750    # 그리드 하단 경계 Y (스크롤 여유 포함)
-    MAX_VIS_IDX = (GRID_BOT - ROW_HEIGHT // 2 - ROW_Y) // ROW_HEIGHT  # 클릭 가능한 마지막 인덱스
-
-    def row_click_y(idx):
-        """가시 영역 안에서만 Y 계산. 범위 초과 시 None 반환 → 클릭 생략."""
-        y = ROW_Y + idx * ROW_HEIGHT
-        if y > GRID_BOT - ROW_HEIGHT // 2:
-            return None  # 그리드 스크롤로 가시 영역 벗어남 → 클릭 생략하고 ↓만 사용
-        return y
-
-    # ── 총 행 수 읽기 ──────────────────────────────────────────────────────
-    total_rows = _get_total_rows(win)
-    if total_rows:
-        log(f"  조회 결과: {total_rows}개 행 감지 → 정확히 {total_rows}번 반복")
-    else:
-        log("  ⚠️  행 수 감지 실패 → 스크린샷 비교 방식으로 폴백")
-
-    # 첫 번째 행 클릭
+    # ROW_X: 창 rectangle 기준으로 동적 계산 (절대 좌표 의존 제거)
     try:
-        win.set_focus()
+        _wrect = win.rectangle()
+        ROW_X = (_wrect.left + _wrect.right) // 2
     except Exception:
-        pass
-    time.sleep(0.3)
-    pyautogui.click(ROW_X, ROW_Y)
-    log(f"  첫 번째 행 클릭: ({ROW_X}, {ROW_Y})")
-    time.sleep(0.5)
+        ROW_X = 1000
+    ROW_HEIGHT = 22
 
-    downloaded = 0
-    row_index  = 0
-    max_iter   = total_rows if total_rows else 500
+    win.set_focus(); time.sleep(0.3)
 
-    for i in range(max_iter):
-        check_stop()
-        log(f"  [{i+1}/{max_iter}] Excel 다운로드 시도...")
-        success = _click_excel_download(win, i + 1, "")
-        if success:
-            downloaded += 1
-
-        # 마지막 행이면 Down 없이 종료
-        if i >= max_iter - 1:
-            log(f"  ✅ 마지막 행 완료 — 전체 {downloaded}개 다운로드 완료")
-            break
-
-        # MES 창 포커스 복귀 후 현재 행 클릭 → ↓
-        try:
-            win.set_focus()
-        except Exception as e:
-            log(f"    ⚠️  set_focus 실패({e})")
-        time.sleep(0.4)
-
-        cy = row_click_y(row_index)
-        if cy is not None:
-            log(f"    행[{row_index+1}] 클릭: ({ROW_X}, {cy}) → ↓")
-            pyautogui.click(ROW_X, cy)
-            time.sleep(0.2)
-        else:
-            log(f"    행[{row_index+1}] 가시 영역 초과 — 클릭 생략, ↓만 사용")
-        pyautogui.press('down')
-        row_index += 1
-        time.sleep(0.5)
-
-    # total_rows 감지 실패 시 폴백: 스크린샷 비교로 추가 탐지
-    if not total_rows:
-        log("  (스크린샷 비교 폴백 — 행 수 미감지)")
-        region = (ROW_X - 200, 145, 500, 615)
-        same_count = 0
-        for i in range(max_iter, 500):
-            check_stop()
-            log(f"  [{i+1}] Excel 다운로드 시도...")
-            success = _click_excel_download(win, i + 1, "")
-            if success:
-                downloaded += 1
+    # UIA로 첫 번째 행 클릭 (해상도/위치 무관 — 좌표 fallback보다 우선)
+    _uia_first_clicked = False
+    _first_row_rect = None
+    try:
+        from pywinauto import Application as _UA
+        _ua = _UA(backend='uia').connect(process=win.process_id(), timeout=5)
+        for _uw in _ua.windows():
             try:
-                win.set_focus()
+                # DataItem / ListItem / Custom 중 가장 위에 있는 행 선택
+                _candidates = []
+                for _ct in ('DataItem', 'ListItem', 'Custom'):
+                    _cands = [c for c in _uw.descendants(control_type=_ct)
+                              if c.rectangle().width() > 50 and c.rectangle().height() > 5]
+                    _candidates.extend(_cands)
+                if _candidates:
+                    _candidates.sort(key=lambda c: c.rectangle().top)
+                    _first = _candidates[0]
+                    _first.click_input()
+                    _first_row_rect = _first.rectangle()
+                    log(f"  UIA 첫 행 클릭: y={_first_row_rect.top}")
+                    _uia_first_clicked = True
+                    time.sleep(0.5)
+                    break
             except Exception:
                 pass
-            time.sleep(0.4)
-            before = pyautogui.screenshot(region=region)
-            cy = row_click_y(row_index)
-            if cy is not None:
-                pyautogui.click(ROW_X, cy)
-                time.sleep(0.2)
+    except Exception as _e:
+        log(f"  UIA 첫 행 클릭 실패: {_e}")
+
+    # fallback: 창 상단 기준 Y 좌표 계산
+    if not _uia_first_clicked:
+        try:
+            _wrect = win.rectangle()
+            _row_y = _wrect.top + 165
+        except Exception:
+            _row_y = 165
+        pyautogui.click(ROW_X, _row_y)
+        log(f"  첫 번째 행 좌표 클릭: ({ROW_X}, {_row_y})")
+        time.sleep(0.5)
+        _first_row_rect = None
+
+    # 화면 전체 높이를 동적으로 읽어 region 설정 (해상도 무관)
+    screen_w, screen_h = pyautogui.size()
+    region_top  = 140
+    region_h    = screen_h - region_top - 50
+    grid_bottom = screen_h - 100
+    region = (max(ROW_X - 200, 0), region_top, 500, region_h)
+    log(f"  스캔 region: x={ROW_X}  y={region_top}~{region_top+region_h}  grid_bottom={grid_bottom}")
+
+    downloaded = []
+    same_count = 0
+    # last_sel_y: 첫 행의 실제 Y로 초기화
+    if _first_row_rect is not None:
+        last_sel_y = (_first_row_rect.top + _first_row_rect.bottom) // 2
+    else:
+        try:
+            last_sel_y = win.rectangle().top + 165
+        except Exception:
+            last_sel_y = 165
+
+    for i in range(500):
+        log(f"  [{i+1}] Excel 다운로드 시도...")
+        saved = _click_excel_download(win, i + 1, f"kitting_{i+1:03d}", row_y=last_sel_y)
+        if saved:
+            downloaded.append(saved)
+
+        win.set_focus()
+        time.sleep(0.4)
+
+        before = pyautogui.screenshot(region=region)
+
+        # 1순위: UIA로 선택된 행의 실제 bounding rectangle Y 좌표 사용
+        uia_rect = _uia_selected_row_rect(win)
+        if uia_rect is not None:
+            sel_y = (uia_rect.top + uia_rect.bottom) // 2
+            sel_x = (uia_rect.left + uia_rect.right) // 2
+            last_sel_y = sel_y
+            log(f"    UIA 선택 행 클릭: ({sel_x}, {sel_y}) → ↓")
+            pyautogui.click(sel_x, sel_y)
+        else:
+            # 2순위: 픽셀 색상 스캔으로 선택 행 Y 탐지
+            sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=grid_bottom, row_height=ROW_HEIGHT)
+            if sel_y is not None:
+                last_sel_y = sel_y
+                log(f"    픽셀스캔 선택 행 클릭: ({ROW_X}, {sel_y}) → ↓")
+                pyautogui.click(ROW_X, sel_y)
             else:
-                log(f"    행[{row_index+1}] 가시 영역 초과 — 클릭 생략, ↓만 사용")
-            pyautogui.press('down')
-            row_index += 1
-            time.sleep(0.5)
-            after = pyautogui.screenshot(region=region)
-            if before.tobytes() == after.tobytes():
-                same_count += 1
-                log(f"    화면 변화 없음 ({same_count}/3)")
-                if same_count >= 3:
-                    log(f"  ✅ 마지막 행 도달 — 전체 {downloaded}개 완료")
-                    break
-            else:
-                same_count = 0
+                log(f"    행 탐지 실패 → 마지막 위치 클릭: ({ROW_X}, {last_sel_y})")
+                pyautogui.click(ROW_X, last_sel_y)
+        time.sleep(0.2)
+
+        pyautogui.press('down')
+        time.sleep(0.5)
+        after = pyautogui.screenshot(region=region)
+
+        if list(before.getdata()) == list(after.getdata()):
+            same_count += 1
+            log(f"    화면 변화 없음 ({same_count}/5)")
+            if same_count >= 5:
+                log(f"  ✅ 마지막 행 도달 — 전체 {len(downloaded)}개 다운로드 완료")
+                break
+        else:
+            same_count = 0
+    else:
+        log(f"  ✅ 최대 반복 도달 — 전체 {len(downloaded)}개 다운로드 완료")
 
     return downloaded
 
 
+def _handle_save_dialog(save_path):
+    """Windows 저장 다이얼로그 자동 처리"""
+    import pyautogui
+    from pywinauto import Desktop
+
+    desktop = Desktop(backend='uia')
+    for _ in range(20):
+        try:
+            dlg = desktop.window(title_re=".*(저장|Save As|다른 이름).*")
+            if dlg.exists(timeout=0.5):
+                dlg.set_focus()
+                time.sleep(0.3)
+                try:
+                    fn_edit = dlg.child_window(control_type="Edit", found_index=0)
+                    fn_edit.set_edit_text(save_path)
+                except Exception:
+                    pyautogui.hotkey('ctrl', 'a')
+                    time.sleep(0.1)
+                    pyautogui.write(save_path, interval=0.02)
+                time.sleep(0.3)
+                pyautogui.press('enter')
+                time.sleep(1.5)
+                # 덮어쓰기 확인
+                try:
+                    conf = desktop.window(title_re=".*(덮어|overwrite|Confirm).*")
+                    if conf.exists(timeout=1):
+                        pyautogui.press('enter')
+                except Exception:
+                    pass
+                return True
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return False
+
+
+def _find_latest_download():
+    """Downloads 폴더 최근 xlsx 파일"""
+    dl_dir = Path.home() / "Downloads"
+    files = list(dl_dir.glob("*.xlsx")) + list(dl_dir.glob("*.xls"))
+    if not files:
+        return None
+    f = max(files, key=lambda x: x.stat().st_mtime)
+    # 5초 이내에 생성된 파일만
+    if time.time() - f.stat().st_mtime < 30:
+        return f
+    return None
+
+
+def _safe(name):
+    import re
+    return re.sub(r'[\\/:*?"<>|]', '_', name)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1297,7 +1075,8 @@ def navigate_and_download_inventory(app):
     if not clicked:
         try:
             rect = main_win.rectangle()
-            menu_y = rect.top + 7
+            # 최대화 창은 rect.top이 -8 정도로 음수 → max()로 보정
+            menu_y = max(rect.top + 50, 42)
             # 생산관리(230) 오른쪽 5번째 — 각 메뉴 약 80px 간격
             menu_x = rect.left + 630
             pyautogui.click(menu_x, menu_y)
@@ -1346,10 +1125,16 @@ def navigate_and_download_inventory(app):
     hwnds_before = set()
     win32gui.EnumWindows(lambda h, _: hwnds_before.add(h), None)
 
-    log("  Tab×1 → Enter → Excel 다운로드...")
-    pyautogui.press('tab')
-    time.sleep(0.3)
-    pyautogui.press('enter')
+    log("  Excel 버튼 클릭...")
+    _, inv_win = _get_smes_window()
+    if inv_win and _click_excel_btn(inv_win):
+        log("  ✅ Excel 버튼 클릭 성공")
+    else:
+        # fallback: Tab→Enter
+        log("  Excel 버튼 미발견 → Tab×1 → Enter fallback")
+        pyautogui.press('tab')
+        time.sleep(0.3)
+        pyautogui.press('enter')
     time.sleep(EXCEL_DELAY)
 
     # ── 새로 생긴 Save As 다이얼로그 감지 ────────────────────────────────────
@@ -1373,28 +1158,16 @@ def navigate_and_download_inventory(app):
         time.sleep(0.5)
 
     if dialog_hwnd:
-        log(f"  Save As 다이얼로그 감지 → 파일명 변경 없이 {save_folder}에 저장...")
+        log(f"  Save As 다이얼로그 감지 → 파일명 그대로 저장버튼 클릭...")
         try:
             win32gui.SetForegroundWindow(dialog_hwnd)
         except Exception:
             pass
         time.sleep(0.4)
 
-        # Alt+D → 주소창 → Ctrl+V(폴더경로) → Enter → Alt+S (파일명 변경 없이 바로 저장)
-        win32clipboard.OpenClipboard()
-        win32clipboard.EmptyClipboard()
-        win32clipboard.SetClipboardText(save_folder, win32clipboard.CF_UNICODETEXT)
-        win32clipboard.CloseClipboard()
-        pyautogui.hotkey('alt', 'd')
-        time.sleep(0.3)
-        pyautogui.hotkey('ctrl', 'v')
-        time.sleep(0.3)
-        pyautogui.press('enter')
-        time.sleep(1.5)
-
-        # 파일명 변경 없이 바로 저장 (Alt+S)
+        # 파일명/경로 변경 없이 바로 저장 버튼 클릭 (Alt+S)
         pyautogui.hotkey('alt', 's')
-        time.sleep(1.5)
+        time.sleep(2.0)
 
         # 덮어쓰기 확인 팝업
         try:
@@ -1406,7 +1179,15 @@ def navigate_and_download_inventory(app):
         except Exception:
             pass
 
-        log(f"  ✅ 저장 완료 → {save_folder}")
+        # 저장된 파일을 재고현황 폴더로 이동
+        import shutil as _shutil
+        latest = _find_latest_download()
+        if latest:
+            dest = INVENTORY_DIR / f"{file_name}.xlsx"
+            _shutil.move(str(latest), str(dest))
+            log(f"  ✅ 저장 완료: {dest.name}")
+        else:
+            log(f"  ✅ 저장 완료 (파일이 기본 위치에 저장됨)")
     else:
         log("  ⚠️  Save As 다이얼로그 미감지 — Downloads 폴더 폴백")
         latest = _find_latest_download()
@@ -1420,6 +1201,7 @@ def navigate_and_download_inventory(app):
 
     # ── Excel 창 포커스 후 Ctrl+W 닫기 ──────────────────────────────────────
     log("  Ctrl+W → Excel 창 닫기...")
+    # 저장 후 포커스가 MES로 넘어갈 수 있으므로 Excel 창 직접 탐색 후 닫기
     closed = False
     try:
         excel_hwnd = None
@@ -1460,7 +1242,7 @@ def navigate_and_download_inventory(app):
 def automate_upload(downloaded_files):
     from playwright.sync_api import sync_playwright
 
-    log("▶ Step 6: 자재부족현황 자동 업로드...")
+    log("▶ Step 6: 자재부족현황.html 자동 업로드...")
 
     if not downloaded_files:
         downloaded_files = [str(f) for f in DOWNLOAD_DIR.glob("*.xlsx")]
@@ -1473,229 +1255,174 @@ def automate_upload(downloaded_files):
     with sync_playwright() as p:
         page = None
         is_cdp = False
+        browser = None
 
-        # ── 1순위: 이미 열린 브라우저에 CDP 연결 ────────────────────────────
         try:
-            browser = p.chromium.connect_over_cdp("http://localhost:9222")
-            is_cdp = True
-            log("  ✅ 기존 브라우저 CDP 연결 성공")
-
-            # 이미 열린 앱 탭 찾기
-            for ctx in browser.contexts:
-                for pg in ctx.pages:
-                    if "material-shortage" in pg.url:
-                        page = pg
-                        page.bring_to_front()
-                        log("  ✅ 기존 앱 탭 사용")
-                        break
-                if page:
-                    break
-
-            # 앱 탭 없으면 새 탭 열기
-            if not page:
-                ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-                page = ctx.new_page()
-                page.goto("https://material-shortage.vercel.app/", timeout=30000)
-                page.wait_for_load_state("networkidle", timeout=15000)
-
-        except Exception as e:
-            log(f"  CDP 연결 실패({e}) → Microsoft Edge 실행")
-            launch_kwargs = dict(
-                headless=False,
-                args=["--start-maximized", "--disable-web-security"]
-            )
-            if EDGE_EXE:
-                launch_kwargs["executable_path"] = str(EDGE_EXE)
-                log(f"  Edge 경로: {EDGE_EXE}")
-            else:
-                log("  ⚠️  Edge 경로를 찾을 수 없음 — Playwright 기본 Chromium 사용")
-            browser = p.chromium.launch(**launch_kwargs)
-            page = browser.new_context(no_viewport=True).new_page()
-            page.goto("https://material-shortage.vercel.app/", timeout=30000)
-            page.wait_for_load_state("networkidle", timeout=15000)
-
-        # 로그인 (이미 로그인 상태면 스킵)
-        # .btn-logout 버튼이 2개(설정/로그아웃)이므로 .first 사용
-        if page.locator(".btn-logout").first.is_visible():
-            log("  ✅ 이미 로그인 상태")
-        else:
-            log("  로그인 중...")
+            # ── 1순위: 이미 열린 브라우저에 CDP 연결 ─────────────────────────
             try:
-                page.locator("#login-email").fill(WEB_EMAIL)
-                page.locator("#login-pw").fill(WEB_PW)
-                page.locator("#auth-login .btn-auth").click()
-                page.wait_for_selector(".btn-logout", timeout=10000)
-                log("  ✅ 로그인 완료")
-            except Exception as e:
-                log(f"  ⚠️  로그인 실패: {e}")
-                input("  수동 로그인 후 Enter → ")
+                browser = p.chromium.connect_over_cdp("http://localhost:9222")
+                is_cdp = True
+                log("  기존 브라우저 CDP 연결 성공")
 
-        # 로그인 후 앱 초기화 대기 (3초)
-        log("  로그인 후 앱 초기화 대기 중... (3초)")
-        time.sleep(3)
+                for ctx in browser.contexts:
+                    for pg in ctx.pages:
+                        if "material-shortage" in pg.url:
+                            page = pg
+                            page.bring_to_front()
+                            log("  기존 앱 탭 사용")
+                            break
+                    if page:
+                        break
 
-        # 키팅 로컬 상태만 초기화 (DB는 건드리지 않음 — 업로드 완료 전 빈 목록 노출 방지)
-        log("  키팅 로컬 상태 초기화 (DB 유지)...")
-        try:
-            page.evaluate("() => { if (typeof clearKitFilesLocal === 'function') clearKitFilesLocal(); else if (typeof clearKitFiles === 'function') clearKitFiles(); }")
-        except Exception as e:
-            log(f"  ⚠️  초기화 평가 오류: {e}")
-        time.sleep(1)
+                if not page:
+                    ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+                    page = ctx.new_page()
+                    page.goto("https://material-shortage.vercel.app/", timeout=30000)
+                    page.wait_for_load_state("networkidle", timeout=15000)
 
-        # ── 키팅 자재 업로드 (먼저) ──────────────────────────────────────────
-        all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
-        all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
-        # 전일키팅 폴더 파일 추가
-        if PREV_KIT_DIR.exists():
-            prev_kit = sorted(PREV_KIT_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
-            prev_kit += sorted(PREV_KIT_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
-            if prev_kit:
-                log(f"  전일키팅 폴더 {len(prev_kit)}개 파일 추가: {[f.name for f in prev_kit]}")
-                all_kit += prev_kit
-        valid = [str(f) for f in all_kit if f.exists()]
-        log(f"  kitting 자재 폴더 전체 {len(valid)}개 파일 업로드 중...")
-        if valid:
-            page.locator("#file-kit").set_input_files(valid)
-
-            # kit-chip 렌더링 + state.kitFiles 채워질 때까지 폴링 (최대 30초)
-            log("  파일 처리 완료 대기 중...")
-            deadline = time.time() + 30
-            loaded = 0
-            while time.time() < deadline:
-                time.sleep(1)
+            except Exception:
+                log("  CDP 연결 실패 → 새 브라우저 실행")
+                browser = p.chromium.launch(
+                    headless=False,
+                    args=["--start-maximized", "--disable-web-security"]
+                )
+                page = browser.new_context(no_viewport=True).new_page()
                 try:
-                    loaded = page.evaluate("() => { try { return state.kitFiles.length; } catch(e) { return 0; } }")
-                    if loaded >= len(valid):
-                        break
-                except Exception:
-                    pass
-            log(f"  state.kitFiles 로드 완료: {loaded}개")
+                    page.goto("https://material-shortage.vercel.app/", timeout=30000)
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception as e2:
+                    log(f"  페이지 로드 실패: {e2}")
+                    input("  페이지 수동 로드 후 Enter → ")
 
-            # Storage 업로드 완료 확인 후 upload_logs 동기화 (파일 먼저, DB 나중에)
-            log("  Supabase Storage 업로드 및 DB 동기화 대기 중...")
+            # ── 로그인 (이미 로그인 상태면 스킵) ──────────────────────────────
+            # .btn-logout 버튼이 2개(설정/로그아웃)이므로 .first 사용
+            if page.locator(".btn-logout").first.is_visible():
+                log("  이미 로그인 상태")
+            else:
+                log("  로그인 중...")
+                try:
+                    page.locator("#login-email").fill(WEB_EMAIL)
+                    page.locator("#login-pw").fill(WEB_PW)
+                    page.locator("#auth-login .btn-auth").click()
+                    page.wait_for_selector(".btn-logout", timeout=10000)
+                    log("  로그인 완료")
+                except Exception as e:
+                    log(f"  로그인 실패: {e}")
+                    input("  수동 로그인 후 Enter → ")
+
+            # ── 키팅 로컬 상태 초기화 ──────────────────────────────────────────
+            log("  키팅 로컬 상태 초기화...")
             try:
-                result = page.evaluate("""
-                    async () => {
-                        const files = (typeof state !== 'undefined' && state.kitFiles) ? state.kitFiles : [];
-                        if (!files.length) return { ok: false, reason: 'state.kitFiles 비어있음' };
-                        const ts = Date.now();
-                        const uname = (typeof currentUser !== 'undefined' && currentUser) ? currentUser.displayName || '' : '';
-                        // Storage 업로드 완료 대기 (DB 갱신 전에 파일이 Storage에 존재해야 함)
-                        await Promise.all(files.map(f => uploadFileToStorage('kit/' + f.name, f.rawData)));
-                        await syncUploadLog('kit', ts, uname, files.map(f => f.name));
-                        localStorage.setItem('ms_uptime_kit', String(ts));
-                        if (uname) localStorage.setItem('ms_uploader_kit', uname);
-                        return { ok: true, count: files.length, names: files.map(f => f.name) };
+                page.evaluate("""
+                    () => {
+                        window.state.kitFiles = [];
+                        if (window.dbPut) window.dbPut('kit_list', []);
+                        if (window.renderKitChips) window.renderKitChips();
+                        if (window.checkReady) window.checkReady();
+                        localStorage.removeItem('ms_uptime_kit');
+                        localStorage.removeItem('ms_uploader_kit');
+                        const el = document.getElementById('uptime-kit');
+                        if (el) el.textContent = '';
                     }
                 """)
-                if result and result.get('ok'):
-                    log(f"  ✅ 키팅 업로드 완료 ({result.get('count')}개): {result.get('names')}")
-                else:
-                    log(f"  ⚠️  키팅 업로드 결과: {result}")
             except Exception as e:
-                log(f"  ⚠️  키팅 업로드 로그 오류: {e}")
+                log(f"  초기화 오류: {e}")
 
-        # ── 재고현황 업로드 (키팅 완료 후) ──────────────────────────────────
-        inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
-        inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
-        if inv_files:
-            latest_inv = str(inv_files[0])
-            log(f"  재고현황 업로드: {inv_files[0].name}")
-            page.locator("#file-inv").set_input_files(latest_inv)
-            time.sleep(4)
-            log("  ✅ 재고현황 업로드 완료")
-        else:
-            log("  ⚠️  재고현황 폴더에 파일 없음")
+            # ── 키팅된 자재 업로드 ─────────────────────────────────────────────
+            all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
+            all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
+            valid = [str(f) for f in all_kit if f.exists()]
+            log(f"  kitting 자재 폴더 전체 {len(valid)}개 파일 업로드 중...")
+            if valid:
+                page.locator("#file-kit").set_input_files(valid)
 
-        # 완료 팝업 — () => {...} 함수 형태로 감싸야 SyntaxError 방지
-        try:
-            page.evaluate("""
-                () => {
+                try:
+                    page.wait_for_selector('.kit-chip', timeout=15000)
+                    log("  파일 처리 완료 — Supabase 저장 중...")
+                except Exception:
+                    time.sleep(5)
+
+                try:
+                    result = page.evaluate("""
+                        async () => {
+                            const files = (window.state && window.state.kitFiles) || [];
+                            if (!files.length) return { ok: false, reason: 'state.kitFiles 비어있음' };
+                            const results = [];
+                            for (const f of files) {
+                                const r = await window.uploadFileToStorage('kit/' + f.name, f.rawData);
+                                results.push({ name: f.name, ok: r?.ok, msg: r?.msg || '' });
+                            }
+                            const ts = Date.now();
+                            const uname = (window.currentUser && window.currentUser.displayName) || '';
+                            await window.syncUploadLog('kit', ts, uname, files.map(f => f.name));
+                            localStorage.setItem('ms_uptime_kit', String(ts));
+                            if (uname) localStorage.setItem('ms_uploader_kit', uname);
+                            return { ok: true, fileCount: files.length, names: files.map(f => f.name), results };
+                        }
+                    """, None)
+                    if result and result.get('ok'):
+                        log(f"  키팅 Supabase 저장 완료: {result.get('names')}")
+                    else:
+                        log(f"  키팅 Supabase 저장 결과: {result}")
+                except Exception as e:
+                    log(f"  키팅 Supabase 저장 오류: {e} — 10초 추가 대기")
+                    time.sleep(10)
+
+            # ── 재고현황 업로드 ────────────────────────────────────────────────
+            inv_files = sorted(INVENTORY_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime, reverse=True)
+            inv_files += sorted(INVENTORY_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime, reverse=True)
+            if inv_files:
+                latest_inv = str(inv_files[0])
+                log(f"  재고현황 업로드: {inv_files[0].name}")
+                page.locator("#file-inv").set_input_files(latest_inv)
+                time.sleep(3)
+                log("  재고현황 업로드 완료")
+            else:
+                log("  재고현황 폴더에 파일 없음")
+
+            # ── 완료 팝업 ──────────────────────────────────────────────────────
+            try:
+                page.evaluate("""
                     const el = document.createElement('div');
                     el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:99999;display:flex;align-items:center;justify-content:center';
                     el.innerHTML = '<div style="background:white;border-radius:16px;padding:36px 52px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.35)">' +
-                        '<div style="font-size:52px;margin-bottom:12px">\\u2705</div>' +
-                        '<div style="font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:8px">\\uc2e4\\ud589\\uc644\\ub8cc \\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4.</div>' +
-                        '<div style="font-size:13px;color:#666;margin-bottom:20px">\\ud0a4\\ud305 \\ud30c\\uc77c\\uc774 \\uc790\\uc7ac\\ubd80\\uc871\\ud604\\ud669\\uc5d0 \\uc5c5\\ub85c\\ub4dc\\ub418\\uc5c8\\uc2b5\\ub2c8\\ub2e4.</div>' +
-                        '<button onclick="this.parentElement.parentElement.remove()" style="padding:10px 36px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">\\ud655\\uc778</button>' +
+                        '<div style="font-size:52px;margin-bottom:12px">완료</div>' +
+                        '<div style="font-size:22px;font-weight:700;color:#1e3a5f;margin-bottom:8px">실행완료 되었습니다.</div>' +
+                        '<div style="font-size:13px;color:#666;margin-bottom:20px">키팅 파일이 자재부족현황에 업로드되었습니다.</div>' +
+                        '<button onclick="this.closest(\'div[style]\').remove()" style="padding:10px 36px;background:#1e3a5f;color:white;border:none;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer">확인</button>' +
                         '</div>';
                     document.body.appendChild(el);
-                }
-            """)
-        except Exception as e:
-            log(f"  ⚠️  완료 팝업 오류: {e}")
+                """)
+            except Exception:
+                pass
 
-        log("✅ 전체 자동화 완료!")
+            log("전체 자동화 완료!")
+
+        except Exception as e:
+            log(f"  업로드 오류: {e}")
+            import traceback as _tb; _tb.print_exc()
+            input("  오류 확인 후 Enter → ")
 
         # CDP 연결은 브라우저를 닫지 않음 — 새 브라우저는 60초 후 종료
-        if not is_cdp:
+        if not is_cdp and browser:
             try:
                 page.wait_for_timeout(60000)
             except Exception:
                 pass
-            browser.close()
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-# 앱 설정에서 폴더 경로 읽기 (브라우저 localStorage → CDP)
-# ──────────────────────────────────────────────────────────────────────────────
-def read_cfg_paths():
-    """
-    이미 열린 브라우저에 CDP로 접속해 localStorage 설정값을 읽는다.
-    성공 시 (download_dir, prev_kit_dir, inv_dir) 반환, 실패 시 (None, None, None).
-    """
-    from playwright.sync_api import sync_playwright
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.connect_over_cdp("http://localhost:9222")
-            page = None
-            for ctx in browser.contexts:
-                for pg in ctx.pages:
-                    if "material-shortage" in pg.url:
-                        page = pg
-                        break
-                if page:
-                    break
-            if not page and browser.contexts:
-                pages = browser.contexts[0].pages
-                if pages:
-                    page = pages[0]
-            if not page:
-                return None, None, None
-            download = page.evaluate("() => localStorage.getItem('ms_cfg_download_dir')")
-            prev_kit = page.evaluate("() => localStorage.getItem('ms_cfg_prev_kit_dir')")
-            inventory = page.evaluate("() => localStorage.getItem('ms_cfg_inv_dir')")
-            return download or None, prev_kit or None, inventory or None
-    except Exception as e:
-        log(f"  [설정 읽기] CDP 연결 실패({e}) — 기본 경로 사용")
-        return None, None, None
+            try:
+                browser.close()
+            except Exception:
+                pass
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 메인
 # ──────────────────────────────────────────────────────────────────────────────
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--step', default='all',
-                        help='실행 단계: login | navigate | all')
-    # mes-kit:// 프로토콜에서 전달되는 URL 인자 무시
-    parser.add_argument('url', nargs='?', default='')
-    args, _ = parser.parse_known_args()
-
+    _init_log()
     log("=" * 60)
-    log(f"sMES 키팅 자동화 시작  ({TODAY})  [step={args.step}]")
+    log(f"sMES 키팅 자동화 시작  ({TODAY})")
     log("=" * 60)
-
-    # ── 앱 설정 경로 적용 (브라우저 localStorage 우선) ──────────────────────
-    global DOWNLOAD_DIR, PREV_KIT_DIR, INVENTORY_DIR
-    log("▶ 앱 설정 경로 읽는 중...")
-    dl, pk, iv = read_cfg_paths()
-    if dl: DOWNLOAD_DIR  = Path(dl);  log(f"  kitting 자재 경로: {DOWNLOAD_DIR}  [설정값]")
-    else:  log(f"  kitting 자재 경로: {DOWNLOAD_DIR}  [기본값]")
-    if pk: PREV_KIT_DIR  = Path(pk);  log(f"  전일키팅 경로:     {PREV_KIT_DIR}  [설정값]")
-    else:  log(f"  전일키팅 경로:     {PREV_KIT_DIR}  [기본값]")
-    if iv: INVENTORY_DIR = Path(iv);  log(f"  재고현황 경로:     {INVENTORY_DIR}  [설정값]")
-    else:  log(f"  재고현황 경로:     {INVENTORY_DIR}  [기본값]")
 
     if not is_admin():
         log("관리자 권한 필요. 재실행 중...")
@@ -1704,19 +1431,7 @@ def main():
         return
 
     try:
-        # Step 0: 기존 키팅 파일 전체 삭제
-        log("▶ Step 0: 기존 키팅 파일 삭제...")
-        deleted = 0
-        for f in DOWNLOAD_DIR.iterdir():
-            if f.is_file():
-                try:
-                    f.unlink()
-                    deleted += 1
-                except Exception as e:
-                    log(f"  ⚠️  삭제 실패: {f.name} → {e}")
-        log(f"  ✅ {deleted}개 파일 삭제 완료")
-
-        # Step 1: sMES 실행
+        # Step 1: 실행
         launch_smes()
 
         # sMES 창 연결
@@ -1734,32 +1449,14 @@ def main():
         log("▶ Step 3: 로그인...")
         login_smes(win)
 
-        log("")
-        log("✅ sMES 로그인 완료!")
-
-        if args.step == 'login':
-            log("=" * 60)
-            log("  [Step 1 완료] MES 실행 및 로그인 성공.")
-            log("  다음 단계(메뉴 이동 → 다운로드)는 추후 추가 예정입니다.")
-            log("=" * 60)
-            input("  확인 후 Enter → ")
-            return
-
-        # Step 3~5: 키팅 자재 메뉴 이동 + 다운로드 (step=navigate 또는 all)
+        # Step 3~5: 키팅 자재 메뉴 이동 + 다운로드
         log("▶ Step 4~5: 키팅 자재 메뉴 이동 및 다운로드...")
         downloaded = navigate_and_download(app)
-
-        if args.step == 'navigate':
-            log("=" * 60)
-            log(f"  [Step 2 완료] 다운로드 {len(downloaded)}개 파일.")
-            log("=" * 60)
-            input("  확인 후 Enter → ")
-            return
 
         # Step 5b: 재고현황 다운로드
         navigate_and_download_inventory(app)
 
-        # Step 6: 업로드 (step=all)
+        # Step 6: 자재부족현황 웹앱 업로드
         automate_upload(downloaded)
 
         # Step 7: sMES 창 닫기
@@ -1790,7 +1487,7 @@ def main():
                 win32gui.EnumWindows(_close_hwnd, None)
                 time.sleep(1.5)
 
-                # 닫기 확인 팝업 자동 Enter
+                # 닫기 확인 팝업(예/아니오) 자동 Enter
                 try:
                     import pyautogui
                     pyautogui.press('enter')
@@ -1808,9 +1505,6 @@ def main():
         except Exception as e:
             log(f"  ⚠️  sMES 닫기 실패: {e}")
 
-    except StopIteration:
-        log("🛑 자동화가 긴급정지로 중단되었습니다.")
-        STOP_FLAG.unlink(missing_ok=True)
     except Exception as e:
         log(f"❌ 오류: {e}")
         import traceback; traceback.print_exc()

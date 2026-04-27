@@ -536,6 +536,44 @@ def _try_click(win, candidates):
     return False
 
 
+def _uia_selected_row_rect(win):
+    """
+    UIA로 현재 선택/포커스된 그리드 행의 bounding rectangle 반환.
+    DataItem → ListItem → Custom 순으로 시도.
+    성공 시 pywinauto RECT 반환, 실패 시 None.
+    """
+    try:
+        from pywinauto import Application
+        pid = win.process_id()
+        uia_app = Application(backend='uia').connect(process=pid, timeout=3)
+        for w in uia_app.windows():
+            try:
+                for ct in ('DataItem', 'ListItem', 'Custom'):
+                    for row in w.descendants(control_type=ct):
+                        try:
+                            selected = False
+                            try:
+                                selected = row.is_selected()
+                            except Exception:
+                                pass
+                            if not selected:
+                                try:
+                                    selected = row.has_keyboard_focus()
+                                except Exception:
+                                    pass
+                            if selected:
+                                rect = row.rectangle()
+                                if rect.width() > 50 and rect.height() > 5:
+                                    return rect
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return None
+
+
 def _find_selected_row_y(col_x, grid_top=150, grid_bottom=560, row_height=22):
     """
     그리드에서 현재 선택된(하이라이트) 행의 Y 좌표를 색상으로 탐지.
@@ -707,32 +745,50 @@ def _click_excel_btn(win, row_y=None):
             log(f"    우클릭 시도 실패: {e}")
 
     # 진단: 발견된 컨트롤 목록 로그 출력 (최대 60개)
-    # 5) win32 EnumChildWindows — MDI 자식 폼 포함 전체 버튼 탐색
+    # 5) win32 EnumWindows + PID 필터 — MDI 자식 폼 포함 프로세스 전체 버튼 탐색
     try:
-        import win32gui, win32con
-        _excel_hwnd = None
+        import win32gui, win32con, win32process
+        _excel_hwnd = [None]
+        _pid = win.process_id()
 
-        def _enum_btn(hwnd, _):
-            nonlocal _excel_hwnd
-            if _excel_hwnd:
+        def _check_btn(hwnd):
+            if _excel_hwnd[0]:
                 return
             try:
                 cls = win32gui.GetClassName(hwnd)
                 txt = win32gui.GetWindowText(hwnd)
                 if 'BUTTON' in cls.upper() and any(k in txt.lower() for k in EXCEL_CONTAINS):
-                    _excel_hwnd = hwnd
+                    _excel_hwnd[0] = hwnd
+                    return
+            except Exception:
+                pass
+            # 자식도 재귀 탐색
+            try:
+                win32gui.EnumChildWindows(hwnd, lambda ch, _: _check_btn(ch), None)
             except Exception:
                 pass
 
-        win32gui.EnumChildWindows(win.handle, _enum_btn, None)
+        def _enum_top(hwnd, _):
+            if _excel_hwnd[0]:
+                return
+            try:
+                _, h_pid = win32process.GetWindowThreadProcessId(hwnd)
+                if h_pid != _pid:
+                    return
+                _check_btn(hwnd)
+                win32gui.EnumChildWindows(hwnd, lambda ch, _: _check_btn(ch), None)
+            except Exception:
+                pass
 
-        if _excel_hwnd:
-            btn_txt = win32gui.GetWindowText(_excel_hwnd)
-            win32gui.SendMessage(_excel_hwnd, win32con.BM_CLICK, 0, 0)
-            log(f"    Excel 버튼 클릭 (win32 EnumChild: '{btn_txt}')")
+        win32gui.EnumWindows(_enum_top, None)
+
+        if _excel_hwnd[0]:
+            btn_txt = win32gui.GetWindowText(_excel_hwnd[0])
+            win32gui.SendMessage(_excel_hwnd[0], win32con.BM_CLICK, 0, 0)
+            log(f"    Excel 버튼 클릭 (win32 PID전체탐색: '{btn_txt}')")
             return True
     except Exception as e:
-        log(f"    win32 EnumChild 실패: {e}")
+        log(f"    win32 PID전체탐색 실패: {e}")
 
     if _dump_controls:
         log(f"    [진단] 발견된 컨트롤 목록 ({len(_dump_controls)}개, 최대 60개 출력):")
@@ -782,26 +838,36 @@ def _click_excel_download(win, idx, item_name, row_y=None):
 def _download_by_keyboard(win):
     import pyautogui
 
-    ROW_X      = 1000   # 품목명 컬럼 X (절대 좌표)
-    ROW_Y      = 165    # 첫 번째(선택) 행 Y (절대 좌표)
-    ROW_HEIGHT = 22     # 행 높이 픽셀 — 실제 MES 그리드 행 높이에 맞게 조정
+    # ROW_X: 창 rectangle 기준으로 동적 계산 (절대 좌표 의존 제거)
+    try:
+        _wrect = win.rectangle()
+        ROW_X = (_wrect.left + _wrect.right) // 2
+    except Exception:
+        ROW_X = 1000
+    ROW_HEIGHT = 22
 
     win.set_focus(); time.sleep(0.3)
 
     # UIA로 첫 번째 행 클릭 (해상도/위치 무관 — 좌표 fallback보다 우선)
     _uia_first_clicked = False
+    _first_row_rect = None
     try:
         from pywinauto import Application as _UA
         _ua = _UA(backend='uia').connect(process=win.process_id(), timeout=5)
         for _uw in _ua.windows():
             try:
-                _rows = [c for c in _uw.descendants(control_type='Custom')
-                         if (c.element_info.name or '').lower().startswith('row ')]
-                _rows.sort(key=lambda r: int(r.element_info.name.split()[-1])
-                           if r.element_info.name and r.element_info.name.split()[-1].isdigit() else 999)
-                if _rows:
-                    _rows[0].click_input()
-                    log(f"  UIA 첫 행 클릭: '{_rows[0].element_info.name}'")
+                # DataItem / ListItem / Custom 중 가장 위에 있는 행 선택
+                _candidates = []
+                for _ct in ('DataItem', 'ListItem', 'Custom'):
+                    _cands = [c for c in _uw.descendants(control_type=_ct)
+                              if c.rectangle().width() > 50 and c.rectangle().height() > 5]
+                    _candidates.extend(_cands)
+                if _candidates:
+                    _candidates.sort(key=lambda c: c.rectangle().top)
+                    _first = _candidates[0]
+                    _first.click_input()
+                    _first_row_rect = _first.rectangle()
+                    log(f"  UIA 첫 행 클릭: y={_first_row_rect.top}")
                     _uia_first_clicked = True
                     time.sleep(0.5)
                     break
@@ -810,22 +876,36 @@ def _download_by_keyboard(win):
     except Exception as _e:
         log(f"  UIA 첫 행 클릭 실패: {_e}")
 
+    # fallback: 창 상단 기준 Y 좌표 계산
     if not _uia_first_clicked:
-        pyautogui.click(ROW_X, ROW_Y)
-        log(f"  첫 번째 행 좌표 클릭: ({ROW_X}, {ROW_Y})")
+        try:
+            _wrect = win.rectangle()
+            _row_y = _wrect.top + 165
+        except Exception:
+            _row_y = 165
+        pyautogui.click(ROW_X, _row_y)
+        log(f"  첫 번째 행 좌표 클릭: ({ROW_X}, {_row_y})")
         time.sleep(0.5)
+        _first_row_rect = None
 
     # 화면 전체 높이를 동적으로 읽어 region 설정 (해상도 무관)
     screen_w, screen_h = pyautogui.size()
     region_top  = 140
-    region_h    = screen_h - region_top - 50   # 하단 태스크바(50px) 제외
+    region_h    = screen_h - region_top - 50
     grid_bottom = screen_h - 100
-    region = (ROW_X - 200, region_top, 500, region_h)
-    log(f"  스캔 region: y={region_top}~{region_top+region_h}  grid_bottom={grid_bottom}")
+    region = (max(ROW_X - 200, 0), region_top, 500, region_h)
+    log(f"  스캔 region: x={ROW_X}  y={region_top}~{region_top+region_h}  grid_bottom={grid_bottom}")
 
     downloaded = []
-    same_count = 0        # 연속으로 화면 변화 없는 횟수 카운트
-    last_sel_y = ROW_Y    # 마지막으로 알려진 선택 행 Y (fallback용)
+    same_count = 0
+    # last_sel_y: 첫 행의 실제 Y로 초기화
+    if _first_row_rect is not None:
+        last_sel_y = (_first_row_rect.top + _first_row_rect.bottom) // 2
+    else:
+        try:
+            last_sel_y = win.rectangle().top + 165
+        except Exception:
+            last_sel_y = 165
 
     for i in range(500):
         log(f"  [{i+1}] Excel 다운로드 시도...")
@@ -838,24 +918,30 @@ def _download_by_keyboard(win):
 
         before = pyautogui.screenshot(region=region)
 
-        # 선택 행 탐지 — 탐지 실패(포커스 해제 후 회색으로 변한 경우)에도
-        # 마지막 위치를 클릭해 grid 포커스를 복구하고 Down 키가 동작하도록 함
-        sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=grid_bottom, row_height=ROW_HEIGHT)
-        if sel_y is not None:
+        # 1순위: UIA로 선택된 행의 실제 bounding rectangle Y 좌표 사용
+        uia_rect = _uia_selected_row_rect(win)
+        if uia_rect is not None:
+            sel_y = (uia_rect.top + uia_rect.bottom) // 2
+            sel_x = (uia_rect.left + uia_rect.right) // 2
             last_sel_y = sel_y
-            log(f"    현재 선택 행 클릭: ({ROW_X}, {sel_y}) → ↓")
-            pyautogui.click(ROW_X, sel_y)
+            log(f"    UIA 선택 행 클릭: ({sel_x}, {sel_y}) → ↓")
+            pyautogui.click(sel_x, sel_y)
         else:
-            # 탐지 실패 → 마지막 위치로 클릭해 grid 포커스 확보
-            log(f"    선택 행 탐지 실패 → 마지막 위치 클릭: ({ROW_X}, {last_sel_y})")
-            pyautogui.click(ROW_X, last_sel_y)
+            # 2순위: 픽셀 색상 스캔으로 선택 행 Y 탐지
+            sel_y = _find_selected_row_y(ROW_X, grid_top=150, grid_bottom=grid_bottom, row_height=ROW_HEIGHT)
+            if sel_y is not None:
+                last_sel_y = sel_y
+                log(f"    픽셀스캔 선택 행 클릭: ({ROW_X}, {sel_y}) → ↓")
+                pyautogui.click(ROW_X, sel_y)
+            else:
+                log(f"    행 탐지 실패 → 마지막 위치 클릭: ({ROW_X}, {last_sel_y})")
+                pyautogui.click(ROW_X, last_sel_y)
         time.sleep(0.2)
 
-        pyautogui.press('down')   # 다음 품목으로 이동
+        pyautogui.press('down')
         time.sleep(0.5)
         after = pyautogui.screenshot(region=region)
 
-        # 스크린샷이 동일 → 더 이상 내려갈 행 없음 확인 (5회 연속 동일 시 완료)
         if list(before.getdata()) == list(after.getdata()):
             same_count += 1
             log(f"    화면 변화 없음 ({same_count}/5)")
@@ -863,7 +949,7 @@ def _download_by_keyboard(win):
                 log(f"  ✅ 마지막 행 도달 — 전체 {len(downloaded)}개 다운로드 완료")
                 break
         else:
-            same_count = 0   # 화면 변화 있으면 카운트 초기화
+            same_count = 0
     else:
         log(f"  ✅ 최대 반복 도달 — 전체 {len(downloaded)}개 다운로드 완료")
 
