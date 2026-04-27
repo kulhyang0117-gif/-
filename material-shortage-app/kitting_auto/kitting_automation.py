@@ -265,30 +265,31 @@ def login_smes(_unused_win=None):
     all_edits = dlg.children(class_name_re="WindowsForms10.EDIT.*")
     log(f"  Edit 컨트롤 전체 {len(all_edits)}개")
 
-    # 실제 입력 필드만 필터: 너비 < 500px, 높이 < 60px (컨테이너 패널 제외)
-    small_edits = [
-        e for e in all_edits
-        if e.rectangle().width() < 500 and e.rectangle().height() < 60
-    ]
-    log(f"  입력 크기 필드 {len(small_edits)}개")
-
-    # 타이틀 텍스트로 ID/PW 식별
-    # 버튼 텍스트(Exit, Login 등)는 제외하고 실제 입력란만 사용
     BUTTON_TEXTS = {'exit', 'login', '로그인', '취소', 'cancel', 'ok', '확인'}
     id_field = None
     pw_field = None
-    for e in small_edits:
-        txt = e.window_text().strip()
-        log(f"    필드 '{txt}' 위치: {e.rectangle()}")
-        if txt.lower() in BUTTON_TEXTS:
-            continue  # 버튼 텍스트는 건너뜀
-        if txt == SMES_ID:
-            id_field = e   # ID 값과 정확히 일치 → ID 필드
-        elif txt.upper() == 'PASSWORD':
-            pw_field = e   # 'PASSWORD' 플레이스홀더 → PW 필드
 
-    # fallback: Y 정렬 후 위=ID, 아래=PW (버튼 제외한 필드 중)
+    # 1순위: 텍스트로 직접 탐지 — 크기 필터 없이 전체에서 검색
+    for e in all_edits:
+        try:
+            txt = e.window_text().strip()
+            log(f"    필드 '{txt}' 위치: {e.rectangle()}")
+            if txt.lower() in BUTTON_TEXTS:
+                continue
+            if txt == SMES_ID:
+                id_field = e
+            elif txt.upper() == 'PASSWORD':
+                pw_field = e
+        except Exception:
+            pass
+
+    # 2순위: 크기 필터 후 Y 정렬 fallback
     if id_field is None or pw_field is None:
+        small_edits = [
+            e for e in all_edits
+            if e.rectangle().width() < 500 and e.rectangle().height() < 60
+        ]
+        log(f"  크기 필터 필드 {len(small_edits)}개")
         input_only = [
             e for e in small_edits
             if e.window_text().strip().lower() not in BUTTON_TEXTS
@@ -299,8 +300,20 @@ def login_smes(_unused_win=None):
         if pw_field is None and len(sorted_edits) >= 2:
             pw_field = sorted_edits[1]
 
+    # 3순위: 크기 필터 없이 Y 정렬 (최후 수단)
     if id_field is None or pw_field is None:
-        raise RuntimeError(f"ID/PW 입력 필드를 찾지 못했습니다. 소형 Edit 수: {len(small_edits)}")
+        input_only_all = [
+            e for e in all_edits
+            if e.window_text().strip().lower() not in BUTTON_TEXTS
+        ]
+        sorted_all = sorted(input_only_all, key=lambda c: c.rectangle().top)
+        if id_field is None and len(sorted_all) >= 1:
+            id_field = sorted_all[0]
+        if pw_field is None and len(sorted_all) >= 2:
+            pw_field = sorted_all[1]
+
+    if id_field is None or pw_field is None:
+        raise RuntimeError(f"ID/PW 입력 필드를 찾지 못했습니다. Edit 전체 수: {len(all_edits)}")
 
     log(f"  ID 필드 위치: {id_field.rectangle()}")
     log(f"  PW 필드 위치: {pw_field.rectangle()}")
