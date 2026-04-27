@@ -728,16 +728,70 @@ def _click_excel_btn(win, row_y=None):
     except Exception as e:
         log(f"    ToolBar 스캔 실패: {e}")
 
-    # 4) 우클릭 컨텍스트 메뉴 → Excel/엑셀 항목 클릭
+    # 4) win32 EnumWindows + PID 필터 — 프로세스 전체 버튼 완전 재귀 탐색
+    #    (콜백이 반드시 True/False 반환 → EnumChildWindows 정상 동작)
+    try:
+        import win32gui, win32con, win32process
+        _excel_hwnd = [None]
+        _pid = win.process_id()
+        _all_btns = []   # 진단용: 발견된 모든 버튼 텍스트
+
+        def _enum_cb(hwnd, _):
+            """EnumChildWindows 콜백: True=계속, False=중단(찾음)"""
+            _scan_hwnd(hwnd)
+            return not bool(_excel_hwnd[0])
+
+        def _scan_hwnd(hwnd):
+            """hwnd 및 모든 자손을 재귀 탐색"""
+            if _excel_hwnd[0]:
+                return
+            try:
+                cls = win32gui.GetClassName(hwnd)
+                txt = win32gui.GetWindowText(hwnd) or ''
+                if 'BUTTON' in cls.upper():
+                    _all_btns.append(txt or '<empty>')
+                    if any(k in txt.lower() for k in EXCEL_CONTAINS):
+                        _excel_hwnd[0] = hwnd
+                        return
+            except Exception:
+                pass
+            try:
+                win32gui.EnumChildWindows(hwnd, _enum_cb, None)
+            except Exception:
+                pass
+
+        def _enum_top_cb(hwnd, _):
+            if _excel_hwnd[0]:
+                return False
+            try:
+                _, h_pid = win32process.GetWindowThreadProcessId(hwnd)
+                if h_pid == _pid:
+                    _scan_hwnd(hwnd)
+            except Exception:
+                pass
+            return not bool(_excel_hwnd[0])
+
+        win32gui.EnumWindows(_enum_top_cb, None)
+
+        if _excel_hwnd[0]:
+            btn_txt = win32gui.GetWindowText(_excel_hwnd[0])
+            win32gui.SendMessage(_excel_hwnd[0], win32con.BM_CLICK, 0, 0)
+            log(f"    Excel 버튼 클릭 (win32 완전재귀탐색: '{btn_txt}')")
+            return True
+        else:
+            log(f"    [win32 버튼 진단] 발견된 버튼 {len(_all_btns)}개: {_all_btns[:50]}")
+    except Exception as e:
+        log(f"    win32 완전재귀탐색 실패: {e}")
+
+    # 5) 우클릭 컨텍스트 메뉴 (최후 수단 — 느림)
     if row_y is not None:
         try:
             from pywinauto import Desktop
-            log(f"    우클릭 컨텍스트 메뉴 시도: (1000, {row_y})")
-            pyautogui.rightClick(1000, row_y)
+            log(f"    우클릭 컨텍스트 메뉴 시도: (400, {row_y})")
+            pyautogui.rightClick(400, row_y)
             time.sleep(0.8)
             desktop = Desktop(backend='uia')
-            # 컨텍스트 메뉴에서 Excel 관련 항목 탐색
-            for attempt in range(10):
+            for _ in range(5):
                 try:
                     menus = desktop.windows(control_type='Menu')
                     for menu in menus:
@@ -751,60 +805,13 @@ def _click_excel_btn(win, row_y=None):
                 except Exception:
                     pass
                 time.sleep(0.3)
-            # 메뉴에서 못 찾으면 Escape로 닫기
             pyautogui.press('escape')
             time.sleep(0.3)
         except Exception as e:
             log(f"    우클릭 시도 실패: {e}")
 
-    # 진단: 발견된 컨트롤 목록 로그 출력 (최대 60개)
-    # 5) win32 EnumWindows + PID 필터 — MDI 자식 폼 포함 프로세스 전체 버튼 탐색
-    try:
-        import win32gui, win32con, win32process
-        _excel_hwnd = [None]
-        _pid = win.process_id()
-
-        def _check_btn(hwnd):
-            if _excel_hwnd[0]:
-                return
-            try:
-                cls = win32gui.GetClassName(hwnd)
-                txt = win32gui.GetWindowText(hwnd)
-                if 'BUTTON' in cls.upper() and any(k in txt.lower() for k in EXCEL_CONTAINS):
-                    _excel_hwnd[0] = hwnd
-                    return
-            except Exception:
-                pass
-            # 자식도 재귀 탐색
-            try:
-                win32gui.EnumChildWindows(hwnd, lambda ch, _: _check_btn(ch), None)
-            except Exception:
-                pass
-
-        def _enum_top(hwnd, _):
-            if _excel_hwnd[0]:
-                return
-            try:
-                _, h_pid = win32process.GetWindowThreadProcessId(hwnd)
-                if h_pid != _pid:
-                    return
-                _check_btn(hwnd)
-                win32gui.EnumChildWindows(hwnd, lambda ch, _: _check_btn(ch), None)
-            except Exception:
-                pass
-
-        win32gui.EnumWindows(_enum_top, None)
-
-        if _excel_hwnd[0]:
-            btn_txt = win32gui.GetWindowText(_excel_hwnd[0])
-            win32gui.SendMessage(_excel_hwnd[0], win32con.BM_CLICK, 0, 0)
-            log(f"    Excel 버튼 클릭 (win32 PID전체탐색: '{btn_txt}')")
-            return True
-    except Exception as e:
-        log(f"    win32 PID전체탐색 실패: {e}")
-
     if _dump_controls:
-        log(f"    [진단] 발견된 컨트롤 목록 ({len(_dump_controls)}개, 최대 60개 출력):")
+        log(f"    [진단] UIA 컨트롤 목록 ({len(_dump_controls)}개, 최대 60개 출력):")
         for line in _dump_controls[:60]:
             log(f"      {line}")
     else:
