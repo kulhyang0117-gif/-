@@ -683,16 +683,17 @@ def _click_excel_btn(win, row_y=None):
             if _pnl_rect:
                 break
 
-        if _pnl_rect:
-            excel_x = _pnl_rect.left + _pnl_rect.width() // 2
-            excel_y = (_pnl_rect.top + _pnl_rect.bottom) // 2
-            log(f"    pnl_top_button Excel 클릭: ({excel_x}, {excel_y})  pnl={_pnl_rect}")
-        elif _src_rect:
+        log(f"    [좌표 진단] btn_src_hide={_src_rect}  pnl_top_button={_pnl_rect}")
+        if _src_rect:
             panel_right = _src_rect.left
             sh_cy = (_src_rect.top + _src_rect.bottom) // 2
             excel_x = int(panel_right * 0.62)
             excel_y = sh_cy + 26
-            log(f"    btn_src_hide 기준 Excel 클릭: ({excel_x}, {excel_y})")
+            log(f"    btn_src_hide 기준 Excel 클릭: ({excel_x}, {excel_y})  src={_src_rect}")
+        elif _pnl_rect:
+            excel_x = _pnl_rect.left + _pnl_rect.width() // 2
+            excel_y = (_pnl_rect.top + _pnl_rect.bottom) // 2
+            log(f"    pnl_top_button Excel 클릭: ({excel_x}, {excel_y})  pnl={_pnl_rect}")
         else:
             raise Exception("pnl_top_button/btn_src_hide 미발견")
 
