@@ -685,10 +685,9 @@ def _click_excel_btn(win, row_y=None):
 
         log(f"    [좌표 진단] btn_src_hide={_src_rect}  pnl_top_button={_pnl_rect}")
         if _src_rect:
-            panel_right = _src_rect.left
             sh_cy = (_src_rect.top + _src_rect.bottom) // 2
-            excel_x = int(panel_right * 0.62)
-            excel_y = sh_cy + 26
+            excel_x = _src_rect.right + 90
+            excel_y = sh_cy
             log(f"    btn_src_hide 기준 Excel 클릭: ({excel_x}, {excel_y})  src={_src_rect}")
         elif _pnl_rect:
             excel_x = _pnl_rect.left + _pnl_rect.width() // 2
@@ -934,26 +933,31 @@ def _download_by_keyboard(win):
 
     win.set_focus(); time.sleep(0.3)
 
-    # ── UIA 'row N' 요소 직접 수집 (C1TrueDBGrid 행 노출) ───────────────────
+    # ── UIA 'row N' 요소 직접 수집 (C1TrueDBGrid 행 노출, 최대 3회 재시도) ──
     _uia_rows = {}   # {row_idx: elem}
-    try:
-        from pywinauto import Application as _UA
-        _ua = _UA(backend='uia').connect(process=win.process_id(), timeout=5)
-        for _uw in _ua.windows():
-            try:
-                for _elem in _uw.descendants(control_type='Custom'):
-                    try:
-                        _name = (_elem.element_info.name or '')
-                        if _name.startswith('row ') and _name[4:].isdigit():
-                            _idx = int(_name[4:])
-                            if _idx not in _uia_rows:   # 첫 번째 발견만 사용
-                                _uia_rows[_idx] = _elem
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-    except Exception as _e:
-        log(f"  UIA row 수집 실패: {_e}")
+    for _attempt in range(3):
+        try:
+            from pywinauto import Application as _UA
+            _ua = _UA(backend='uia').connect(process=win.process_id(), timeout=5)
+            for _uw in _ua.windows():
+                try:
+                    for _elem in _uw.descendants(control_type='Custom'):
+                        try:
+                            _name = (_elem.element_info.name or '')
+                            if _name.startswith('row ') and _name[4:].isdigit():
+                                _idx = int(_name[4:])
+                                if _idx not in _uia_rows:
+                                    _uia_rows[_idx] = _elem
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+        except Exception as _e:
+            log(f"  UIA row 수집 실패 (시도 {_attempt+1}): {_e}")
+        if _uia_rows:
+            break
+        log(f"  UIA row 미발견 — 1초 대기 후 재시도 ({_attempt+1}/3)...")
+        time.sleep(1)
 
     downloaded = []
 
