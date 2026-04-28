@@ -39,6 +39,9 @@ STEP_DELAY   = 1.0
 LOAD_DELAY   = 4.0
 EXCEL_DELAY  = 5.0
 
+# 첫 저장 시 폴더 클리어 여부 (세션당 1회만)
+_kitting_folder_cleared = False
+
 # ──────────────────────────────────────────────────────────────────────────────
 # 유틸
 # ──────────────────────────────────────────────────────────────────────────────
@@ -685,6 +688,8 @@ def _click_excel_btn(win, row_y=None):
 
         log(f"    [좌표 진단] btn_src_hide={_src_rect}  pnl_top_button={_pnl_rect}")
         if _src_rect:
+            # btn_src_hide 기준: Excel 버튼은 btn_src_hide 오른쪽 그리드 툴바에 위치
+            # right+90 = 2번째 버튼(Excel) 중앙 추정, Y = 동일 행
             sh_cy = (_src_rect.top + _src_rect.bottom) // 2
             excel_x = _src_rect.right + 90
             excel_y = sh_cy
@@ -1014,9 +1019,9 @@ def _download_by_keyboard(win):
 
     try:
         _wrect = win.rectangle()
-        _row_y = _wrect.top + 205
+        _row_y = _wrect.top + 183
     except Exception:
-        _row_y = 205
+        _row_y = 183
     pyautogui.click(ROW_X, _row_y)
     log(f"  첫 번째 행 좌표 클릭: ({ROW_X}, {_row_y})")
     time.sleep(0.5)
@@ -1071,39 +1076,78 @@ def _download_by_keyboard(win):
 
 
 def _handle_save_dialog(save_path):
-    """Windows 저장 다이얼로그 자동 처리"""
-    import pyautogui
-    from pywinauto import Desktop
+    """Windows 저장 다이얼로그 자동 처리 — win32gui 탐지"""
+    import pyautogui, pyperclip
+    import win32gui, win32con
+    global _kitting_folder_cleared
 
-    desktop = Desktop(backend='uia')
+    target_dir = str(Path(save_path).parent)
+
+    # 첫 저장 전 폴더 기존 파일 전체 삭제 (세션당 1회)
+    if not _kitting_folder_cleared:
+        _dir = Path(target_dir)
+        for _f in list(_dir.glob("*.xlsx")) + list(_dir.glob("*.xls")):
+            try:
+                _f.unlink()
+            except Exception:
+                pass
+        _kitting_folder_cleared = True
+        log("    kitting 자재 폴더 기존 파일 삭제 완료")
+
+    _SAVE_KEYS = ['저장', 'Save As', '다른 이름', 'xlsx', 'xls']
+
+    def _find_save_hwnd():
+        found = []
+        def _cb(hwnd, _):
+            if win32gui.IsWindowVisible(hwnd):
+                t = win32gui.GetWindowText(hwnd)
+                if any(k in t for k in _SAVE_KEYS):
+                    found.append(hwnd)
+            return True
+        win32gui.EnumWindows(_cb, None)
+        return found[0] if found else None
+
+    # 다이얼로그 탐지 대기 (최대 10초)
+    dlg_hwnd = None
     for _ in range(20):
-        try:
-            dlg = desktop.window(title_re=".*(저장|Save As|다른 이름).*")
-            if dlg.exists(timeout=0.5):
-                dlg.set_focus()
-                time.sleep(0.3)
-                try:
-                    fn_edit = dlg.child_window(control_type="Edit", found_index=0)
-                    fn_edit.set_edit_text(save_path)
-                except Exception:
-                    pyautogui.hotkey('ctrl', 'a')
-                    time.sleep(0.1)
-                    pyautogui.write(save_path, interval=0.02)
-                time.sleep(0.3)
-                pyautogui.press('enter')
-                time.sleep(1.5)
-                # 덮어쓰기 확인
-                try:
-                    conf = desktop.window(title_re=".*(덮어|overwrite|Confirm).*")
-                    if conf.exists(timeout=1):
-                        pyautogui.press('enter')
-                except Exception:
-                    pass
-                return True
-        except Exception:
-            pass
+        dlg_hwnd = _find_save_hwnd()
+        if dlg_hwnd:
+            break
         time.sleep(0.5)
-    return False
+
+    if not dlg_hwnd:
+        log("    저장 다이얼로그 미감지 (win32gui)")
+        return False
+
+    log(f"    저장 다이얼로그 감지: '{win32gui.GetWindowText(dlg_hwnd)}'")
+
+    try:
+        # 포커스 이동
+        win32gui.ShowWindow(dlg_hwnd, win32con.SW_RESTORE)
+        win32gui.SetForegroundWindow(dlg_hwnd)
+        time.sleep(0.4)
+
+        # 파일명 입력란에 전체 경로 붙여넣기
+        pyautogui.hotkey('ctrl', 'a')
+        time.sleep(0.1)
+        pyperclip.copy(save_path)
+        pyautogui.hotkey('ctrl', 'v')
+        time.sleep(0.3)
+        pyautogui.press('enter')
+        time.sleep(1.5)
+
+        # 덮어쓰기 확인 팝업 (win32gui로 탐지)
+        conf_hwnd = _find_save_hwnd()
+        if conf_hwnd and conf_hwnd != dlg_hwnd:
+            win32gui.SetForegroundWindow(conf_hwnd)
+            time.sleep(0.2)
+            pyautogui.press('enter')
+
+        return True
+
+    except Exception as e:
+        log(f"    저장 다이얼로그 처리 오류: {e}")
+        return False
 
 
 def _find_latest_download():

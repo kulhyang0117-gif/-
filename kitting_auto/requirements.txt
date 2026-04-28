@@ -1,7 +1,0 @@
-pywinauto
-pyautogui
-pillow
-playwright
-psutil
-keyboard
-comtypes
