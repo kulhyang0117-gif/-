@@ -1,3 +1,3 @@
 {
-  "rewrites": [{ "source": "/(.*)", "destination": "/material-shortage-app/index.html" }]
+  "rewrites": [{ "source": "/(.*)", "destination": "/material-shortage-app/조립팀자재현황.html" }]
 }
