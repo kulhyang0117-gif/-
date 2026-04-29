@@ -359,21 +359,18 @@
   /* ── 준비작업 관리 뷰 ── */
   #view-prep { display:none; padding:20px 24px; overflow-y:auto; flex:1; }
   body[data-view=prep] #view-prep { display:block; }
-  /* 키팅 자동화 PC 뷰 */
-  #view-kitting-pc { display:none; padding:36px 48px; flex:1; background:#f8fafc; overflow-y:auto; min-height:calc(100vh - 56px); }
-  body[data-view=kitting-pc] #view-kitting-pc { display:block; }
-  /* 사이드바 그룹 */
-  .side-group-header { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; transition:background 0.15s; border-left:3px solid transparent; }
-  .side-group-header:hover { background:rgba(255,255,255,0.07); }
-  .side-group-arrow { margin-left:auto; font-size:11px; color:#64748b; transition:transform 0.2s; flex-shrink:0; }
-  .side-group-header.open .side-group-arrow { transform:rotate(180deg); }
-  .side-group-children { overflow:hidden; max-height:0; transition:max-height 0.25s ease; }
-  .side-group-children.open { max-height:200px; }
-  .side-sub-item { display:flex; align-items:center; gap:10px; padding:9px 14px 9px 28px; cursor:pointer; transition:background 0.15s; border-left:3px solid transparent; }
-  .side-sub-item:hover { background:rgba(255,255,255,0.07); }
-  .side-sub-item.active { background:rgba(56,189,248,0.1); border-left-color:#38bdf8; }
-  .side-sub-item .side-item-label { font-size:11px; font-weight:600; color:#94a3b8; }
-  .side-sub-item.active .side-item-label { color:#e2e8f0; }
+  /* 키팅 자동화 뷰 */
+  #view-kitting { display:none; padding:32px 40px; flex:1; background:#f8fafc; overflow-y:auto; min-height:calc(100vh - 56px); }
+  body[data-view=kitting] #view-kitting { display:block; }
+  .kit-view-cards { display:flex; gap:16px; margin-bottom:28px; max-width:520px; }
+  .kit-view-card { flex:1; background:white; border-radius:12px; padding:24px 20px; text-align:center; cursor:pointer; border:2px solid #e5e7eb; transition:all 0.18s; box-shadow:0 1px 4px rgba(0,0,0,0.07); }
+  .kit-view-card:hover { border-color:#8e44ad; background:#faf5ff; }
+  .kit-view-card.active { border-color:#8e44ad; background:#faf5ff; box-shadow:0 2px 12px rgba(142,68,173,0.15); }
+  .kit-view-card-icon { font-size:32px; margin-bottom:10px; }
+  .kit-view-card-label { font-size:14px; font-weight:700; color:#1e3a5f; margin-bottom:4px; }
+  .kit-view-card-desc { font-size:11px; color:#9ca3af; }
+  .kit-view-card.active .kit-view-card-label { color:#6c3483; }
+  .kit-view-panel { max-width:620px; }
   .prep-tab-bar { background:#163050; display:flex; gap:2px; padding:0 0 0 0; margin-bottom:16px; border-radius:8px 8px 0 0; overflow:hidden; }
   .prep-tab-btn { padding:10px 20px; color:rgba(255,255,255,0.6); font-size:13px; font-weight:600; cursor:pointer; border:none; background:none; border-bottom:3px solid transparent; transition:all 0.2s; }
   .prep-tab-btn:hover { color:white; }
@@ -765,22 +762,9 @@
       <span class="side-item-icon">📂</span>
       <span class="side-item-label">파일 업로드</span>
     </div>
-    <div class="side-group" id="side-group-kitting">
-      <div class="side-group-header" id="snav-kitting" onclick="toggleSideGroup('kitting')">
-        <span class="side-item-icon">🤖</span>
-        <span class="side-item-label" style="font-size:12px;font-weight:600;color:#cbd5e1;">키팅 자동화</span>
-        <span class="side-group-arrow">▾</span>
-      </div>
-      <div class="side-group-children" id="side-group-children-kitting">
-        <div class="side-sub-item" id="snav-kitting-pc" onclick="switchView('kitting-pc')">
-          <span class="side-item-icon" style="font-size:15px;">💻</span>
-          <span class="side-item-label">타 PC 자동화</span>
-        </div>
-        <div class="side-sub-item" id="snav-kitting-settings" onclick="openAppSettings()">
-          <span class="side-item-icon" style="font-size:15px;">⚙️</span>
-          <span class="side-item-label">설정</span>
-        </div>
-      </div>
+    <div class="side-item" id="snav-kitting" onclick="switchView('kitting')">
+      <span class="side-item-icon">🤖</span>
+      <span class="side-item-label">키팅 자동화</span>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 12px;flex-shrink:0;margin-top:auto;"></div>
     <div class="side-item" id="snav-manual" onclick="switchView('manual')">
@@ -1488,12 +1472,28 @@
   <div style="font-size:13px; color:#9ca3af;">해당 기능은 곧 추가될 예정입니다.</div>
 </div>
 
-<!-- ── 키팅 자동화 (타 PC) 뷰 ── -->
-<div id="view-kitting-pc">
-  <div style="max-width:600px;">
-    <h2 style="font-size:20px;font-weight:800;color:#1e3a5f;margin-bottom:6px;">🤖 sMES 키팅 자동화</h2>
-    <div style="font-size:12px;color:#888;margin-bottom:28px;">타 PC의 sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다.</div>
-    <div style="background:white;border-radius:12px;padding:28px 32px;box-shadow:0 1px 6px rgba(0,0,0,0.08);margin-bottom:20px;">
+<!-- ── 키팅 자동화 뷰 ── -->
+<div id="view-kitting">
+  <h2 style="font-size:20px;font-weight:800;color:#1e3a5f;margin-bottom:24px;">🤖 키팅 자동화</h2>
+
+  <!-- 카드 선택 -->
+  <div class="kit-view-cards">
+    <div class="kit-view-card active" id="kit-tab-btn-pc" onclick="switchKitTab('pc')">
+      <div class="kit-view-card-icon">💻</div>
+      <div class="kit-view-card-label">타 PC 자동화</div>
+      <div class="kit-view-card-desc">sMES 키팅 자동화 실행</div>
+    </div>
+    <div class="kit-view-card" id="kit-tab-btn-settings" onclick="switchKitTab('settings')">
+      <div class="kit-view-card-icon">⚙️</div>
+      <div class="kit-view-card-label">설정</div>
+      <div class="kit-view-card-desc">경로 및 좌표 설정</div>
+    </div>
+  </div>
+
+  <!-- 타 PC 자동화 패널 -->
+  <div class="kit-view-panel" id="kit-tab-pc">
+    <div style="background:white;border-radius:12px;padding:28px 32px;box-shadow:0 1px 6px rgba(0,0,0,0.08);">
+      <div style="font-size:13px;color:#666;margin-bottom:18px;">타 PC의 sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다.</div>
       <div class="auto-kit-step"><span class="num">1</span><span>sMES 실행 → 로그인 (SSAT045)</span></div>
       <div class="auto-kit-step"><span class="num">2</span><span>생산관리 → 조립 자재 kitting → 오늘 날짜 조회</span></div>
       <div class="auto-kit-step"><span class="num">3</span><span>품목 전체 선택 후 Excel 다운로드 반복</span></div>
@@ -1503,6 +1503,67 @@
       <div class="auto-kit-btns" style="margin-top:20px;">
         <button class="btn-start-auto" onclick="startAutoKit()">▶ 자동화 시작</button>
         <button class="btn-setup" onclick="downloadSetupBat()">⚙️ 최초 설정</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 설정 패널 -->
+  <div class="kit-view-panel" id="kit-tab-settings" style="display:none;">
+    <div style="background:white;border-radius:12px;padding:28px 32px;box-shadow:0 1px 6px rgba(0,0,0,0.08);">
+
+      <!-- 경로 설정 -->
+      <div style="font-size:12px;font-weight:700;color:#1e3a5f;margin-bottom:14px;display:flex;align-items:center;gap:6px;">📁 경로 설정</div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">🌐 sMES 시스템 경로</label>
+        <input type="text" id="kit-cfg-mes-url" placeholder="http://smes.company.com 또는 C:\경로\sMES.exe" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">setup_url_protocol.bat 경로</label>
+        <input type="text" id="kit-cfg-kit-path" placeholder="C:\경로\kitting_auto\setup_url_protocol.bat" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">📁 kitting 자재 폴더</label>
+        <input type="text" id="kit-cfg-download-dir" placeholder="C:\...\kitting 자재" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:10px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">📁 전일키팅 폴더</label>
+        <input type="text" id="kit-cfg-prev-kit-dir" placeholder="C:\...\전일키팅" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:20px;">
+        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">📁 재고현황 폴더</label>
+        <input type="text" id="kit-cfg-inv-dir" placeholder="C:\...\재고현황" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+      </div>
+
+      <!-- 좌표 설정 -->
+      <div style="font-size:12px;font-weight:700;color:#1e3a5f;margin-bottom:6px;display:flex;align-items:center;gap:6px;">🎯 자동화 좌표 설정</div>
+      <div style="font-size:11px;color:#9ca3af;margin-bottom:14px;">PC마다 해상도가 달라 좌표가 다를 수 있습니다. 비워두면 기본값 사용.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">Excel 버튼 X 좌표</label>
+          <input type="number" id="kit-cfg-excel-x" placeholder="308 (기본값)" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">Excel 버튼 Y 좌표</label>
+          <input type="number" id="kit-cfg-excel-y" placeholder="533 (기본값)" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">생산관리 메뉴 X 오프셋</label>
+          <input type="number" id="kit-cfg-menu-offset" placeholder="230 (기본값)" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">첫 행 Y 오프셋</label>
+          <input type="number" id="kit-cfg-row-y" placeholder="183 (기본값)" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:3px;">행 높이 (px)</label>
+          <input type="number" id="kit-cfg-row-height" placeholder="33 (기본값)" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;box-sizing:border-box;">
+        </div>
+      </div>
+
+      <!-- 버튼 -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button onclick="saveKitInlineSettings()" style="flex:1;padding:10px;background:#1e3a5f;color:white;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">💾 저장</button>
+        <button onclick="downloadKittingConfigInline()" style="padding:10px 16px;background:#8e44ad;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">⬇️ kitting_config.json</button>
       </div>
     </div>
   </div>
@@ -5768,18 +5829,10 @@ function kbUpdateNow() {
 // ── 사이드바 뷰 전환 ──────────────────────────────
 function switchView(v) {
   document.body.setAttribute('data-view', v);
-  ['manual','kb','material','pkg','prep','insp','upload','kitting-pc'].forEach(id => {
+  ['manual','kb','material','pkg','prep','insp','upload','kitting'].forEach(id => {
     const el = document.getElementById('snav-'+id);
     if (el) el.classList.toggle('active', id === v);
   });
-  const kittingPcEl = document.getElementById('snav-kitting-pc');
-  if (kittingPcEl) kittingPcEl.classList.toggle('active', v === 'kitting-pc');
-  if (v === 'kitting-pc') {
-    const children = document.getElementById('side-group-children-kitting');
-    const header = document.getElementById('snav-kitting');
-    if (children) children.classList.add('open');
-    if (header) header.classList.add('open');
-  }
   const coming = document.getElementById('view-coming');
   if (coming) coming.style.display = 'none';
   if (v === 'prep') prepInitView();
@@ -5806,13 +5859,63 @@ function switchView(v) {
   window.scrollTo({ top: 0 });
 }
 
-function toggleSideGroup(name) {
-  const header = document.getElementById('snav-' + name);
-  const children = document.getElementById('side-group-children-' + name);
-  if (!header || !children) return;
-  const isOpen = children.classList.contains('open');
-  children.classList.toggle('open', !isOpen);
-  header.classList.toggle('open', !isOpen);
+function switchKitTab(tab) {
+  ['pc','settings'].forEach(t => {
+    document.getElementById('kit-tab-' + t).style.display = (t === tab) ? 'block' : 'none';
+    document.getElementById('kit-tab-btn-' + t).classList.toggle('active', t === tab);
+  });
+  if (tab === 'settings') loadKitInlineSettings();
+}
+
+function loadKitInlineSettings() {
+  document.getElementById('kit-cfg-mes-url').value      = localStorage.getItem('ms_cfg_mes_url')      || '';
+  document.getElementById('kit-cfg-kit-path').value     = localStorage.getItem('ms_cfg_kit_path')     || '';
+  document.getElementById('kit-cfg-download-dir').value = localStorage.getItem('ms_cfg_download_dir') || '';
+  document.getElementById('kit-cfg-prev-kit-dir').value = localStorage.getItem('ms_cfg_prev_kit_dir') || '';
+  document.getElementById('kit-cfg-inv-dir').value      = localStorage.getItem('ms_cfg_inv_dir')      || '';
+  document.getElementById('kit-cfg-excel-x').value      = localStorage.getItem('ms_cfg_coord_excel_x')      || '';
+  document.getElementById('kit-cfg-excel-y').value      = localStorage.getItem('ms_cfg_coord_excel_y')      || '';
+  document.getElementById('kit-cfg-menu-offset').value  = localStorage.getItem('ms_cfg_coord_menu_offset')  || '';
+  document.getElementById('kit-cfg-row-y').value        = localStorage.getItem('ms_cfg_coord_row_y')        || '';
+  document.getElementById('kit-cfg-row-height').value   = localStorage.getItem('ms_cfg_coord_row_height')   || '';
+}
+
+function saveKitInlineSettings() {
+  const fields = {
+    ms_cfg_mes_url:           document.getElementById('kit-cfg-mes-url').value.trim(),
+    ms_cfg_kit_path:          document.getElementById('kit-cfg-kit-path').value.trim(),
+    ms_cfg_download_dir:      document.getElementById('kit-cfg-download-dir').value.trim(),
+    ms_cfg_prev_kit_dir:      document.getElementById('kit-cfg-prev-kit-dir').value.trim(),
+    ms_cfg_inv_dir:           document.getElementById('kit-cfg-inv-dir').value.trim(),
+    ms_cfg_coord_excel_x:     document.getElementById('kit-cfg-excel-x').value.trim(),
+    ms_cfg_coord_excel_y:     document.getElementById('kit-cfg-excel-y').value.trim(),
+    ms_cfg_coord_menu_offset: document.getElementById('kit-cfg-menu-offset').value.trim(),
+    ms_cfg_coord_row_y:       document.getElementById('kit-cfg-row-y').value.trim(),
+    ms_cfg_coord_row_height:  document.getElementById('kit-cfg-row-height').value.trim(),
+  };
+  Object.entries(fields).forEach(([k, v]) => {
+    if (v) localStorage.setItem(k, v);
+    else   localStorage.removeItem(k);
+  });
+  const btn = event.target;
+  btn.textContent = '✅ 저장됨';
+  setTimeout(() => { btn.textContent = '💾 저장'; }, 1500);
+}
+
+function downloadKittingConfigInline() {
+  const cfg = {
+    excel_btn_x:   parseInt(document.getElementById('kit-cfg-excel-x').value)     || 308,
+    excel_btn_y:   parseInt(document.getElementById('kit-cfg-excel-y').value)     || 533,
+    menu_x_offset: parseInt(document.getElementById('kit-cfg-menu-offset').value) || 230,
+    row_y_offset:  parseInt(document.getElementById('kit-cfg-row-y').value)       || 183,
+    row_height:    parseInt(document.getElementById('kit-cfg-row-height').value)  || 33,
+  };
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'kitting_config.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function openKittingBoard() {
