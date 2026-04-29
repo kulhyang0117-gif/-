@@ -1526,6 +1526,34 @@
         <button class="btn-setup" onclick="downloadSetupBat()">⚙️ 최초 설정</button>
       </div>
     </div>
+
+    <!-- 로그 뷰어 -->
+    <div style="background:white;border-radius:12px;padding:24px 32px;box-shadow:0 1px 6px rgba(0,0,0,0.08);margin-top:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:13px;font-weight:700;color:#1e3a5f;">📄 타 PC 로그 뷰어</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <label id="kit-log-file-label" style="padding:7px 14px;background:#f0f2f5;border:1px solid #ddd;border-radius:6px;font-size:12px;font-weight:600;color:#444;cursor:pointer;white-space:nowrap;">
+            📂 로그 파일 열기
+            <input type="file" accept=".txt,.log" style="display:none;" onchange="loadKitLog(this)">
+          </label>
+          <button onclick="clearKitLog()" style="padding:7px 12px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#888;cursor:pointer;">✕ 닫기</button>
+        </div>
+      </div>
+      <div id="kit-log-empty" style="text-align:center;padding:28px 0;color:#bbb;font-size:12px;">
+        타 PC의 <b>kitting_log.txt</b> 파일을 선택하면 여기에 표시됩니다.
+      </div>
+      <div id="kit-log-viewer" style="display:none;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap;">
+          <span id="kit-log-filename" style="font-size:11px;color:#888;"></span>
+          <input type="text" id="kit-log-search" placeholder="🔍 검색..." oninput="filterKitLog()" style="border:1px solid #ddd;border-radius:5px;padding:4px 10px;font-size:12px;width:180px;outline:none;">
+          <span id="kit-log-match-count" style="font-size:11px;color:#8e44ad;font-weight:600;"></span>
+          <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#555;cursor:pointer;">
+            <input type="checkbox" id="kit-log-error-only" onchange="filterKitLog()"> 오류만 보기
+          </label>
+        </div>
+        <div id="kit-log-content" style="background:#1e2332;color:#c8d0e0;border-radius:8px;padding:16px;font-family:monospace;font-size:11.5px;line-height:1.7;max-height:480px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;"></div>
+      </div>
+    </div>
   </div>
 
   <!-- 긴급정지 패널 -->
@@ -6851,6 +6879,62 @@ function openKbDetail(row, entry, line, startMin, endMin, blockParts) {
 
   panel.style.display = 'block';
   panel.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+// ── 타 PC 로그 뷰어 ──────────────────────────────
+let _kitLogLines = [];
+
+function loadKitLog(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    _kitLogLines = e.target.result.split('\n');
+    document.getElementById('kit-log-filename').textContent = file.name;
+    document.getElementById('kit-log-empty').style.display = 'none';
+    document.getElementById('kit-log-viewer').style.display = 'block';
+    document.getElementById('kit-log-search').value = '';
+    document.getElementById('kit-log-error-only').checked = false;
+    filterKitLog();
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function filterKitLog() {
+  const query = (document.getElementById('kit-log-search').value || '').toLowerCase();
+  const errOnly = document.getElementById('kit-log-error-only').checked;
+  const filtered = _kitLogLines.filter(line => {
+    if (errOnly && !/error|fail|실패|오류|traceback|exception/i.test(line)) return false;
+    if (query && !line.toLowerCase().includes(query)) return false;
+    return true;
+  });
+  document.getElementById('kit-log-match-count').textContent =
+    query || errOnly ? `${filtered.length}줄 매칭` : `전체 ${_kitLogLines.length}줄`;
+  const content = document.getElementById('kit-log-content');
+  content.innerHTML = filtered.map(line => {
+    const escaped = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    let color = '#c8d0e0';
+    if (/error|fail|실패|오류|traceback|exception/i.test(line)) color = '#ff7675';
+    else if (/warn|경고/i.test(line)) color = '#fdcb6e';
+    else if (/\[완료\]|success|✅|done/i.test(line)) color = '#55efc4';
+    else if (/^\[|^\d{4}-\d{2}-\d{2}/.test(line)) color = '#74b9ff';
+    return `<span style="color:${color}">${escaped}</span>`;
+  }).join('\n');
+  content.scrollTop = content.scrollHeight;
+}
+
+function clearKitLog() {
+  _kitLogLines = [];
+  document.getElementById('kit-log-empty').style.display = 'block';
+  document.getElementById('kit-log-viewer').style.display = 'none';
+  document.getElementById('kit-log-filename').textContent = '';
+  document.getElementById('kit-log-content').innerHTML = '';
+  // 파일 input 초기화
+  const label = document.getElementById('kit-log-file-label');
+  if (label) {
+    const inp = label.querySelector('input[type=file]');
+    if (inp) inp.value = '';
+  }
 }
 
 function downloadSetupBat() {
