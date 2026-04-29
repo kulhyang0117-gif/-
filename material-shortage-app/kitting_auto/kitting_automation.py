@@ -39,6 +39,24 @@ STEP_DELAY   = 1.0
 LOAD_DELAY   = 4.0
 EXCEL_DELAY  = 5.0
 
+# ── 외부 좌표 설정 파일 (kitting_config.json) ─────────────────────────────
+# 앱 설정 > 자동화 좌표 설정 > "kitting_config.json 저장" 버튼으로 생성
+import json as _json
+_CFG_FILE = _HERE / "kitting_config.json"
+_ext_cfg  = {}
+if _CFG_FILE.exists():
+    try:
+        _ext_cfg = _json.loads(_CFG_FILE.read_text(encoding='utf-8'))
+        print(f"[설정] kitting_config.json 로드: {_ext_cfg}")
+    except Exception as _e:
+        print(f"[설정] kitting_config.json 읽기 실패: {_e}")
+
+COORD_EXCEL_X      = int(_ext_cfg.get('excel_btn_x',   308))
+COORD_EXCEL_Y      = int(_ext_cfg.get('excel_btn_y',   533))
+COORD_MENU_OFFSET  = int(_ext_cfg.get('menu_x_offset', 230))
+COORD_ROW_Y_OFFSET = int(_ext_cfg.get('row_y_offset',  183))
+COORD_ROW_HEIGHT   = int(_ext_cfg.get('row_height',     33))
+
 # 첫 저장 시 폴더 클리어 여부 (세션당 1회만)
 _kitting_folder_cleared = False
 
@@ -460,7 +478,7 @@ def navigate_and_download(app):
             rect = main_win.rectangle()
             # 최대화 창은 rect.top이 -8 정도로 음수 → max()로 보정
             menu_y = max(rect.top + 50, 42)
-            menu_x = rect.left + 230   # System+기본정보관리+영업관리 이후 위치
+            menu_x = rect.left + COORD_MENU_OFFSET   # System+기본정보관리+영업관리 이후 위치
             pyautogui.click(menu_x, menu_y)
             clicked = True
             log(f"  ✅ 좌표 클릭 성공: ({menu_x}, {menu_y})")
@@ -661,9 +679,9 @@ def _click_excel_btn(win, row_y=None):
     import pyautogui, win32gui
     EXCEL_CONTAINS = ['excel', '엑셀', 'xls', 'export', '다운로드']
 
-    # 0) Excel 버튼 절대 좌표 클릭 (실측값: 308, 533)
-    pyautogui.click(308, 533)
-    log("    Excel 버튼 좌표 클릭: (308, 533)")
+    # 0) Excel 버튼 절대 좌표 클릭 (kitting_config.json 또는 기본값)
+    pyautogui.click(COORD_EXCEL_X, COORD_EXCEL_Y)
+    log(f"    Excel 버튼 좌표 클릭: ({COORD_EXCEL_X}, {COORD_EXCEL_Y})")
     return True
 
     # 1) win32 backend
@@ -967,13 +985,13 @@ def _download_by_keyboard(win):
         ROW_X = _wrect.left + int((_wrect.right - _wrect.left) * 0.35)
     except Exception:
         ROW_X = 800
-    ROW_HEIGHT = 33  # 2560x1600 스크린 실측값
+    ROW_HEIGHT = COORD_ROW_HEIGHT  # kitting_config.json 또는 기본값(33, 2560x1600 기준)
 
     try:
         _wrect = win.rectangle()
-        _row_y = _wrect.top + 183
+        _row_y = _wrect.top + COORD_ROW_Y_OFFSET
     except Exception:
-        _row_y = 183
+        _row_y = COORD_ROW_Y_OFFSET
     pyautogui.click(ROW_X, _row_y)
     log(f"  첫 번째 행 좌표 클릭: ({ROW_X}, {_row_y})")
     time.sleep(0.5)

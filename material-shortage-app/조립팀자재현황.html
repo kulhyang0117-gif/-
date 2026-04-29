@@ -868,6 +868,38 @@
       </div>
     </div>
 
+    <div class="cfg-section">
+      <div class="cfg-section-title">🎯 자동화 좌표 설정 <span style="font-size:10px;font-weight:400;color:#9ca3af;">(PC마다 해상도가 달라 좌표가 다를 수 있습니다)</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="cfg-field">
+          <label>Excel 버튼 X 좌표</label>
+          <input type="number" id="cfg-coord-excel-x" placeholder="308" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;">
+          <div class="cfg-hint">기본값: 308</div>
+        </div>
+        <div class="cfg-field">
+          <label>Excel 버튼 Y 좌표</label>
+          <input type="number" id="cfg-coord-excel-y" placeholder="533" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;">
+          <div class="cfg-hint">기본값: 533</div>
+        </div>
+        <div class="cfg-field">
+          <label>생산관리 메뉴 X 오프셋</label>
+          <input type="number" id="cfg-coord-menu-offset" placeholder="230" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;">
+          <div class="cfg-hint">창 왼쪽 기준 오프셋. 기본값: 230</div>
+        </div>
+        <div class="cfg-field">
+          <label>첫 번째 행 Y 오프셋</label>
+          <input type="number" id="cfg-coord-row-y" placeholder="183" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;">
+          <div class="cfg-hint">창 상단 기준 오프셋. 기본값: 183</div>
+        </div>
+        <div class="cfg-field">
+          <label>행 높이 (px)</label>
+          <input type="number" id="cfg-coord-row-height" placeholder="33" style="width:100%;border:1px solid #ddd;border-radius:6px;padding:8px 10px;font-size:12px;outline:none;">
+          <div class="cfg-hint">기본값: 33 (2560×1600 기준)</div>
+        </div>
+      </div>
+      <button onclick="downloadKittingConfig()" style="margin-top:12px;padding:8px 16px;background:#8e44ad;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">⬇️ kitting_config.json 저장 (kitting_auto 폴더에 넣기)</button>
+    </div>
+
     <div class="cfg-btns">
       <button class="btn-cfg-save" onclick="saveAppSettings()">💾 저장 후 새로고침</button>
       <button class="btn-cfg-reset" onclick="resetAppSettings()">초기화</button>
@@ -6668,6 +6700,11 @@ function openAppSettings() {
   document.getElementById('cfg-download-dir').value = localStorage.getItem('ms_cfg_download_dir') || '';
   document.getElementById('cfg-prev-kit-dir').value = localStorage.getItem('ms_cfg_prev_kit_dir') || '';
   document.getElementById('cfg-inv-dir').value      = localStorage.getItem('ms_cfg_inv_dir')      || '';
+  document.getElementById('cfg-coord-excel-x').value      = localStorage.getItem('ms_cfg_coord_excel_x')      || '';
+  document.getElementById('cfg-coord-excel-y').value      = localStorage.getItem('ms_cfg_coord_excel_y')      || '';
+  document.getElementById('cfg-coord-menu-offset').value  = localStorage.getItem('ms_cfg_coord_menu_offset')  || '';
+  document.getElementById('cfg-coord-row-y').value        = localStorage.getItem('ms_cfg_coord_row_y')        || '';
+  document.getElementById('cfg-coord-row-height').value   = localStorage.getItem('ms_cfg_coord_row_height')   || '';
   overlay.classList.add('open');
 }
 
@@ -6702,19 +6739,53 @@ function saveAppSettings() {
   if (invDir)      localStorage.setItem('ms_cfg_inv_dir', invDir);
   else             localStorage.removeItem('ms_cfg_inv_dir');
 
+  const coordExcelX     = document.getElementById('cfg-coord-excel-x').value.trim();
+  const coordExcelY     = document.getElementById('cfg-coord-excel-y').value.trim();
+  const coordMenuOffset = document.getElementById('cfg-coord-menu-offset').value.trim();
+  const coordRowY       = document.getElementById('cfg-coord-row-y').value.trim();
+  const coordRowHeight  = document.getElementById('cfg-coord-row-height').value.trim();
+  if (coordExcelX)     localStorage.setItem('ms_cfg_coord_excel_x', coordExcelX);
+  else                 localStorage.removeItem('ms_cfg_coord_excel_x');
+  if (coordExcelY)     localStorage.setItem('ms_cfg_coord_excel_y', coordExcelY);
+  else                 localStorage.removeItem('ms_cfg_coord_excel_y');
+  if (coordMenuOffset) localStorage.setItem('ms_cfg_coord_menu_offset', coordMenuOffset);
+  else                 localStorage.removeItem('ms_cfg_coord_menu_offset');
+  if (coordRowY)       localStorage.setItem('ms_cfg_coord_row_y', coordRowY);
+  else                 localStorage.removeItem('ms_cfg_coord_row_y');
+  if (coordRowHeight)  localStorage.setItem('ms_cfg_coord_row_height', coordRowHeight);
+  else                 localStorage.removeItem('ms_cfg_coord_row_height');
+
   location.reload();
 }
 
 function resetAppSettings() {
   if (!confirm('모든 설정을 기본값으로 초기화하시겠습니까?')) return;
   ['ms_cfg_sb_url','ms_cfg_sb_key','ms_cfg_admin_email','ms_cfg_mes_url','ms_cfg_kit_path',
-   'ms_cfg_download_dir','ms_cfg_prev_kit_dir','ms_cfg_inv_dir'].forEach(k => localStorage.removeItem(k));
+   'ms_cfg_download_dir','ms_cfg_prev_kit_dir','ms_cfg_inv_dir',
+   'ms_cfg_coord_excel_x','ms_cfg_coord_excel_y','ms_cfg_coord_menu_offset',
+   'ms_cfg_coord_row_y','ms_cfg_coord_row_height'].forEach(k => localStorage.removeItem(k));
   location.reload();
 }
 
 document.getElementById('app-settings-overlay')?.addEventListener('click', function(e) {
   if (e.target === this) closeAppSettings();
 });
+
+function downloadKittingConfig() {
+  const cfg = {
+    excel_btn_x:     parseInt(document.getElementById('cfg-coord-excel-x').value)      || 308,
+    excel_btn_y:     parseInt(document.getElementById('cfg-coord-excel-y').value)      || 533,
+    menu_x_offset:   parseInt(document.getElementById('cfg-coord-menu-offset').value)  || 230,
+    row_y_offset:    parseInt(document.getElementById('cfg-coord-row-y').value)        || 183,
+    row_height:      parseInt(document.getElementById('cfg-coord-row-height').value)   || 33
+  };
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'kitting_config.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
 
 // ══════════════════════════════════════════════════════════════
 // ── 준비작업 관리 ─────────────────────────────────────────────
