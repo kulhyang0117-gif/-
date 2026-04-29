@@ -764,7 +764,7 @@
     </div>
     <div class="side-item" id="snav-kitting" onclick="switchView('kitting')">
       <span class="side-item-icon">🤖</span>
-      <span class="side-item-label">키팅 자동화</span>
+      <span class="side-item-label">업로드 자동화</span>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 12px;flex-shrink:0;margin-top:auto;"></div>
     <div class="side-item" id="snav-manual" onclick="switchView('manual')">
@@ -781,12 +781,6 @@
     <h1>조립팀 자재현황</h1>
     <div class="sub">생산계획 × BOM × 재고 통합 분석</div>
   </div>
-  <button class="btn-auto-kit" onclick="openAutoKitModal()" title="sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다">
-    🤖 키팅 자동화
-  </button>
-  <button class="btn-emergency-stop" onclick="emergencyStop()" title="실행 중인 키팅 자동화를 즉시 중단합니다">
-    🛑 긴급정지
-  </button>
   <div class="header-user" id="header-user" style="display:none;">
     <span class="hdr-uname" id="hdr-uname"></span>
     <button class="btn-admin-open" id="btn-admin-open" onclick="openAdminPanel()" style="display:none;">👥 회원관리</button>
@@ -1477,11 +1471,21 @@
   <h2 style="font-size:20px;font-weight:800;color:#1e3a5f;margin-bottom:24px;">🤖 키팅 자동화</h2>
 
   <!-- 카드 선택 -->
-  <div class="kit-view-cards">
-    <div class="kit-view-card active" id="kit-tab-btn-pc" onclick="switchKitTab('pc')">
+  <div class="kit-view-cards" style="max-width:760px;">
+    <div class="kit-view-card active" id="kit-tab-btn-local" onclick="switchKitTab('local')">
+      <div class="kit-view-card-icon">🤖</div>
+      <div class="kit-view-card-label">키팅 자동화</div>
+      <div class="kit-view-card-desc">이 PC에서 자동화 실행</div>
+    </div>
+    <div class="kit-view-card" id="kit-tab-btn-pc" onclick="switchKitTab('pc')">
       <div class="kit-view-card-icon">💻</div>
       <div class="kit-view-card-label">타 PC 자동화</div>
-      <div class="kit-view-card-desc">sMES 키팅 자동화 실행</div>
+      <div class="kit-view-card-desc">원격 PC 자동화 실행</div>
+    </div>
+    <div class="kit-view-card" id="kit-tab-btn-stop" onclick="switchKitTab('stop')">
+      <div class="kit-view-card-icon">🛑</div>
+      <div class="kit-view-card-label">긴급정지</div>
+      <div class="kit-view-card-desc">진행 중인 자동화 중단</div>
     </div>
     <div class="kit-view-card" id="kit-tab-btn-settings" onclick="switchKitTab('settings')">
       <div class="kit-view-card-icon">⚙️</div>
@@ -1490,8 +1494,25 @@
     </div>
   </div>
 
+  <!-- 키팅 자동화 패널 (이 PC) -->
+  <div class="kit-view-panel" id="kit-tab-local">
+    <div style="background:white;border-radius:12px;padding:28px 32px;box-shadow:0 1px 6px rgba(0,0,0,0.08);">
+      <div style="font-size:13px;color:#666;margin-bottom:18px;">이 PC의 sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다.</div>
+      <div class="auto-kit-step"><span class="num">1</span><span>sMES 실행 → 로그인 (SSAT045)</span></div>
+      <div class="auto-kit-step"><span class="num">2</span><span>생산관리 → 조립 자재 kitting → 오늘 날짜 조회</span></div>
+      <div class="auto-kit-step"><span class="num">3</span><span>품목 전체 선택 후 Excel 다운로드 반복</span></div>
+      <div class="auto-kit-step"><span class="num">4</span><span>자재부족현황 로그인 → 키팅 초기화 → 전체 업로드</span></div>
+      <div class="auto-kit-step"><span class="num">5</span><span>실행완료 알림 표시</span></div>
+      <div class="auto-kit-note">⚠️ 최초 1회 setup_url_protocol.bat를 관리자로 실행하여 프로토콜을 등록해야 합니다.</div>
+      <div class="auto-kit-btns" style="margin-top:20px;">
+        <button class="btn-start-auto" onclick="startAutoKit()">▶ 자동화 시작</button>
+        <button class="btn-setup" onclick="downloadSetupBat()">⚙️ 최초 설정</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 타 PC 자동화 패널 -->
-  <div class="kit-view-panel" id="kit-tab-pc">
+  <div class="kit-view-panel" id="kit-tab-pc" style="display:none;">
     <div style="background:white;border-radius:12px;padding:28px 32px;box-shadow:0 1px 6px rgba(0,0,0,0.08);">
       <div style="font-size:13px;color:#666;margin-bottom:18px;">타 PC의 sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다.</div>
       <div class="auto-kit-step"><span class="num">1</span><span>sMES 실행 → 로그인 (SSAT045)</span></div>
@@ -1504,6 +1525,14 @@
         <button class="btn-start-auto" onclick="startAutoKit()">▶ 자동화 시작</button>
         <button class="btn-setup" onclick="downloadSetupBat()">⚙️ 최초 설정</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 긴급정지 패널 -->
+  <div class="kit-view-panel" id="kit-tab-stop" style="display:none;">
+    <div style="background:white;border-radius:12px;padding:28px 32px;box-shadow:0 1px 6px rgba(0,0,0,0.08);">
+      <div style="font-size:13px;color:#666;margin-bottom:20px;">현재 실행 중인 키팅 자동화를 즉시 중단합니다.<br>이미 저장된 파일은 유지됩니다.</div>
+      <button onclick="emergencyStop()" style="display:inline-flex;align-items:center;gap:8px;padding:13px 32px;background:linear-gradient(135deg,#e74c3c,#c0392b);color:white;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(231,76,60,0.4);animation:pulse-red 2s infinite;">🛑 긴급정지</button>
     </div>
   </div>
 
@@ -5860,7 +5889,7 @@ function switchView(v) {
 }
 
 function switchKitTab(tab) {
-  ['pc','settings'].forEach(t => {
+  ['local','pc','stop','settings'].forEach(t => {
     document.getElementById('kit-tab-' + t).style.display = (t === tab) ? 'block' : 'none';
     document.getElementById('kit-tab-btn-' + t).classList.toggle('active', t === tab);
   });
