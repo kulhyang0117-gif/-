@@ -1514,15 +1514,15 @@
   <!-- 타 PC 자동화 패널 -->
   <div class="kit-view-panel" id="kit-tab-pc" style="display:none;">
     <div style="background:white;border-radius:12px;padding:28px 32px;box-shadow:0 1px 6px rgba(0,0,0,0.08);">
-      <div style="font-size:13px;color:#666;margin-bottom:18px;">타 PC의 sMES에서 키팅 자재를 자동으로 다운로드하여 업로드합니다.</div>
-      <div class="auto-kit-step"><span class="num">1</span><span>sMES 실행 → 로그인 (SSAT045)</span></div>
+      <div style="font-size:13px;color:#666;margin-bottom:18px;">설정 탭에 입력된 경로·좌표·계정 값을 기준으로 자동화를 실행합니다.</div>
+      <div class="auto-kit-step"><span class="num">1</span><span>sMES 실행 → 로그인 (설정의 sMES 경로 사용)</span></div>
       <div class="auto-kit-step"><span class="num">2</span><span>생산관리 → 조립 자재 kitting → 오늘 날짜 조회</span></div>
-      <div class="auto-kit-step"><span class="num">3</span><span>품목 전체 선택 후 Excel 다운로드 반복</span></div>
+      <div class="auto-kit-step"><span class="num">3</span><span>품목 전체 선택 후 Excel 다운로드 (설정의 kitting 폴더에 저장)</span></div>
       <div class="auto-kit-step"><span class="num">4</span><span>자재부족현황 로그인 → 키팅 초기화 → 전체 업로드</span></div>
       <div class="auto-kit-step"><span class="num">5</span><span>실행완료 알림 표시</span></div>
-      <div class="auto-kit-note">⚠️ 최초 1회 setup_url_protocol.bat를 관리자로 실행하여 프로토콜을 등록해야 합니다.</div>
+      <div class="auto-kit-note" id="kit-pc-settings-status" style="border-left-color:#f39c12;background:#fffbf0;">📋 설정 탭에서 경로·좌표를 먼저 입력하고 저장하세요.</div>
       <div class="auto-kit-btns" style="margin-top:20px;">
-        <button class="btn-start-auto" onclick="startAutoKit()">▶ 자동화 시작</button>
+        <button class="btn-start-auto" onclick="startAutoKitFromSettings()">▶ 설정값으로 자동화 시작</button>
         <button class="btn-setup" onclick="downloadSetupBat()">⚙️ 최초 설정</button>
       </div>
     </div>
@@ -5894,6 +5894,23 @@ function switchKitTab(tab) {
     document.getElementById('kit-tab-btn-' + t).classList.toggle('active', t === tab);
   });
   if (tab === 'settings') loadKitInlineSettings();
+  if (tab === 'pc') {
+    const statusEl = document.getElementById('kit-pc-settings-status');
+    if (statusEl) {
+      const downloadDir = localStorage.getItem('ms_cfg_download_dir') || '';
+      const invDir      = localStorage.getItem('ms_cfg_inv_dir')      || '';
+      const hasCoords   = localStorage.getItem('ms_cfg_coord_excel_x');
+      if (downloadDir && invDir) {
+        statusEl.style.borderLeftColor = '#27ae60';
+        statusEl.style.background      = '#f0faf4';
+        statusEl.innerHTML = `✅ 설정 완료 — kitting 폴더: <b>${downloadDir}</b>`;
+      } else {
+        statusEl.style.borderLeftColor = '#f39c12';
+        statusEl.style.background      = '#fffbf0';
+        statusEl.innerHTML = '⚠️ 설정 탭에서 경로·좌표를 먼저 입력하고 저장하세요.';
+      }
+    }
+  }
 }
 
 function loadKitInlineSettings() {
@@ -5931,20 +5948,60 @@ function saveKitInlineSettings() {
   setTimeout(() => { btn.textContent = '💾 저장'; }, 1500);
 }
 
-function downloadKittingConfigInline() {
-  const cfg = {
-    excel_btn_x:   parseInt(document.getElementById('kit-cfg-excel-x').value)     || 308,
-    excel_btn_y:   parseInt(document.getElementById('kit-cfg-excel-y').value)     || 533,
-    menu_x_offset: parseInt(document.getElementById('kit-cfg-menu-offset').value) || 230,
-    row_y_offset:  parseInt(document.getElementById('kit-cfg-row-y').value)       || 183,
-    row_height:    parseInt(document.getElementById('kit-cfg-row-height').value)  || 33,
+function _buildKittingConfig() {
+  return {
+    // 경로 설정
+    smes_exe:     localStorage.getItem('ms_cfg_mes_url')      || '',
+    download_dir: localStorage.getItem('ms_cfg_download_dir') || '',
+    prev_kit_dir: localStorage.getItem('ms_cfg_prev_kit_dir') || '',
+    inv_dir:      localStorage.getItem('ms_cfg_inv_dir')      || '',
+    // 계정 (저장된 값이 있을 때만)
+    web_email:    localStorage.getItem('ms_cfg_web_email')    || '',
+    web_pw:       localStorage.getItem('ms_cfg_web_pw')       || '',
+    smes_id:      localStorage.getItem('ms_cfg_smes_id')      || '',
+    smes_pw:      localStorage.getItem('ms_cfg_smes_pw')      || '',
+    // 좌표
+    excel_btn_x:   parseInt(localStorage.getItem('ms_cfg_coord_excel_x'))      || 308,
+    excel_btn_y:   parseInt(localStorage.getItem('ms_cfg_coord_excel_y'))      || 533,
+    menu_x_offset: parseInt(localStorage.getItem('ms_cfg_coord_menu_offset'))  || 230,
+    row_y_offset:  parseInt(localStorage.getItem('ms_cfg_coord_row_y'))        || 183,
+    row_height:    parseInt(localStorage.getItem('ms_cfg_coord_row_height'))   || 33,
   };
+}
+
+function downloadKittingConfigInline() {
+  // 설정 패널 값을 먼저 저장 후 config 생성
+  saveKitInlineSettings();
+  const cfg = _buildKittingConfig();
   const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'kitting_config.json';
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+function startAutoKitFromSettings() {
+  // 설정값 저장 여부 확인
+  const downloadDir = localStorage.getItem('ms_cfg_download_dir') || '';
+  const invDir      = localStorage.getItem('ms_cfg_inv_dir')      || '';
+  if (!downloadDir || !invDir) {
+    if (!confirm('설정 탭에서 kitting 자재 폴더와 재고현황 폴더가 설정되지 않았습니다.\n기본 경로로 실행하시겠습니까?')) return;
+  }
+  // kitting_config.json 생성 & 다운로드
+  const cfg = _buildKittingConfig();
+  const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'kitting_config.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  // 파일 저장 확인 후 자동화 시작
+  setTimeout(() => {
+    if (confirm('kitting_config.json 파일을 kitting_auto 폴더에 저장하셨나요?\n\n확인을 누르면 자동화가 시작됩니다.')) {
+      startAutoKit();
+    }
+  }, 800);
 }
 
 function openKittingBoard() {

@@ -57,6 +57,26 @@ COORD_MENU_OFFSET  = int(_ext_cfg.get('menu_x_offset', 230))
 COORD_ROW_Y_OFFSET = int(_ext_cfg.get('row_y_offset',  183))
 COORD_ROW_HEIGHT   = int(_ext_cfg.get('row_height',     33))
 
+# ── 경로/계정 오버라이드 (kitting_config.json 우선) ───────────────────────
+if 'smes_exe'     in _ext_cfg and _ext_cfg['smes_exe']:
+    SMES_EXE = Path(_ext_cfg['smes_exe'])
+if 'download_dir' in _ext_cfg and _ext_cfg['download_dir']:
+    DOWNLOAD_DIR = Path(_ext_cfg['download_dir'])
+if 'inv_dir'      in _ext_cfg and _ext_cfg['inv_dir']:
+    INVENTORY_DIR = Path(_ext_cfg['inv_dir'])
+if 'prev_kit_dir' in _ext_cfg and _ext_cfg['prev_kit_dir']:
+    _PREV_KIT_DIR_CFG = Path(_ext_cfg['prev_kit_dir'])
+else:
+    _PREV_KIT_DIR_CFG = None
+if 'web_email'    in _ext_cfg and _ext_cfg['web_email']:
+    WEB_EMAIL = _ext_cfg['web_email']
+if 'web_pw'       in _ext_cfg and _ext_cfg['web_pw']:
+    WEB_PW = _ext_cfg['web_pw']
+if 'smes_id'      in _ext_cfg and _ext_cfg['smes_id']:
+    SMES_ID = _ext_cfg['smes_id']
+if 'smes_pw'      in _ext_cfg and _ext_cfg['smes_pw']:
+    SMES_PW = _ext_cfg['smes_pw']
+
 # 첫 저장 시 폴더 클리어 여부 (세션당 1회만)
 _kitting_folder_cleared = False
 
@@ -1436,7 +1456,7 @@ def automate_upload(downloaded_files):
                 log(f"  초기화 오류: {e}")
 
             # ── 키팅된 자재 업로드 (kitting 자재 + 전일키팅) ────────────────────
-            PREV_KIT_DIR = _BASE / "전일키팅"
+            PREV_KIT_DIR = _PREV_KIT_DIR_CFG if _PREV_KIT_DIR_CFG else (_BASE / "전일키팅")
             all_kit = sorted(DOWNLOAD_DIR.glob("*.xlsx"), key=lambda f: f.stat().st_mtime)
             all_kit += sorted(DOWNLOAD_DIR.glob("*.xls"), key=lambda f: f.stat().st_mtime)
             if PREV_KIT_DIR.exists():
