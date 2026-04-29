@@ -121,7 +121,15 @@ def launch_smes():
     log("▶ Step 1: sMES 실행 중...")
     if not SMES_EXE.exists():
         raise FileNotFoundError(f"sMES.exe 없음: {SMES_EXE}")
-    subprocess.Popen([str(SMES_EXE)])
+    try:
+        ret = ctypes.windll.shell32.ShellExecuteW(
+            None, "open", str(SMES_EXE), None, str(SMES_EXE.parent), 1
+        )
+        if ret <= 32:
+            raise OSError(f"ShellExecuteW 실패 (코드 {ret})")
+    except Exception as e:
+        log(f"  ShellExecuteW 실패, subprocess 시도: {e}")
+        subprocess.Popen([str(SMES_EXE)], cwd=str(SMES_EXE.parent))
     log(f"  {LOAD_DELAY}초 로딩 대기...")
     time.sleep(LOAD_DELAY)
 
