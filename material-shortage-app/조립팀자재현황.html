@@ -193,6 +193,145 @@
     .summary-cards { grid-template-columns: repeat(2, 1fr); }
   }
 
+  /* ══════════════════════════════════════════
+     모바일 하단 탭바 (항상 정의, 기본 숨김)
+  ══════════════════════════════════════════ */
+  .mobile-tab-bar {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #151e2b; z-index: 600;
+    flex-direction: row;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+  .mob-tab {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 7px 2px 5px; cursor: pointer;
+    transition: background 0.15s;
+    border-top: 2px solid transparent;
+    min-width: 0;
+  }
+  .mob-tab.active { background: rgba(56,189,248,0.1); border-top-color: #38bdf8; }
+  .mob-tab:active { background: rgba(255,255,255,0.06); }
+  .mob-tab-icon { font-size: 17px; line-height: 1; }
+  .mob-tab-label { font-size: 9px; color: #94a3b8; margin-top: 2px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .mob-tab.active .mob-tab-label { color: #e2e8f0; }
+  .mobile-more-menu {
+    display: none; position: fixed; bottom: 52px; left: 0; right: 0;
+    background: #1e2d3d; border-top: 1px solid rgba(255,255,255,0.1);
+    z-index: 610; box-shadow: 0 -4px 20px rgba(0,0,0,0.35);
+  }
+  .mobile-more-menu.open { display: block; }
+  .mob-more-item {
+    padding: 14px 20px; color: #cbd5e1; font-size: 14px;
+    cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.05);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .mob-more-item:active { background: rgba(255,255,255,0.07); }
+
+  /* ══════════════════════════════════════════
+     모바일 반응형 (768px 이하)
+  ══════════════════════════════════════════ */
+  @media (max-width: 768px) {
+    /* 사이드바 숨김 */
+    .side-nav { display: none; }
+    /* 앱 레이아웃: 사이드바 여백 제거, 하단 탭바 공간 확보 */
+    .app-layout { margin-left: 0; padding-bottom: 56px; }
+    /* 하단 탭바 표시 */
+    .mobile-tab-bar { display: flex; }
+
+    /* 헤더 */
+    .header { padding: 10px 14px; }
+    .header h1 { font-size: 14px; }
+    .header .sub { display: none; }
+    .hdr-uname { display: none; }
+    .btn-logout { font-size: 10px; padding: 4px 9px; }
+    .btn-admin-open { font-size: 10px; padding: 4px 9px; }
+    .btn-auto-kit { font-size: 11px; padding: 7px 12px; }
+
+    /* 컨테이너 패딩 */
+    .container { padding: 12px 12px; }
+
+    /* 요약 카드 */
+    .summary-cards { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
+    .card { padding: 10px 8px; }
+    .card .val { font-size: 20px; }
+    .card .lbl { font-size: 10px; }
+
+    /* 설정 바 */
+    .settings-section { flex-direction: column; align-items: flex-start; gap: 10px; padding: 12px; }
+    .setting-item { width: 100%; }
+    .setting-item select, .setting-item input[type=date] { width: 100%; }
+
+    /* 탭 */
+    .tab-row { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+    .tab-row::-webkit-scrollbar { height: 3px; }
+    .tab { white-space: nowrap; padding: 7px 12px; font-size: 11px; }
+
+    /* 결과 섹션 */
+    .result-section { padding: 12px 10px; }
+    .result-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+    .filter-bar { width: 100%; }
+    .filter-bar input[type=text] { width: 100%; box-sizing: border-box; }
+    .filter-bar select { flex: 1; }
+
+    /* 테이블 */
+    .table-wrap { max-height: 400px; }
+
+    /* 업로드 */
+    .upload-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .upload-section { padding: 14px; }
+
+    /* 인증 */
+    .auth-box { width: 94vw; padding: 24px 18px; }
+
+    /* 관리자 패널 */
+    .admin-box { width: 98vw; }
+    .admin-body { padding: 12px; }
+
+    /* 준비작업 / 투입전 검사 뷰 */
+    #view-prep, #view-insp { padding: 12px 12px; }
+    .prep-home-wrap { padding: 10px 0; }
+    .prep-home-title { font-size: 18px; }
+    .prep-home-cards { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .prep-home-card { padding: 20px 14px; }
+    .prep-home-card-icon { font-size: 26px; }
+    .prep-home-card-title { font-size: 13px; }
+
+    /* 통계 카드 */
+    .prep-stats-row { grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 12px; }
+    .prep-stat-card { padding: 10px 12px; }
+    .prep-stat-value { font-size: 20px; }
+
+    /* 툴바 */
+    .prep-toolbar { gap: 8px; }
+    .prep-filter-line { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+    .prep-filter-line::-webkit-scrollbar { height: 3px; }
+    .prep-filter-btn { white-space: nowrap; }
+    .prep-subview-header { margin-bottom: 12px; padding-bottom: 10px; }
+    .prep-subview-title { font-size: 14px; }
+
+    /* 모달 */
+    .prep-modal-box { width: 98vw; max-height: 95vh; }
+    .auto-kit-box { padding: 24px 18px; }
+
+    /* KB 뷰 */
+    body[data-view=kb] .kb-wrap { border-radius: 0; }
+
+    /* 메뉴얼 */
+    #view-manual { padding: 16px 12px; }
+    .man-hero { padding: 20px 16px; flex-direction: column; gap: 12px; }
+    .man-hero-icon { font-size: 36px; }
+    .man-hero h1 { font-size: 16px; }
+    .man-sections { grid-template-columns: 1fr; gap: 12px; }
+    .man-card { padding: 16px 14px; }
+
+    /* 키팅 자동화 뷰 */
+    #view-kitting { padding: 20px 14px; }
+    .kit-view-cards { flex-direction: column; max-width: 100%; }
+  }
+
   /* ── 인증 오버레이 ── */
   .auth-overlay { position:fixed; inset:0; background:rgba(10,20,40,0.97); z-index:1000; display:flex; align-items:center; justify-content:center; }
   .auth-box { background:white; border-radius:12px; padding:36px 40px; width:390px; box-shadow:0 8px 40px rgba(0,0,0,0.5); }
@@ -451,6 +590,7 @@
   .prep-history-table tr:hover td { background:#f8fafc; }
   .prep-del-btn { padding:3px 8px; background:#fee2e2; color:#e74c3c; border:1px solid #fca5a5; border-radius:4px; font-size:11px; cursor:pointer; }
   .prep-del-btn:hover { background:#e74c3c; color:white; }
+  body[data-no-delete] .prep-del-btn { display:none !important; }
   .prep-no-history { text-align:center; color:#bbb; padding:20px; font-size:12px; }
   .prep-item-selector { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:14px; }
   .prep-item-card { border:2px solid #ddd; border-radius:8px; padding:10px 14px; cursor:pointer; transition:all 0.15s; }
@@ -1649,6 +1789,7 @@
       <div class="prep-month-nav">
         <input type="month" class="prep-month-picker" id="prep-inv-mp" onchange="prepPickDate(this.value, prepRenderInventory)">
       </div>
+      <button class="prep-btn-export" onclick="prepExportInventoryExcel()">📥 엑셀 다운로드</button>
     </div>
     <div class="prep-inv-table-wrap">
       <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
@@ -1753,6 +1894,7 @@
         <input type="month" class="prep-month-picker" id="prep-hist-mp" onchange="prepPickDate(this.value, prepRenderAllHistory)">
       </div>
       <span id="prep-hist-count" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
+      <button class="prep-btn-export" onclick="prepExportHistoryExcel()">📥 엑셀 다운로드</button>
       <div class="prep-filter-line">
         <button class="prep-filter-btn active" onclick="prepHistSetFilter('all',this)">전체</button>
         <button class="prep-filter-btn" onclick="prepHistSetFilter('A',this)">A라인</button>
@@ -1789,6 +1931,7 @@
       <div class="prep-month-nav">
         <input type="month" class="prep-month-picker" id="prep-og-mp" onchange="prepPickDate(this.value, outgoingRenderTable)">
       </div>
+      <button class="prep-btn-export" onclick="prepExportOutgoingExcel()">📥 엑셀 다운로드</button>
       <button class="prep-btn-outgoing" onclick="outgoingOpenModal()">📤 출고 등록</button>
     </div>
     <div class="prep-outgoing-wrap" id="prep-outgoing-wrap">
@@ -2083,6 +2226,7 @@
       <div class="prep-month-nav">
         <input type="month" class="prep-month-picker" id="insp-inv-mp" onchange="inspPickDate(this.value, inspRenderInventory)">
       </div>
+      <button class="prep-btn-export" onclick="inspExportInventoryExcel()">📥 엑셀 다운로드</button>
     </div>
     <div class="prep-inv-table-wrap">
       <div style="overflow-x:auto;max-height:520px;overflow-y:auto;">
@@ -2186,6 +2330,7 @@
         <input type="month" class="prep-month-picker" id="insp-hist-mp" onchange="inspPickDate(this.value, inspRenderAllHistory)">
       </div>
       <span id="insp-hist-count" style="font-size:12px;color:#6b7280;margin-left:8px;"></span>
+      <button class="prep-btn-export" onclick="inspExportHistoryExcel()">📥 엑셀 다운로드</button>
       <div class="prep-filter-line">
         <button class="prep-filter-btn active" onclick="inspHistSetFilter('all',this)">전체</button>
         <button class="prep-filter-btn" onclick="inspHistSetFilter('A',this)">A라인</button>
@@ -2221,6 +2366,7 @@
       <div class="prep-month-nav">
         <input type="month" class="prep-month-picker" id="insp-og-mp" onchange="inspPickDate(this.value, inspOutgoingRenderTable)">
       </div>
+      <button class="prep-btn-export" onclick="inspExportOutgoingExcel()">📥 엑셀 다운로드</button>
       <button class="prep-btn-outgoing" onclick="inspOutgoingOpenModal()">📤 출고 등록</button>
     </div>
     <div class="prep-outgoing-wrap" id="insp-outgoing-wrap">
@@ -5203,7 +5349,7 @@ async function getProfile(userId) {
 }
 
 const ADMIN_EMAIL = localStorage.getItem('ms_cfg_admin_email') || 'kulhyang0117@gmail.com';
-const ADMIN_PERMS = { read: true, upload: true, modify: true };
+const ADMIN_PERMS = { read: true, upload: true, modify: true, delete: true };
 
 // ─── 관리자 프로필 자동 생성/복구 ────────────────────
 async function ensureAdminProfile(userId, email) {
@@ -5255,7 +5401,7 @@ async function authRegister(email, pw, name) {
     display_name: isAdmin ? '관리자' : name.trim(),
     status: isAdmin ? 'approved' : 'pending',
     is_admin: isAdmin,
-    permissions: isAdmin ? ADMIN_PERMS : { read: false, upload: false, modify: false },
+    permissions: isAdmin ? ADMIN_PERMS : { read: false, upload: false, modify: false, delete: false },
     approved_at: isAdmin ? nowLocalISO() : null
   });
   if (isAdmin) return { autoLogin: true };
@@ -5432,6 +5578,7 @@ async function syncFilesFromSupabase(forceAnalysis = false, forceDownload = fals
 function applyPermissions(perm){
   const canUpload=perm&&(perm.upload||perm.modify);
   const canModify=perm&&perm.modify;
+  const canDelete=perm&&perm.delete;
   document.querySelectorAll('.upload-item input[type=file]').forEach(el=>{
     el.disabled=!canUpload;
     el.parentElement.style.opacity=canUpload?'1':'0.5';
@@ -5447,6 +5594,16 @@ function applyPermissions(perm){
     document.getElementById('btn-run').title='분석 실행 권한이 없습니다';
     ['bomLevel','partType','fromDate'].forEach(id=>document.getElementById(id).disabled=true);
   }
+  // 삭제 권한: body 속성으로 CSS 제어 + 동적 렌더링 함수에서도 참조
+  if(canDelete){
+    document.body.removeAttribute('data-no-delete');
+  } else {
+    document.body.setAttribute('data-no-delete','1');
+  }
+}
+
+function hasDeletePerm(){
+  return !!(currentUser&&(currentUser.isAdmin||currentUser.permissions?.delete));
 }
 
 // ── 인증 UI ──
@@ -5614,6 +5771,7 @@ async function renderAdminPanel(){
         <label class="perm-chk"><input type="checkbox" id="pr-${u.id}" ${u.permissions.read?'checked':''} onchange="adminSavePerm('${u.id}')"> 읽기</label>
         <label class="perm-chk"><input type="checkbox" id="pu-${u.id}" ${u.permissions.upload?'checked':''} onchange="adminSavePerm('${u.id}')"> 파일 업로드</label>
         <label class="perm-chk"><input type="checkbox" id="pm-${u.id}" ${u.permissions.modify?'checked':''} onchange="adminSavePerm('${u.id}')"> 분석 실행</label>
+        <label class="perm-chk"><input type="checkbox" id="pd-${u.id}" ${u.permissions.delete?'checked':''} onchange="adminSavePerm('${u.id}')"> 삭제</label>
       </div>
     </div>`).join('');
 }
@@ -5648,7 +5806,8 @@ async function adminSavePerm(uid){
   u.permissions={
     read:!!document.getElementById(`pr-${uid}`)?.checked,
     upload:!!document.getElementById(`pu-${uid}`)?.checked,
-    modify:!!document.getElementById(`pm-${uid}`)?.checked
+    modify:!!document.getElementById(`pm-${uid}`)?.checked,
+    delete:!!document.getElementById(`pd-${uid}`)?.checked
   };
   await dbUpdateUser(u);
 }
@@ -5723,7 +5882,7 @@ async function initAuth(){
       email: '',
       displayName: '대시보드 뷰어',
       isAdmin: false,
-      permissions: { read: true, upload: false, modify: true },
+      permissions: { read: true, upload: false, modify: true, delete: false },
       status: 'approved',
       isGuest: true
     };
@@ -5858,10 +6017,19 @@ function kbUpdateNow() {
 // ── 사이드바 뷰 전환 ──────────────────────────────
 function switchView(v) {
   document.body.setAttribute('data-view', v);
+  // 사이드바 활성화
   ['manual','kb','material','pkg','prep','insp','upload','kitting'].forEach(id => {
     const el = document.getElementById('snav-'+id);
     if (el) el.classList.toggle('active', id === v);
   });
+  // 모바일 탭바 활성화
+  ['kb','material','prep','insp'].forEach(id => {
+    const el = document.getElementById('mtab-'+id);
+    if (el) el.classList.toggle('active', id === v);
+  });
+  const moreTab = document.getElementById('mtab-more');
+  if (moreTab) moreTab.classList.toggle('active', ['pkg','upload','kitting','manual'].includes(v));
+  closeMobileMore();
   const coming = document.getElementById('view-coming');
   if (coming) coming.style.display = 'none';
   if (v === 'prep') prepInitView();
@@ -8359,6 +8527,7 @@ function prepRenderAllHistory() {
 }
 
 function prepDeleteFromHistory(id) {
+  if (!hasDeletePerm()) { prepShowToast('삭제 권한이 없습니다', 'error'); return; }
   if (!confirm('이 이력을 삭제하시겠습니까?')) return;
   const records = prepGetRecords().filter(r => r.id !== id);
   prepSaveRecords(records);
@@ -8419,6 +8588,7 @@ function prepCancelEdit() {
 }
 
 function prepDeleteRecord(id, eLine, eModel, eItem) {
+  if (!hasDeletePerm()) { prepShowToast('삭제 권한이 없습니다', 'error'); return; }
   if (!confirm('이 이력을 삭제하시겠습니까?')) return;
   const records = prepGetRecords().filter(r => r.id !== id);
   prepSaveRecords(records);
@@ -8465,6 +8635,69 @@ function prepExportExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '준비작업');
   XLSX.writeFile(wb, `준비작업_${mk}.xlsx`);
+  prepShowToast('엑셀 다운로드 완료', 'success');
+}
+
+function prepExportInventoryExcel() {
+  const mk = prepMonthKey();
+  const rows = prepGetInventoryRows();
+  if (rows.length === 0) { prepShowToast('내보낼 데이터가 없습니다', 'error'); return; }
+  const header = ['모델','자품번','고객사 P/N','품목명','준비수량(EA)','출고수량','재고','최근작업일'];
+  const data = rows.sort((a,b)=>(a.partNo||a.itemName||'').localeCompare(b.partNo||b.itemName||'')).map(r => [
+    r.models||'-', r.partNo||'-', r.custPN||'-', r.itemName,
+    r.prepQty, r.ogQty, r.stock, r.lastDate||'-'
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '준비작업재고현황');
+  XLSX.writeFile(wb, `준비작업_재고현황_${mk}.xlsx`);
+  prepShowToast('엑셀 다운로드 완료', 'success');
+}
+
+function prepExportHistoryExcel() {
+  const mk = prepMonthKey();
+  let records = prepGetRecords().filter(r => r.date && r.date.startsWith(mk));
+  if (prepHistFilterLine !== 'all') records = records.filter(r => r.line === prepHistFilterLine);
+  const modelQ = (document.getElementById('prep-hist-model-search')?.value || '').trim();
+  if (modelQ) records = records.filter(r => (r.modelName||'').includes(modelQ));
+  records = records.sort((a,b) => b.date.localeCompare(a.date));
+  if (records.length === 0) { prepShowToast('내보낼 데이터가 없습니다', 'error'); return; }
+  const defectHeaders = PREP_DEFECT_TYPES.map(t => `불량_${t}`);
+  const header = ['날짜','라인','모델','항목','자품번','고객사 P/N','투입수량(EA)','양품수량(EA)','불량수량(EA)','불량률(%)','인원','예상시간(H)','시작시간','종료시간','실제시간(H)','실제UPH','실제UPPH','비고','작성자','작성일시','수정자','수정일시',...defectHeaders];
+  const rows = records.map(r => {
+    const pi = window._prepPartInfoMap?.[r.modelName+'::'+r.itemName] || {};
+    const defRate = r.qty > 0 ? (((r.defectQty||0)/r.qty)*100).toFixed(1) : '';
+    return [
+      r.date, r.line||'', r.modelName||'', r.itemName||'',
+      r.partNo||pi.partNo||'-', r.custPN||pi.custPN||'-',
+      r.qty||0, r.goodQty??'', r.defectQty??'', defRate,
+      r.workers||'', r.hours||'', r.startTime||'', r.endTime||'',
+      r.actualHours??'', r.actualUph??'', r.actualUpph??'',
+      r.memo||'', r.createdBy||'', r.createdAt||'', r.updatedBy||'', r.updatedAt||'',
+      ...PREP_DEFECT_TYPES.map(t => (r.defects&&r.defects[t]) ? r.defects[t] : 0)
+    ];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '준비작업이력');
+  XLSX.writeFile(wb, `준비작업_이력_${mk}.xlsx`);
+  prepShowToast('엑셀 다운로드 완료', 'success');
+}
+
+function prepExportOutgoingExcel() {
+  const mk = prepMonthKey();
+  const records = outgoingGetRecords().filter(r => r.date && r.date.startsWith(mk));
+  if (records.length === 0) { prepShowToast('내보낼 데이터가 없습니다', 'error'); return; }
+  const header = ['날짜','라인','모델','품목명','수량','단위','비고','작성자','작성일시','수정자','수정일시'];
+  const rows = [...records].sort((a,b)=>b.date.localeCompare(a.date)).map(r => [
+    r.date, r.line||'', r.modelName||'', r.itemName||'',
+    r.qty||0, r.unit||'', r.memo||'',
+    r.createdBy||'', r.createdAt||'', r.updatedBy||'', r.updatedAt||''
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '준비작업출고이력');
+  XLSX.writeFile(wb, `준비작업_출고이력_${mk}.xlsx`);
   prepShowToast('엑셀 다운로드 완료', 'success');
 }
 
@@ -8660,6 +8893,7 @@ function ogCancelEdit() {
 }
 
 function outgoingDeleteRecord(id) {
+  if (!hasDeletePerm()) { prepShowToast('삭제 권한이 없습니다', 'error'); return; }
   if (!confirm('출고 이력을 삭제하시겠습니까?')) return;
   const records = outgoingGetRecords().filter(r => r.id !== id);
   outgoingSaveRecords(records);
@@ -9595,6 +9829,7 @@ function inspRenderAllHistory() {
 }
 
 function inspDeleteFromHistory(id) {
+  if (!hasDeletePerm()) { inspShowToast('삭제 권한이 없습니다', 'error'); return; }
   if (!confirm('이 이력을 삭제하시겠습니까?')) return;
   const records = inspGetRecords().filter(r => r.id !== id);
   inspSaveRecords(records);
@@ -9649,6 +9884,7 @@ function inspCancelEdit() {
 }
 
 function inspDeleteRecord(id, eLine, eModel, eItem) {
+  if (!hasDeletePerm()) { inspShowToast('삭제 권한이 없습니다', 'error'); return; }
   if (!confirm('이 이력을 삭제하시겠습니까?')) return;
   const records = inspGetRecords().filter(r => r.id !== id);
   inspSaveRecords(records);
@@ -9694,6 +9930,69 @@ function inspExportExcel() {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, '투입전검사');
   XLSX.writeFile(wb, `투입전검사_${mk}.xlsx`);
+  inspShowToast('엑셀 다운로드 완료','success');
+}
+
+function inspExportInventoryExcel() {
+  const mk = inspMonthKey();
+  const rows = inspGetInventoryRows();
+  if (rows.length === 0) { inspShowToast('내보낼 데이터가 없습니다','error'); return; }
+  const header = ['모델','자품번','고객사 P/N','품목명','검사수량(EA)','출고수량','재고','최근작업일'];
+  const data = rows.sort((a,b)=>(a.partNo||a.itemName||'').localeCompare(b.partNo||b.itemName||'')).map(r => [
+    r.models||'-', r.partNo||'-', r.custPN||'-', r.itemName,
+    r.prepQty, r.ogQty, r.stock, r.lastDate||'-'
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '검사재고현황');
+  XLSX.writeFile(wb, `투입전검사_재고현황_${mk}.xlsx`);
+  inspShowToast('엑셀 다운로드 완료','success');
+}
+
+function inspExportHistoryExcel() {
+  const mk = inspMonthKey();
+  let records = inspGetRecords().filter(r => r.date && r.date.startsWith(mk));
+  if (inspHistFilterLine !== 'all') records = records.filter(r => r.line === inspHistFilterLine);
+  const modelQ = (document.getElementById('insp-hist-model-search')?.value || '').trim();
+  if (modelQ) records = records.filter(r => (r.modelName||'').includes(modelQ));
+  records = records.sort((a,b) => b.date.localeCompare(a.date));
+  if (records.length === 0) { inspShowToast('내보낼 데이터가 없습니다','error'); return; }
+  const defectHeaders = PREP_DEFECT_TYPES.map(t=>`불량_${t}`);
+  const header = ['날짜','라인','모델','항목','자품번','고객사 P/N','투입수량(EA)','양품수량(EA)','불량수량(EA)','불량률(%)','인원','예상시간(H)','시작시간','종료시간','실제시간(H)','실제UPH','실제UPPH','비고','작성자','작성일시','수정자','수정일시',...defectHeaders];
+  const rows = records.map(r => {
+    const pi = window._inspPartInfoMap?.[r.modelName+'::'+r.itemName] || {};
+    const defRate = r.qty > 0 ? (((r.defectQty||0)/r.qty)*100).toFixed(1) : '';
+    return [
+      r.date, r.line||'', r.modelName||'', r.itemName||'',
+      r.partNo||pi.partNo||'-', r.custPN||pi.custPN||'-',
+      r.qty||0, r.goodQty??'', r.defectQty??'', defRate,
+      r.workers||'', r.hours||'', r.startTime||'', r.endTime||'',
+      r.actualHours??'', r.actualUph??'', r.actualUpph??'',
+      r.memo||'', r.createdBy||'', r.createdAt||'', r.updatedBy||'', r.updatedAt||'',
+      ...PREP_DEFECT_TYPES.map(t => (r.defects&&r.defects[t]) ? r.defects[t] : 0)
+    ];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '투입전검사이력');
+  XLSX.writeFile(wb, `투입전검사_이력_${mk}.xlsx`);
+  inspShowToast('엑셀 다운로드 완료','success');
+}
+
+function inspExportOutgoingExcel() {
+  const mk = inspMonthKey();
+  const records = inspOutgoingGetRecords().filter(r => r.date && r.date.startsWith(mk));
+  if (records.length === 0) { inspShowToast('내보낼 데이터가 없습니다','error'); return; }
+  const header = ['날짜','라인','모델','품목명','수량','단위','비고','작성자','작성일시','수정자','수정일시'];
+  const rows = [...records].sort((a,b)=>b.date.localeCompare(a.date)).map(r => [
+    r.date, r.line||'', r.modelName||'', r.itemName||'',
+    r.qty||0, r.unit||'', r.memo||'',
+    r.createdBy||'', r.createdAt||'', r.updatedBy||'', r.updatedAt||''
+  ]);
+  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '검사출고이력');
+  XLSX.writeFile(wb, `투입전검사_출고이력_${mk}.xlsx`);
   inspShowToast('엑셀 다운로드 완료','success');
 }
 
@@ -9872,6 +10171,7 @@ function inspOgCancelEdit() {
 }
 
 function inspOutgoingDeleteRecord(id) {
+  if (!hasDeletePerm()) { inspShowToast('삭제 권한이 없습니다', 'error'); return; }
   if (!confirm('출고 이력을 삭제하시겠습니까?')) return;
   const records = inspOutgoingGetRecords().filter(r=>r.id!==id);
   inspOutgoingSaveRecords(records);
@@ -9899,6 +10199,57 @@ document.getElementById('insp-outgoing-modal')?.addEventListener('click', functi
 
 // ── 끝: 투입전 검사관리 ──────────────────────────────────────
 
+// ── 모바일 더보기 메뉴 ──────────────────────────────────────
+function toggleMobileMore() {
+  const menu = document.getElementById('mobile-more-menu');
+  if (menu) menu.classList.toggle('open');
+}
+function closeMobileMore() {
+  const menu = document.getElementById('mobile-more-menu');
+  if (menu) menu.classList.remove('open');
+}
+// 더보기 메뉴 외부 터치 시 닫기
+document.addEventListener('click', function(e) {
+  const menu = document.getElementById('mobile-more-menu');
+  const moreTab = document.getElementById('mtab-more');
+  if (menu && menu.classList.contains('open')) {
+    if (!menu.contains(e.target) && !moreTab?.contains(e.target)) {
+      closeMobileMore();
+    }
+  }
+});
+
 </script>
+
+<!-- ── 모바일 하단 탭바 ── -->
+<nav class="mobile-tab-bar" id="mobile-tab-bar">
+  <div class="mob-tab active" id="mtab-kb" onclick="switchView('kb')">
+    <span class="mob-tab-icon">📋</span>
+    <span class="mob-tab-label">키팅</span>
+  </div>
+  <div class="mob-tab" id="mtab-material" onclick="switchView('material')">
+    <span class="mob-tab-icon">📊</span>
+    <span class="mob-tab-label">자재현황</span>
+  </div>
+  <div class="mob-tab" id="mtab-prep" onclick="switchView('prep')">
+    <span class="mob-tab-icon">🔧</span>
+    <span class="mob-tab-label">준비작업</span>
+  </div>
+  <div class="mob-tab" id="mtab-insp" onclick="switchView('insp')">
+    <span class="mob-tab-icon">🔍</span>
+    <span class="mob-tab-label">검사관리</span>
+  </div>
+  <div class="mob-tab" id="mtab-more" onclick="toggleMobileMore()">
+    <span class="mob-tab-icon">☰</span>
+    <span class="mob-tab-label">더보기</span>
+  </div>
+</nav>
+<!-- 모바일 더보기 메뉴 -->
+<div class="mobile-more-menu" id="mobile-more-menu">
+  <div class="mob-more-item" onclick="switchView('pkg');closeMobileMore()">📦 포장재 필요수량</div>
+  <div class="mob-more-item" onclick="switchView('upload');closeMobileMore()">📂 파일 업로드</div>
+  <div class="mob-more-item" onclick="switchView('kitting');closeMobileMore()">🤖 업로드 자동화</div>
+  <div class="mob-more-item" onclick="switchView('manual');closeMobileMore()">📖 메뉴얼</div>
+</div>
 </body>
 </html>
