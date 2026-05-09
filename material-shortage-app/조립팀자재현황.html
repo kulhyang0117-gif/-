@@ -237,7 +237,7 @@
     /* 사이드바 숨김 */
     .side-nav { display: none; }
     /* 앱 레이아웃: 사이드바 여백 제거, 하단 탭바 공간 확보 */
-    .app-layout { margin-left: 0; padding-bottom: 56px; }
+    .app-layout { margin-left: 0 !important; padding-bottom: 56px; }
     /* 하단 탭바 표시 */
     .mobile-tab-bar { display: flex; }
 
@@ -403,24 +403,47 @@
   .btn-admin-open:hover { background:#d35400; }
 
   /* ── 사이드바 ── */
-  .side-nav { position:fixed; left:0; top:0; bottom:0; width:190px; background:#151e2b; z-index:500; display:flex; flex-direction:column; overflow:hidden; border-right:1px solid #1e2d3d; }
+  .side-nav { position:fixed; left:0; top:0; bottom:0; width:190px; background:#151e2b; z-index:500; display:flex; flex-direction:column; overflow:hidden; border-right:1px solid #1e2d3d; transition:width 0.25s ease; }
   .side-logo { padding:18px 16px 14px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px; }
-  .side-logo-icon { font-size:20px; }
-  .side-logo-text { font-size:12px; font-weight:700; color:#e2e8f0; line-height:1.35; }
-  .side-menu { flex:1; overflow-y:auto; padding:6px 0; display:flex; flex-direction:column; }
-  .side-item { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; transition:background 0.15s; border-left:3px solid transparent; position:relative; }
+  .side-logo-icon { font-size:20px; flex-shrink:0; }
+  .side-logo-text { font-size:12px; font-weight:700; color:#e2e8f0; line-height:1.35; white-space:nowrap; overflow:hidden; transition:opacity 0.2s, max-width 0.25s; }
+  .side-menu { flex:1; overflow-y:auto; overflow-x:hidden; padding:6px 0; display:flex; flex-direction:column; }
+  .side-item { display:flex; align-items:center; gap:10px; padding:11px 14px; cursor:pointer; transition:background 0.15s, padding 0.25s; border-left:3px solid transparent; position:relative; }
   .side-item:hover { background:rgba(255,255,255,0.07); }
   .side-item.active { background:rgba(56,189,248,0.1); border-left-color:#38bdf8; }
   .side-item.disabled { cursor:default; }
   .side-item.disabled:hover { background:none; }
   .side-item-icon { font-size:17px; flex-shrink:0; }
-  .side-item-label { font-size:12px; font-weight:600; color:#cbd5e1; line-height:1.3; }
+  .side-item-label { font-size:12px; font-weight:600; color:#cbd5e1; line-height:1.3; white-space:nowrap; overflow:hidden; transition:opacity 0.2s; }
   .side-item.active .side-item-label { color:#e2e8f0; }
   .side-item.disabled .side-item-label { color:#475569; }
   .side-coming { font-size:9px; background:#1e293b; color:#475569; padding:1px 5px; border-radius:8px; white-space:nowrap; flex-shrink:0; }
 
+  /* 사이드바 접기 버튼 */
+  .side-toggle-btn { background:none; border:none; color:rgba(255,255,255,0.35); cursor:pointer; font-size:16px; padding:3px 5px; border-radius:4px; margin-left:auto; flex-shrink:0; transition:color 0.15s, background 0.15s, transform 0.25s; line-height:1; }
+  .side-toggle-btn:hover { color:white; background:rgba(255,255,255,0.1); }
+
+  /* 접힌 상태 */
+  body[data-sidebar=collapsed] .side-nav { width:48px; }
+  body[data-sidebar=collapsed] .side-logo { justify-content:center; padding:18px 0 14px; }
+  body[data-sidebar=collapsed] .side-logo-text { opacity:0; max-width:0; }
+  body[data-sidebar=collapsed] .side-toggle-btn { margin-left:0; transform:rotate(180deg); }
+  body[data-sidebar=collapsed] .side-item { justify-content:center; padding:12px 0; }
+  body[data-sidebar=collapsed] .side-item-label { opacity:0; max-width:0; }
+  body[data-sidebar=collapsed] .side-coming { display:none; }
+  /* 접힌 상태 툴팁 */
+  body[data-sidebar=collapsed] .side-item:hover::after {
+    content: attr(data-label);
+    position:absolute; left:calc(100% + 6px); top:50%; transform:translateY(-50%);
+    background:#1e2d3d; color:#e2e8f0; padding:5px 11px;
+    border-radius:6px; font-size:12px; font-weight:600;
+    white-space:nowrap; z-index:1000; pointer-events:none;
+    box-shadow:0 2px 10px rgba(0,0,0,0.35);
+  }
+
   /* ── 앱 레이아웃 (사이드바 오른쪽) ── */
-  .app-layout { margin-left:190px; display:flex; flex-direction:column; min-height:100vh; }
+  .app-layout { margin-left:190px; display:flex; flex-direction:column; min-height:100vh; transition:margin-left 0.25s ease; }
+  body[data-sidebar=collapsed] .app-layout { margin-left:48px; }
 
   /* ── 뷰 전환 ── */
   /* KB 뷰: kb-modal을 인라인 블록으로 표시 */
@@ -876,38 +899,39 @@
   <div class="side-logo">
     <div class="side-logo-icon">⚙️</div>
     <div class="side-logo-text">조립팀<br>자재현황</div>
+    <button class="side-toggle-btn" onclick="toggleSidebar()" title="사이드바 접기/펼치기">&#8249;</button>
   </div>
   <div class="side-menu">
-    <div class="side-item active" id="snav-kb" onclick="switchView('kb')">
+    <div class="side-item active" id="snav-kb" data-label="Kitting Board" onclick="switchView('kb')">
       <span class="side-item-icon">📋</span>
       <span class="side-item-label">Kitting Board</span>
     </div>
-    <div class="side-item" id="snav-material" onclick="switchView('material')">
+    <div class="side-item" id="snav-material" data-label="자재현황" onclick="switchView('material')">
       <span class="side-item-icon">📊</span>
       <span class="side-item-label">자재현황</span>
     </div>
-    <div class="side-item" id="snav-pkg" onclick="switchView('pkg')">
+    <div class="side-item" id="snav-pkg" data-label="포장재 필요수량" onclick="switchView('pkg')">
       <span class="side-item-icon">📦</span>
       <span class="side-item-label">포장재 필요수량</span>
     </div>
-    <div class="side-item" id="snav-prep" onclick="switchView('prep')">
+    <div class="side-item" id="snav-prep" data-label="준비작업 관리" onclick="switchView('prep')">
       <span class="side-item-icon">🔧</span>
       <span class="side-item-label">준비작업 관리</span>
     </div>
-    <div class="side-item" id="snav-insp" onclick="switchView('insp')">
+    <div class="side-item" id="snav-insp" data-label="투입전 검사관리" onclick="switchView('insp')">
       <span class="side-item-icon">🔍</span>
       <span class="side-item-label">투입전 검사관리</span>
     </div>
-    <div class="side-item" id="snav-upload" onclick="switchView('upload')">
+    <div class="side-item" id="snav-upload" data-label="파일 업로드" onclick="switchView('upload')">
       <span class="side-item-icon">📂</span>
       <span class="side-item-label">파일 업로드</span>
     </div>
-    <div class="side-item" id="snav-kitting" onclick="switchView('kitting')">
+    <div class="side-item" id="snav-kitting" data-label="업로드 자동화" onclick="switchView('kitting')">
       <span class="side-item-icon">🤖</span>
       <span class="side-item-label">업로드 자동화</span>
     </div>
     <div style="height:1px;background:rgba(255,255,255,0.07);margin:4px 12px;flex-shrink:0;margin-top:auto;"></div>
-    <div class="side-item" id="snav-manual" onclick="switchView('manual')">
+    <div class="side-item" id="snav-manual" data-label="메뉴얼" onclick="switchView('manual')">
       <span class="side-item-icon">📖</span>
       <span class="side-item-label">메뉴얼</span>
     </div>
@@ -10198,6 +10222,24 @@ document.getElementById('insp-outgoing-modal')?.addEventListener('click', functi
 // ── 24시간 시간 입력 헬퍼 ──────────────────────────────────────
 
 // ── 끝: 투입전 검사관리 ──────────────────────────────────────
+
+// ── 사이드바 접기/펼치기 ─────────────────────────────────────
+function toggleSidebar() {
+  const collapsed = document.body.getAttribute('data-sidebar') === 'collapsed';
+  if (collapsed) {
+    document.body.removeAttribute('data-sidebar');
+    localStorage.setItem('ms_sidebar', 'expanded');
+  } else {
+    document.body.setAttribute('data-sidebar', 'collapsed');
+    localStorage.setItem('ms_sidebar', 'collapsed');
+  }
+}
+// 초기 사이드바 상태 복원
+(function() {
+  if (localStorage.getItem('ms_sidebar') === 'collapsed') {
+    document.body.setAttribute('data-sidebar', 'collapsed');
+  }
+})();
 
 // ── 모바일 더보기 메뉴 ──────────────────────────────────────
 function toggleMobileMore() {
