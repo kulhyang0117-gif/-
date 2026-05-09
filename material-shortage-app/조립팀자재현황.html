@@ -3858,8 +3858,8 @@ function renderTable(data,hasKit) {
   const sc=[...aSheets].sort();
   const totalCols = 6 + sc.length + 2 + (hasKit?2:0) + 4 + 1; // +1 상세
   let html=`<div class="table-wrap"><table><thead><tr>
-    <th rowspan="2" style="width:26px;">#</th>
-    <th rowspan="2">품목코드</th><th rowspan="2">품목명</th>
+    <th rowspan="2" style="width:20px;padding:7px 3px;">NO</th>
+    <th rowspan="2">품목코드</th><th rowspan="2" style="min-width:180px;">품목명</th>
     <th rowspan="2">규격/사양</th><th rowspan="2">유형</th><th rowspan="2">단위</th>
     ${sc.map(s=>`<th>${s}<br><span style="font-size:10px;font-weight:400;">필요수량</span></th>`).join('')}
     <th rowspan="2">총 필요수량</th><th rowspan="2">창고 재고</th>
@@ -3912,8 +3912,8 @@ function renderModelTable(data) {
     return;
   }
   let html=`<div class="table-wrap"><table><thead><tr>
-    <th style="width:26px;">#</th>
-    <th>모델명</th><th>품목코드</th><th>품목명</th><th>라인</th><th>계획수량</th>
+    <th style="width:20px;padding:7px 3px;">NO</th>
+    <th>모델명</th><th>품목코드</th><th style="min-width:160px;">품목명</th><th>라인</th><th>계획수량</th>
     <th>🚨 부족자재</th><th>⚠️ 위험자재</th><th>상태</th><th>긴급도</th><th>상세</th>
   </tr></thead><tbody>`;
 
@@ -4120,7 +4120,7 @@ function renderDateTable(data) {
     return;
   }
   let html=`<div class="table-wrap"><table><thead><tr>
-    <th style="width:26px;">#</th>
+    <th style="width:20px;padding:7px 3px;">NO</th>
     <th>계획일자</th>
     <th>총 모델수</th>
     <th style="color:#ffaaaa;">🚨 부족모델</th>
@@ -4262,8 +4262,8 @@ function renderInvTable(data) {
   if(!data.length){ el.innerHTML='<div class="empty"><div class="icon">🔍</div><div>조건에 맞는 항목이 없습니다.</div></div>'; return; }
   const hasKit=data.some(r=>r.kitTotal>0);
   let html=`<div class="table-wrap"><table><thead><tr>
-    <th style="width:26px;">#</th>
-    <th>품목코드</th><th>품목명</th><th>규격/사양</th><th>부품유형</th><th>단위</th>
+    <th style="width:20px;padding:7px 3px;">NO</th>
+    <th>품목코드</th><th style="min-width:180px;">품목명</th><th>규격/사양</th><th>부품유형</th><th>단위</th>
     <th>🏭 창고재고</th>
     ${hasKit?'<th class="kit-col">🟣 키팅수량</th>':''}
     <th style="background:#1a5276;">📦 총 수량<br><span style="font-size:10px;font-weight:400;">(창고+키팅)</span></th>
@@ -4315,8 +4315,8 @@ function renderModelInvTable(data) {
   const el=document.getElementById('modinv-body');
   if(!data.length){ el.innerHTML='<div class="empty"><div class="icon">🔍</div><div>조건에 맞는 항목이 없습니다.</div></div>'; return; }
   let html=`<div class="table-wrap"><table><thead><tr>
-    <th style="width:26px;">#</th>
-    <th>모델명</th><th>제품코드</th><th>제품명</th>
+    <th style="width:20px;padding:7px 3px;">NO</th>
+    <th>모델명</th><th>제품코드</th><th style="min-width:160px;">제품명</th>
     <th>구성 부품수</th><th style="width:100px;">상세</th>
   </tr></thead><tbody>`;
   data.forEach((r,i)=>{
