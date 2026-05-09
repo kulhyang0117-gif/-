@@ -193,6 +193,79 @@
     .summary-cards { grid-template-columns: repeat(2, 1fr); }
   }
 
+  /* ── PC/모바일 레이아웃 토글 버튼 ── */
+  .layout-toggle-group { display:flex; gap:2px; background:rgba(255,255,255,0.1); border-radius:7px; padding:2px; margin-right:6px; }
+  .layout-btn { background:none; border:none; color:rgba(255,255,255,0.6); padding:4px 10px; border-radius:5px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background 0.15s, color 0.15s; }
+  .layout-btn:hover { color:white; background:rgba(255,255,255,0.13); }
+  .layout-btn.active { background:rgba(255,255,255,0.25); color:white; }
+
+  /* ── 강제 모바일 모드 (force-mobile) ── */
+  body.force-mobile .side-nav { display:none !important; }
+  body.force-mobile .app-layout { margin-left:0 !important; padding-bottom:56px !important; }
+  body.force-mobile .mobile-tab-bar { display:flex !important; }
+  body.force-mobile .header { padding:10px 14px !important; }
+  body.force-mobile .header h1 { font-size:14px !important; }
+  body.force-mobile .header .sub { display:none !important; }
+  body.force-mobile .hdr-uname { display:none !important; }
+  body.force-mobile .container { padding:12px !important; }
+  body.force-mobile .summary-cards { grid-template-columns:repeat(2,1fr) !important; gap:8px !important; margin-bottom:12px !important; }
+  body.force-mobile .card { padding:10px 8px !important; }
+  body.force-mobile .card .val { font-size:20px !important; }
+  body.force-mobile .card .lbl { font-size:10px !important; }
+  body.force-mobile .settings-section { flex-direction:column !important; align-items:flex-start !important; gap:10px !important; padding:12px !important; }
+  body.force-mobile .setting-item { width:100% !important; }
+  body.force-mobile .setting-item select, body.force-mobile .setting-item input[type=date] { width:100% !important; }
+  body.force-mobile .upload-grid { grid-template-columns:1fr 1fr !important; gap:10px !important; }
+  body.force-mobile .upload-section { padding:14px !important; }
+  body.force-mobile .tab-row { overflow-x:auto !important; flex-wrap:nowrap !important; }
+  body.force-mobile .tab { white-space:nowrap !important; padding:7px 12px !important; font-size:11px !important; }
+  body.force-mobile .result-section { padding:12px 10px !important; }
+  body.force-mobile .result-header { flex-direction:column !important; align-items:flex-start !important; gap:8px !important; }
+  body.force-mobile .filter-bar input[type=text] { width:100% !important; box-sizing:border-box !important; }
+  body.force-mobile #view-prep, body.force-mobile #view-insp { padding:12px !important; }
+  body.force-mobile .prep-stats-row { grid-template-columns:repeat(2,1fr) !important; gap:8px !important; }
+  body.force-mobile .prep-home-cards { grid-template-columns:1fr 1fr !important; gap:12px !important; }
+  body.force-mobile .prep-home-card { padding:20px 14px !important; }
+  body.force-mobile .prep-modal-box { width:98vw !important; max-height:95vh !important; }
+  body.force-mobile .auth-box { width:94vw !important; padding:24px 18px !important; }
+  body.force-mobile #view-manual { padding:16px 12px !important; }
+  body.force-mobile .man-hero { padding:20px 16px !important; flex-direction:column !important; gap:12px !important; }
+  body.force-mobile .man-sections { grid-template-columns:1fr !important; }
+  body.force-mobile #view-kitting { padding:20px 14px !important; }
+  body.force-mobile .kit-view-cards { flex-direction:column !important; max-width:100% !important; }
+  body.force-mobile .table-wrap { max-height:400px !important; }
+
+  /* ── 강제 PC 모드 (force-pc) — 모바일 미디어쿼리 덮어쓰기 ── */
+  @media (max-width: 768px) {
+    body.force-pc .side-nav { display:flex !important; }
+    body.force-pc .app-layout { margin-left:190px !important; padding-bottom:0 !important; }
+    body[data-sidebar=collapsed].force-pc .app-layout { margin-left:48px !important; }
+    body.force-pc .mobile-tab-bar { display:none !important; }
+    body.force-pc .header { padding:16px 24px !important; }
+    body.force-pc .header h1 { font-size:18px !important; }
+    body.force-pc .header .sub { display:block !important; }
+    body.force-pc .hdr-uname { display:inline !important; }
+    body.force-pc .container { padding:20px 24px !important; }
+    body.force-pc .summary-cards { grid-template-columns:repeat(7,1fr) !important; gap:12px !important; }
+    body.force-pc .card { padding:14px !important; }
+    body.force-pc .settings-section { flex-direction:row !important; align-items:center !important; }
+    body.force-pc .setting-item { width:auto !important; }
+    body.force-pc .upload-grid { grid-template-columns:repeat(4,1fr) !important; }
+    body.force-pc .tab-row { flex-wrap:wrap !important; overflow-x:visible !important; }
+    body.force-pc .tab { white-space:nowrap !important; padding:7px 18px !important; font-size:12px !important; }
+    body.force-pc .result-section { padding:16px 20px !important; }
+    body.force-pc .result-header { flex-direction:row !important; align-items:center !important; }
+    body.force-pc #view-prep, body.force-pc #view-insp { padding:20px 24px !important; }
+    body.force-pc .prep-stats-row { grid-template-columns:repeat(5,1fr) !important; }
+    body.force-pc .prep-home-cards { grid-template-columns:repeat(2,1fr) !important; }
+    body.force-pc .auth-box { width:390px !important; }
+    body.force-pc #view-manual { padding:36px 48px !important; }
+    body.force-pc .man-hero { flex-direction:row !important; padding:36px 40px !important; }
+    body.force-pc .man-sections { grid-template-columns:repeat(auto-fit,minmax(340px,1fr)) !important; }
+    body.force-pc #view-kitting { padding:32px 40px !important; }
+    body.force-pc .kit-view-cards { flex-direction:row !important; max-width:520px !important; }
+  }
+
   /* ══════════════════════════════════════════
      모바일 하단 탭바 (항상 정의, 기본 숨김)
   ══════════════════════════════════════════ */
@@ -945,7 +1018,12 @@
     <h1>조립팀 자재현황</h1>
     <div class="sub">생산계획 × BOM × 재고 통합 분석</div>
   </div>
-  <div class="header-user" id="header-user" style="display:none;">
+  <div class="layout-toggle-group" style="margin-left:auto;">
+    <button class="layout-btn" id="layout-btn-pc" onclick="setLayout('pc')" title="PC 버전으로 고정">🖥️ PC</button>
+    <button class="layout-btn active" id="layout-btn-auto" onclick="setLayout('auto')" title="화면 크기에 따라 자동 전환">자동</button>
+    <button class="layout-btn" id="layout-btn-mobile" onclick="setLayout('mobile')" title="모바일 버전으로 고정">📱 모바일</button>
+  </div>
+  <div class="header-user" id="header-user" style="display:none;margin-left:0;">
     <span class="hdr-uname" id="hdr-uname"></span>
     <button class="btn-admin-open" id="btn-admin-open" onclick="openAdminPanel()" style="display:none;">👥 회원관리</button>
     <button class="btn-logout" onclick="doLogout()">로그아웃</button>
@@ -10222,6 +10300,23 @@ document.getElementById('insp-outgoing-modal')?.addEventListener('click', functi
 // ── 24시간 시간 입력 헬퍼 ──────────────────────────────────────
 
 // ── 끝: 투입전 검사관리 ──────────────────────────────────────
+
+// ── PC/모바일 레이아웃 전환 ──────────────────────────────────
+function setLayout(mode) {
+  document.body.classList.remove('force-mobile', 'force-pc');
+  if (mode === 'mobile') document.body.classList.add('force-mobile');
+  if (mode === 'pc') document.body.classList.add('force-pc');
+  localStorage.setItem('ms_layout', mode);
+  ['pc', 'auto', 'mobile'].forEach(m => {
+    const btn = document.getElementById('layout-btn-' + m);
+    if (btn) btn.classList.toggle('active', m === mode);
+  });
+}
+// 초기 레이아웃 복원
+(function() {
+  const saved = localStorage.getItem('ms_layout') || 'auto';
+  setLayout(saved);
+})();
 
 // ── 사이드바 접기/펼치기 ─────────────────────────────────────
 function toggleSidebar() {
