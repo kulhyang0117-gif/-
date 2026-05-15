@@ -2733,6 +2733,8 @@ let dateResult = [];
 let filteredDateResult = [];
 let pkgResult = [];
 let filteredPkgResult = [];
+let pkgLineFilterState = { 라인: '', 일자: '', 검색: '', 사양: '', 발포지: '', 패드: '', 박스: '', 포장지: '', 비고: '' };
+let _pkgLineData = [];
 
 // ── IndexedDB ──────────────────────────────────────
 const DB_NAME = 'MaterialShortageDB';
@@ -5138,11 +5140,81 @@ function renderPkgLineView(rows) {
     return;
   }
 
+  // 필터 드롭다운용 고유값 수집
+  const allLines = [...new Set(filtered.map(r => r.라인))].sort();
+  const allDates = dates;
+
+  // 전역 데이터 저장 (필터 적용 시 재사용)
+  _pkgLineData = filtered;
+
+  // 필터 바 렌더링 (컨테이너 구조만 초기화)
+  const fsBar = `
+    <div id="pkg-line-filter-bar" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 4px 10px 4px;border-bottom:1px solid #dce4ef;margin-bottom:8px;">
+      <span style="font-size:11px;font-weight:700;color:#1e3a5f;white-space:nowrap;">필터:</span>
+      <select id="plf-line" onchange="pkgLineFilterState.라인=this.value;renderPkgLineTable()"
+        style="font-size:11px;padding:3px 6px;border:1px solid #adc6e0;border-radius:4px;background:#f7fafd;min-width:80px;">
+        <option value="">전체 라인</option>
+        ${allLines.map(l => `<option value="${l}" ${pkgLineFilterState.라인===l?'selected':''}>${l}</option>`).join('')}
+      </select>
+      <select id="plf-date" onchange="pkgLineFilterState.일자=this.value;renderPkgLineTable()"
+        style="font-size:11px;padding:3px 6px;border:1px solid #adc6e0;border-radius:4px;background:#f7fafd;min-width:90px;">
+        <option value="">전체 일자</option>
+        ${allDates.map(d => `<option value="${d}" ${pkgLineFilterState.일자===d?'selected':''}>${d}</option>`).join('')}
+      </select>
+      <input id="plf-search" type="text" placeholder="제품코드 / MODEL 검색" value="${pkgLineFilterState.검색}"
+        oninput="pkgLineFilterState.검색=this.value;renderPkgLineTable()"
+        style="font-size:11px;padding:3px 8px;border:1px solid #adc6e0;border-radius:4px;width:160px;background:#f7fafd;">
+      <button onclick="pkgLineFilterState={라인:'',일자:'',검색:'',사양:'',발포지:'',패드:'',박스:'',포장지:'',비고:''};document.getElementById('plf-line').value='';document.getElementById('plf-date').value='';document.getElementById('plf-search').value='';renderPkgLineTable()"
+        style="font-size:11px;padding:3px 10px;background:#e8eef5;border:1px solid #adc6e0;border-radius:4px;cursor:pointer;color:#1e3a5f;font-weight:600;">초기화</button>
+      <span id="plf-count" style="font-size:11px;color:#888;margin-left:4px;"></span>
+    </div>
+    <div id="pkg-line-table-container"></div>`;
+
+  el.innerHTML = fsBar;
+  renderPkgLineTable();
+}
+
+// ── 라인별 소요량 테이블만 재렌더 (필터 적용) ──────────
+function renderPkgLineTable() {
+  const container = document.getElementById('pkg-line-table-container');
+  if (!container) return;
+
+  const filtered = _pkgLineData;
+  if (!filtered || !filtered.length) return;
+
+  // 필터 적용
+  let display = filtered;
+  if (pkgLineFilterState.라인) display = display.filter(r => r.라인 === pkgLineFilterState.라인);
+  if (pkgLineFilterState.일자) display = display.filter(r => r.일자 === pkgLineFilterState.일자);
+  if (pkgLineFilterState.검색) {
+    const q = pkgLineFilterState.검색.toLowerCase();
+    display = display.filter(r =>
+      (r.시스템PN||'').toLowerCase().includes(q) ||
+      (r.MODEL||'').toLowerCase().includes(q) ||
+      (r.고객사PARTNO||'').toLowerCase().includes(q)
+    );
+  }
+  if (pkgLineFilterState.사양) { const q=pkgLineFilterState.사양.toLowerCase(); display=display.filter(r=>(r.사양||'').toLowerCase().includes(q)); }
+  if (pkgLineFilterState.발포지) { const q=pkgLineFilterState.발포지.toLowerCase(); display=display.filter(r=>(r.발포지||'').toLowerCase().includes(q)); }
+  if (pkgLineFilterState.패드) { const q=pkgLineFilterState.패드.toLowerCase(); display=display.filter(r=>(r.패드||'').toLowerCase().includes(q)); }
+  if (pkgLineFilterState.박스) { const q=pkgLineFilterState.박스.toLowerCase(); display=display.filter(r=>(r.박스유형||'').toLowerCase().includes(q)); }
+  if (pkgLineFilterState.포장지) { const q=pkgLineFilterState.포장지.toLowerCase(); display=display.filter(r=>(r.포장지||'').toLowerCase().includes(q)); }
+  if (pkgLineFilterState.비고) { const q=pkgLineFilterState.비고.toLowerCase(); display=display.filter(r=>(r.비고||'').toLowerCase().includes(q)); }
+
+  // 건수 표시
+  const countEl = document.getElementById('plf-count');
+  const isFiltered = Object.values(pkgLineFilterState).some(v => v !== '');
+  if (countEl) countEl.textContent = isFiltered ? `${display.length} / ${filtered.length} 건` : `${filtered.length} 건`;
+
+  if (!display.length) {
+    container.innerHTML = '<div class="empty" style="padding:30px 0;"><div class="icon">🔍</div><div>필터 조건에 해당하는 데이터가 없습니다.</div></div>';
+    return;
+  }
+
   // 라인 목록 (정렬)
-  const lines = [...new Set(filtered.map(r => r.라인))].sort();
+  const lines = [...new Set(display.map(r => r.라인))].sort();
 
   const thStyle = 'background:#1e3a5f;color:white;border:1px solid #2952a3;padding:5px 8px;text-align:center;white-space:nowrap;';
-  // 항목별 색상 정의
   const C = {
     발포지:  { th: 'background:#b9770e;color:white;border:1px solid #9a7d0a;padding:5px 8px;text-align:center;white-space:nowrap;', td: 'background:#fef9e7;', num: 'background:#fef9e7;' },
     패드:    { th: 'background:#6c3483;color:white;border:1px solid #5b2c6f;padding:5px 8px;text-align:center;white-space:nowrap;', td: 'background:#f5eef8;', num: 'background:#f5eef8;' },
@@ -5150,35 +5222,115 @@ function renderPkgLineView(rows) {
     포장지:  { th: 'background:#1e8449;color:white;border:1px solid #196f3d;padding:5px 8px;text-align:center;white-space:nowrap;', td: 'background:#e9f7ef;', num: 'background:#e9f7ef;' },
   };
 
-  let html = `<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:11px;white-space:nowrap;">
-    <thead><tr>
-      <th style="${thStyle}">라인</th>
-      <th style="${thStyle}">일자</th>
-      <th style="${thStyle}">제품코드</th>
-      <th style="${thStyle}">고객사 PART NO</th>
-      <th style="${thStyle}">MODEL</th>
-      <th style="${thStyle}">사양</th>
-      <th style="${thStyle}">계획 수량</th>
-      <th style="${C.발포지.th}">발포지</th><th style="${C.발포지.th}">소요량</th>
-      <th style="${C.패드.th}">패드</th><th style="${C.패드.th}">소요량</th>
-      <th style="${C.박스.th}">박스사양</th><th style="${C.박스.th}">소요량</th>
-      <th style="${C.포장지.th}">포장지/트레이</th><th style="${C.포장지.th}">소요량</th>
-      <th style="${thStyle}">비고</th>
-    </tr></thead><tbody>`;
+  // 컬럼명 필터 인라인 스타일
+  const filterInputStyle = 'width:100%;box-sizing:border-box;margin-top:3px;font-size:10px;padding:2px 4px;border:1px solid rgba(255,255,255,0.4);border-radius:3px;background:rgba(255,255,255,0.15);color:white;outline:none;';
+  const filterSelectStyle = 'width:100%;box-sizing:border-box;margin-top:3px;font-size:10px;padding:2px 2px;border:1px solid rgba(255,255,255,0.6);border-radius:3px;background:rgba(255,255,255,0.92);color:#1a1a1a;outline:none;';
 
+  // 컬럼 필터용 고유값
+  const allLinesDisp  = [...new Set(filtered.map(r => r.라인))].sort();
+  const allDatesDisp  = [...new Set(filtered.map(r => r.일자))].sort();
   const isValid = v => v && v !== 'X' && String(v).trim() !== '' && String(v).trim() !== '0';
+  const allFoamDisp   = [...new Set(filtered.map(r => r.발포지).filter(isValid))].sort();
+  const allPadDisp    = [...new Set(filtered.map(r => r.패드).filter(isValid))].sort();
+  const allBoxDisp    = [...new Set(filtered.map(r => r.박스유형).filter(isValid))].sort();
+  const allWrapDisp   = [...new Set(filtered.map(r => r.포장지).filter(isValid))].sort();
+
+  let html = `<div style="overflow-x:auto;"><table style="border-collapse:collapse;font-size:11px;white-space:nowrap;">
+    <thead>
+      <tr>
+        <th style="${thStyle}">라인</th>
+        <th style="${thStyle}">일자</th>
+        <th style="${thStyle}">제품코드</th>
+        <th style="${thStyle}">고객사 PART NO</th>
+        <th style="${thStyle}">MODEL</th>
+        <th style="${thStyle}">사양</th>
+        <th style="${thStyle}">계획 수량</th>
+        <th style="${C.발포지.th}">발포지</th><th style="${C.발포지.th}">소요량</th>
+        <th style="${C.패드.th}">패드</th><th style="${C.패드.th}">소요량</th>
+        <th style="${C.박스.th}">박스사양</th><th style="${C.박스.th}">소요량</th>
+        <th style="${C.포장지.th}">포장지/트레이</th><th style="${C.포장지.th}">소요량</th>
+        <th style="${thStyle}">비고</th>
+      </tr>
+      <tr title="컬럼 필터">
+        <th style="${thStyle}padding:3px 5px;">
+          <select style="${filterSelectStyle}" onchange="pkgLineFilterState.라인=this.value;document.getElementById('plf-line').value=this.value;renderPkgLineTable()">
+            <option value="">전체</option>
+            ${allLinesDisp.map(l => `<option value="${l}" ${pkgLineFilterState.라인===l?'selected':''}>${l}</option>`).join('')}
+          </select>
+        </th>
+        <th style="${thStyle}padding:3px 5px;">
+          <select style="${filterSelectStyle}" onchange="pkgLineFilterState.일자=this.value;document.getElementById('plf-date').value=this.value;renderPkgLineTable()">
+            <option value="">전체</option>
+            ${allDatesDisp.map(d => `<option value="${d}" ${pkgLineFilterState.일자===d?'selected':''}>${d}</option>`).join('')}
+          </select>
+        </th>
+        <th style="${thStyle}padding:3px 5px;">
+          <input type="text" placeholder="검색" value="${pkgLineFilterState.검색}"
+            style="${filterInputStyle}"
+            oninput="pkgLineFilterState.검색=this.value;document.getElementById('plf-search').value=this.value;renderPkgLineTable()">
+        </th>
+        <th style="${thStyle}padding:3px 5px;">
+          <input type="text" placeholder="검색" value="${pkgLineFilterState.검색}"
+            style="${filterInputStyle}"
+            oninput="pkgLineFilterState.검색=this.value;document.getElementById('plf-search').value=this.value;renderPkgLineTable()">
+        </th>
+        <th style="${thStyle}padding:3px 5px;">
+          <input type="text" placeholder="검색" value="${pkgLineFilterState.검색}"
+            style="${filterInputStyle}"
+            oninput="pkgLineFilterState.검색=this.value;document.getElementById('plf-search').value=this.value;renderPkgLineTable()">
+        </th>
+        <th style="${thStyle}padding:3px 5px;">
+          <input type="text" placeholder="검색" value="${pkgLineFilterState.사양}"
+            style="${filterInputStyle}"
+            oninput="pkgLineFilterState.사양=this.value;renderPkgLineTable()">
+        </th>
+        <th style="${thStyle}"></th>
+        <th style="${C.발포지.th}padding:3px 5px;">
+          <select style="${filterSelectStyle}" onchange="pkgLineFilterState.발포지=this.value;renderPkgLineTable()">
+            <option value="">전체</option>
+            ${allFoamDisp.map(v => `<option value="${v}" ${pkgLineFilterState.발포지===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </th>
+        <th style="${C.발포지.th}"></th>
+        <th style="${C.패드.th}padding:3px 5px;">
+          <select style="${filterSelectStyle}" onchange="pkgLineFilterState.패드=this.value;renderPkgLineTable()">
+            <option value="">전체</option>
+            ${allPadDisp.map(v => `<option value="${v}" ${pkgLineFilterState.패드===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </th>
+        <th style="${C.패드.th}"></th>
+        <th style="${C.박스.th}padding:3px 5px;">
+          <select style="${filterSelectStyle}" onchange="pkgLineFilterState.박스=this.value;renderPkgLineTable()">
+            <option value="">전체</option>
+            ${allBoxDisp.map(v => `<option value="${v}" ${pkgLineFilterState.박스===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </th>
+        <th style="${C.박스.th}"></th>
+        <th style="${C.포장지.th}padding:3px 5px;">
+          <select style="${filterSelectStyle}" onchange="pkgLineFilterState.포장지=this.value;renderPkgLineTable()">
+            <option value="">전체</option>
+            ${allWrapDisp.map(v => `<option value="${v}" ${pkgLineFilterState.포장지===v?'selected':''}>${v}</option>`).join('')}
+          </select>
+        </th>
+        <th style="${C.포장지.th}"></th>
+        <th style="${thStyle}padding:3px 5px;">
+          <input type="text" placeholder="검색" value="${pkgLineFilterState.비고}"
+            style="${filterInputStyle}"
+            oninput="pkgLineFilterState.비고=this.value;renderPkgLineTable()">
+        </th>
+      </tr>
+    </thead><tbody>`;
+
   const tdBase = 'border:1px solid #ddd;padding:4px 8px;';
   const tdNum  = tdBase + 'text-align:right;';
 
-  // 라인별 소계 집계용
   const lineTotals = {};
   lines.forEach(ln => { lineTotals[ln] = { 계획: 0, 발포지: 0, 패드: 0, 박스: 0, 포장지: 0 }; });
   let grandTotals = { 계획: 0, 발포지: 0, 패드: 0, 박스: 0, 포장지: 0 };
 
   lines.forEach(ln => {
-    const lineRows = filtered.filter(r => r.라인 === ln)
+    const lineRows = display.filter(r => r.라인 === ln)
       .sort((a, b) => a.일자시리얼 - b.일자시리얼);
-    let prevLine = ln;
 
     lineRows.forEach((r, idx) => {
       const even = idx % 2 === 0 ? 'background:#f8fafc;' : '';
@@ -5246,7 +5398,7 @@ function renderPkgLineView(rows) {
   </tr>`;
 
   html += `</tbody></table></div>`;
-  el.innerHTML = html;
+  container.innerHTML = html;
 }
 
 // ── 인쇄: 라인별 소요량 ─────────────────────────────
