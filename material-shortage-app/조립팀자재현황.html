@@ -5405,8 +5405,27 @@ function renderPkgLineTable() {
 function printPkgLine() {
   if (!pkgResult.length) { alert('인쇄할 데이터가 없습니다.'); return; }
   const fromDate = document.getElementById('fromDate')?.value || '';
-  const tmp = document.getElementById('pkg-line-body').innerHTML;
-  if (!tmp || tmp.includes('class="empty"')) { alert('라인별 소요량 탭을 먼저 열어주세요.'); return; }
+  const tableEl = document.getElementById('pkg-line-table-container');
+  if (!tableEl || !tableEl.innerHTML || tableEl.innerHTML.includes('class="empty"')) { alert('라인별 소요량 탭을 먼저 열어주세요.'); return; }
+
+  // 적용된 필터 정보 문자열
+  const fs = pkgLineFilterState;
+  const filterParts = [
+    fs.라인    ? `라인: ${fs.라인}`       : '',
+    fs.일자    ? `일자: ${fs.일자}`       : '',
+    fs.검색    ? `검색: ${fs.검색}`       : '',
+    fs.사양    ? `사양: ${fs.사양}`       : '',
+    fs.발포지  ? `발포지: ${fs.발포지}`   : '',
+    fs.패드    ? `패드: ${fs.패드}`       : '',
+    fs.박스    ? `박스사양: ${fs.박스}`   : '',
+    fs.포장지  ? `포장지: ${fs.포장지}`   : '',
+    fs.비고    ? `비고: ${fs.비고}`       : '',
+  ].filter(Boolean);
+  const filterInfo = filterParts.length ? ` | 필터: ${filterParts.join(', ')}` : '';
+
+  const countEl = document.getElementById('plf-count');
+  const countInfo = countEl?.textContent ? ` | ${countEl.textContent}` : '';
+
   const w = window.open('', '_blank', 'width=1200,height=800');
   w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
   <title>포장재 라인별 소요량</title>
@@ -5417,6 +5436,7 @@ function printPkgLine() {
     .meta { font-size: 11px; color: #888; margin-bottom: 14px; }
     div[style*="overflow-x"] { overflow-x: visible !important; }
     table { table-layout: auto; }
+    thead tr:nth-child(2) { display: none; }
     @page { size: A4 landscape; margin: 8mm; }
     @media print {
       .no-print { display: none; }
@@ -5427,9 +5447,9 @@ function printPkgLine() {
     }
   </style></head><body>
   <h2>🏭 포장재 라인별 소요량</h2>
-  <div class="meta">기준일: ${fromDate} | 기준일자부터 4일 집계 | 출력일시: ${new Date().toLocaleString()}</div>
+  <div class="meta">기준일: ${fromDate} | 기준일자부터 3일 집계${filterInfo}${countInfo} | 출력일시: ${new Date().toLocaleString()}</div>
   <button class="no-print" onclick="window.print()" style="margin-bottom:14px;padding:7px 18px;background:#2c3e50;color:white;border:none;border-radius:5px;cursor:pointer;font-size:12px;font-weight:700;">🖨️ 인쇄</button>
-  ${tmp}
+  ${tableEl.innerHTML}
   </body></html>`);
   w.document.close();
 }
