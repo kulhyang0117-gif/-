@@ -9185,10 +9185,10 @@ function prepShowToast(msg, type = '') {
   setTimeout(() => { t.className = 'prep-toast'; }, 2500);
 }
 
-// 모달 외부 클릭 닫기
-document.getElementById('prep-mainModal')?.addEventListener('click', function(e) {
-  if (e.target === this) prepCloseModal();
-});
+// 모달 외부 클릭 닫기 비활성화 (닫기/X 버튼으로만 닫기)
+// document.getElementById('prep-mainModal')?.addEventListener('click', function(e) {
+//   if (e.target === this) prepCloseModal();
+// });
 document.getElementById('outgoing-modal')?.addEventListener('click', function(e) {
   if (e.target === this) outgoingCloseModal();
 });
@@ -10462,9 +10462,10 @@ function inspShowToast(msg, type='') {
   setTimeout(()=>{ t.className='prep-toast'; }, 2500);
 }
 
-document.getElementById('insp-mainModal')?.addEventListener('click', function(e) {
-  if (e.target === this) inspCloseModal();
-});
+// 모달 외부 클릭 닫기 비활성화 (닫기/X 버튼으로만 닫기)
+// document.getElementById('insp-mainModal')?.addEventListener('click', function(e) {
+//   if (e.target === this) inspCloseModal();
+// });
 document.getElementById('insp-outgoing-modal')?.addEventListener('click', function(e) {
   if (e.target === this) inspOutgoingCloseModal();
 });
